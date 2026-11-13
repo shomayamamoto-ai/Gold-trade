@@ -3,6 +3,13 @@
 ブラウザだけで動く、チャート表示サイトです。
 ローソク足・出来高に加えて、出来高系インジケーターを2種類表示できます。
 
+## 公開ページ
+
+GitHub Pages で公開する設定になっています(Settings → Pages → Source を「GitHub Actions」にすると有効になります)。
+
+- チャート: https://shomayamamoto-ai.github.io/Gold-trade/
+- 教科書: https://shomayamamoto-ai.github.io/Gold-trade/guide.html
+
 ## 使い方
 
 `index.html` をブラウザで開くだけで動きます(ビルド不要)。教科書は `guide.html` です。

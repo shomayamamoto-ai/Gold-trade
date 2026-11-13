@@ -1,5 +1,6 @@
 # サイトを GitHub Pages に公開する。
 # このブランチに push するたびに、自動で最新の内容に更新される。
+# 事前に、リポジトリの Settings → Pages → Source を「GitHub Actions」にしておく必要がある。
 name: Deploy to GitHub Pages
 
 on:
@@ -25,8 +26,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - name: Collect site files
         run: |
           mkdir _site
