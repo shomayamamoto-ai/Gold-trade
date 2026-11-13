@@ -451,3 +451,7 @@ body {
 .tbl th { color: var(--muted); font-weight: 400; font-size: 11px; }
 .tbl th:first-child, .tbl td:first-child { text-align: left; }
 @media (max-width: 760px) { .kpis { grid-template-columns: 1fr 1fr; } .kpi strong { font-size: 15px; } }
+
+a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
+.tr-note a { color: inherit; }
+@media (max-width: 760px) { #guideLink { display: none; } }

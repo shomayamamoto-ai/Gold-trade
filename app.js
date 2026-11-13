@@ -1646,6 +1646,7 @@ function buildTopbar() {
    ['トレンドライン', '2点を結ぶ線を引く', () => setTool('t')],
    ['線をすべて削除', 'この銘柄に引いた線を全部消す', () => { state.drawings[state.symbol] = []; state.sel = null; save(); setTool(null); }],
    ['画像として保存', 'いまのチャートを PNG 画像でダウンロード', () => { state.hover = null; render(); saveImage(); }],
+   ['教科書を読む', '銘柄・インジケーター・手法・資金管理の解説', () => { location.href = 'guide.html'; }],
   ].forEach(([name, hint, fn]) => {
     const b = el('button', { type: 'button', text: name });
     b.appendChild(el('small', { text: hint }));
