@@ -1,0 +1,38 @@
+# サイトを GitHub Pages に公開する。
+# このブランチに push するたびに、自動で最新の内容に更新される。
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [claude/funny-fermi-ntfkyt, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Collect site files
+        run: |
+          mkdir _site
+          cp index.html guide.html style.css app.js _site/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
