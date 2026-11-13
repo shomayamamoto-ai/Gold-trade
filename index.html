@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gold Trade Chart</title>
+<meta name="description" content="ローソク足・出来高・Volume (c-c) 系インジケーターを表示するチャートサイト">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand" aria-label="Gold Trade Chart">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-name">Gold Trade Chart</span>
+  </div>
+
+  <label class="sr-only" for="symbol">銘柄</label>
+  <select id="symbol" class="ctl"></select>
+
+  <div id="intervals" class="seg" role="group" aria-label="時間足"></div>
+
+  <div class="menu-wrap">
+    <button id="indBtn" class="ctl btn" type="button" aria-haspopup="true" aria-expanded="false">
+      インジケーター
+    </button>
+    <div id="indMenu" class="menu" hidden></div>
+  </div>
+
+  <div class="spacer"></div>
+
+  <span id="status" class="badge" title="データの取得元">読み込み中</span>
+  <button id="themeBtn" class="ctl btn icon" type="button" aria-label="明るさを切り替える" title="明るさを切り替える">◐</button>
+</header>
+
+<main id="chartWrap" class="chart-wrap">
+  <canvas id="chart"></canvas>
+  <div id="legends"></div>
+  <div id="notice" class="notice" hidden></div>
+</main>
+
+<div id="overlay" class="overlay" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <div class="dlg-head">
+      <h2 id="dlgTitle"></h2>
+      <button id="dlgClose" class="x" type="button" aria-label="閉じる">×</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab on" type="button" data-tab="params">パラメーター</button>
+      <button class="tab" type="button" data-tab="style">スタイル</button>
+      <button class="tab" type="button" data-tab="vis">可視性</button>
+    </div>
+    <div id="dlgBody" class="dlg-body"></div>
+    <div class="dlg-foot">
+      <button id="dlgReset" class="ctl btn" type="button">デフォルトに戻す</button>
+      <div class="spacer"></div>
+      <button id="dlgCancel" class="ctl btn" type="button">キャンセル</button>
+      <button id="dlgOk" class="ctl btn primary" type="button">OK</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
