@@ -149,6 +149,7 @@ const state = {
   hover: null,        // {x, y}
   mainWeight: 2.6,    // メインペインの高さの比率
   loading: false,
+  tradeOpen: false,   // デモトレードのパネルを開いているか
   drawings: {},       // 銘柄ごとの線 {type:'h'|'t', p1:{t,price}, p2}
   tool: null,         // 'h' = 水平線 / 't' = トレンドライン
   pending: null,      // トレンドラインの1点目
@@ -168,7 +169,8 @@ function save() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({
       symbol: state.symbol, interval: state.interval, theme: state.theme, mainWeight: state.mainWeight, drawings: state.drawings,
-      custom: SYMBOLS.slice(BUILTIN).map(x => x.id),
+      tradeOpen: state.tradeOpen,
+      custom: SYMBOLS.slice(BUILTIN).map(x => ({ id: x.id, label: x.label, quote: x.quote || null })),
       indicators: state.indicators.map(i => ({ type: i.type, hidden: i.hidden, p: i.p })),
     }));
   } catch (e) { /* 保存できなくても表示は続ける */ }
@@ -177,10 +179,11 @@ function load() {
   let s = null;
   try { s = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) { s = null; }
   if (s && Array.isArray(s.custom)) {
-    s.custom.forEach(id => {
-      if (typeof id === 'string' && /^[A-Z0-9]{5,20}$/.test(id) && !SYMBOLS.some(x => x.id === id)) {
-        SYMBOLS.push({ id, label: prettySymbol(id), base: 100 });
-      }
+    s.custom.forEach(c => {
+      const o = typeof c === 'string' ? { id: c } : c || {}; // 以前は名前だけを保存していた
+      if (typeof o.id !== 'string' || !/^[A-Z0-9]{5,20}$/.test(o.id) || SYMBOLS.some(x => x.id === o.id)) return;
+      const quote = typeof o.quote === 'string' && /^[A-Z0-9]{1,8}$/.test(o.quote) ? o.quote : null;
+      SYMBOLS.push({ id: o.id, label: quote ? `${o.id.slice(0, -quote.length)}/${quote}` : prettySymbol(o.id), base: 100, quote });
     });
   }
   if (s && SYMBOLS.some(x => x.id === s.symbol)) state.symbol = s.symbol;
@@ -188,6 +191,7 @@ function load() {
   if (s && THEMES[s.theme]) state.theme = s.theme;
   else if (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) state.theme = 'dark';
   if (s && s.mainWeight > 0) state.mainWeight = s.mainWeight;
+  state.tradeOpen = s && typeof s.tradeOpen === 'boolean' ? s.tradeOpen : window.innerWidth > 1000;
   if (s && s.drawings && typeof s.drawings === 'object') state.drawings = s.drawings;
   const list = s && Array.isArray(s.indicators)
     ? s.indicators.filter(i => i && IND_TYPES[i.type])
@@ -357,6 +361,39 @@ async function fetchKlines(symbol, api, limit, endTime) {
   }
   throw lastErr;
 }
+// Binance で取引中の全通貨ペア。大きな一覧なので、取得したら1日はブラウザに覚えておく
+const UNIVERSE_KEY = 'gold-trade-symbols-v1';
+let universe = null; // [{ id, base, quote }]
+async function loadUniverse() {
+  if (universe) return universe;
+  try {
+    const c = JSON.parse(localStorage.getItem(UNIVERSE_KEY));
+    if (c && Date.now() - c.t < 864e5 && Array.isArray(c.list) && c.list.length > 100) {
+      universe = c.list.map(x => { const [base, quote] = x.split('/'); return { id: base + quote, base, quote }; });
+      return universe;
+    }
+  } catch (e) { /* 取り直す */ }
+  let lastErr;
+  for (const host of HOSTS) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 25000);
+    try {
+      const res = await fetch(`${host}/api/v3/exchangeInfo?symbolStatus=TRADING&showPermissionSets=false`, { signal: ac.signal });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const list = (data.symbols || [])
+        .filter(x => x.status === 'TRADING' && /^[A-Z0-9]+$/.test(x.baseAsset + x.quoteAsset) && x.symbol === x.baseAsset + x.quoteAsset)
+        .map(x => ({ id: x.symbol, base: x.baseAsset, quote: x.quoteAsset }));
+      if (list.length < 10) throw new Error('empty');
+      universe = list;
+      try {
+        localStorage.setItem(UNIVERSE_KEY, JSON.stringify({ t: Date.now(), list: list.map(x => `${x.base}/${x.quote}`) }));
+      } catch (e) { /* 保存できなくても使える */ }
+      return universe;
+    } catch (e) { lastErr = e; } finally { clearTimeout(timer); }
+  }
+  throw lastErr;
+}
 // 通信できないとき用の、乱数で作った見本データ
 function demoBars(sym, iv, count) {
   let seed = 7;
@@ -386,6 +423,7 @@ function setBars(raw, resetView) {
   state.raw = raw;
   state.bars = groupBars(raw, iv.group, iv.ms);
   recompute();
+  tradeTick();
   if (resetView) resetViewport();
   draw();
 }
@@ -409,6 +447,7 @@ async function loadData() {
     if (token !== state.loadToken) return;
     state.live = false;
     setStatus('demo', 'デモ');
+    renderTrade();
     $('banner').hidden = false;
     setLoading(false);
     setBars(demoBars(sym, iv, 600), true);
@@ -697,7 +736,7 @@ function render() {
     timeTicks.forEach(t => { const x = Math.round(t.x) + 0.5; ctx.moveTo(x, pane.y); ctx.lineTo(x, pane.y + pane.h); });
     ctx.stroke();
     ctx.restore();
-    if (n && !pane.ind) { drawMain(pane, i0, i1, th); drawDrawings(pane); }
+    if (n && !pane.ind) { drawMain(pane, i0, i1, th); drawDrawings(pane); drawTrade(pane, i0, i1); }
     else if (n) (IND_TYPES[pane.ind.type].simple ? drawSimple : drawIndicator)(pane, i0, i1, th);
     // 区切り線
     ctx.strokeStyle = th.axis;
@@ -1435,7 +1474,7 @@ function buildTopbar() {
   const fillSymbols = () => {
     sel.textContent = '';
     SYMBOLS.forEach(s => sel.appendChild(el('option', { value: s.id, text: s.label })));
-    sel.appendChild(el('option', { value: '__add', text: '+ 銘柄を追加…' }));
+    sel.appendChild(el('option', { value: '__add', text: '🔍 すべての銘柄から探す…' }));
     sel.value = state.symbol;
   };
   fillSymbols();
@@ -1477,14 +1516,75 @@ function buildTopbar() {
     state.symbol = id; state.sel = null;
     fillSymbols(); closeSym(); setTool(null); save(); loadData();
   };
+  // 全銘柄からの検索
+  const QUOTE_ORDER = ['USDT', 'JPY', 'USDC', 'FDUSD', 'BTC', 'ETH', 'EUR'];
+  const rank = q => { const k = QUOTE_ORDER.indexOf(q); return k < 0 ? 99 : k; };
+  let chip = '';
+  const pick = u => {
+    if (!SYMBOLS.some(x => x.id === u.id)) SYMBOLS.push({ id: u.id, label: `${u.base}/${u.quote}`, base: 100, quote: u.quote });
+    state.symbol = u.id; state.sel = null;
+    fillSymbols(); closeSym(); setTool(null); save(); loadData();
+    sel.dispatchEvent(new Event('symbolpicked'));
+  };
+  const searchUniverse = () => {
+    if (!universe) return [];
+    const text = symIn.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const score = u => (u.base === text ? 0 : u.base.startsWith(text) ? 1 : u.id.startsWith(text) ? 2 : u.id.includes(text) ? 3 : 9);
+    return universe
+      .filter(u => (!chip || u.quote === chip) && (!text || score(u) < 9))
+      .sort((x, y) => (text ? score(x) - score(y) : 0) || rank(x.quote) - rank(y.quote) || x.base.localeCompare(y.base));
+  };
+  const fillResults = () => {
+    const box = $('symResults'), chips = $('symChips');
+    box.textContent = ''; chips.textContent = '';
+    if (!universe) return;
+    [['', 'すべて']].concat(QUOTE_ORDER.map(q => [q, q])).forEach(([q, label]) => {
+      const b = el('button', { type: 'button', text: label });
+      b.classList.toggle('on', chip === q);
+      b.setAttribute('aria-pressed', String(chip === q));
+      b.addEventListener('click', () => { chip = q; fillResults(); });
+      chips.appendChild(b);
+    });
+    const found = searchUniverse();
+    symMsg.textContent = found.length
+      ? `${found.length.toLocaleString()} 件(全 ${universe.length.toLocaleString()} 銘柄)${found.length > 80 ? '。上位 80 件を表示中 — 名前を入力して絞り込めます' : ''}`
+      : '見つかりませんでした。別の名前を試してください。';
+    found.slice(0, 80).forEach(u => {
+      const b = el('button', { type: 'button' }, [
+        el('span', { text: `${u.base}/${u.quote}` }),
+        el('small', { text: SYMBOLS.some(x => x.id === u.id) ? '一覧にあります' : '' }),
+      ]);
+      b.addEventListener('click', () => pick(u));
+      box.appendChild(b);
+    });
+  };
+  const openPicker = () => {
+    symIn.value = ''; symMsg.textContent = ''; chip = '';
+    fillCustom(); fillResults();
+    symOk.hidden = !!universe;
+    symOv.hidden = false; symIn.focus();
+    if (universe) return;
+    symMsg.textContent = '銘柄の一覧を読み込み中…';
+    loadUniverse().then(() => {
+      if (symOv.hidden) return;
+      symOk.hidden = true; fillResults();
+    }).catch(() => {
+      if (!symOv.hidden) symMsg.textContent = '一覧を取得できませんでした。「DOGEUSDT」のように名前を入力して「追加」を押すと、直接追加できます。';
+    });
+  };
+  symIn.addEventListener('input', () => { if (universe) fillResults(); });
   symOk.addEventListener('click', addSymbol);
-  symIn.addEventListener('keydown', e => { if (e.key === 'Enter') addSymbol(); });
+  symIn.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const first = universe && searchUniverse()[0];
+    if (first) pick(first); else if (!universe) addSymbol();
+  });
   $('symCancel').addEventListener('click', closeSym);
   symOv.addEventListener('pointerdown', e => { if (e.target === symOv) closeSym(); });
   sel.addEventListener('change', () => {
     if (sel.value === '__add') {
       sel.value = state.symbol;
-      symIn.value = ''; symMsg.textContent = ''; fillCustom(); symOv.hidden = false; symIn.focus();
+      openPicker();
       return;
     }
     state.symbol = sel.value; save(); loadData();
@@ -1727,14 +1827,509 @@ function bindPointer() {
   });
 }
 
+// ---------------------------------------------------------------- デモトレード
+/* 仮想資金での売買の練習。口座は決済通貨(USDT、JPY など)ごとに持つ。
+ * レバレッジなし:建てられる金額は「使える金額」まで。 */
+const TRADE_KEY = 'gold-trade-paper-v1';
+const FEE = 0.001; // 売買金額に対する手数料の割合(0.1%)
+const START_CASH = { JPY: 1000000, BTC: 1, ETH: 10, BNB: 20, TRY: 300000, IDR: 150000000, BRL: 50000 };
+const freshTrade = () => ({ accounts: {}, positions: {}, history: [], last: {}, quotes: {} });
+let T = freshTrade();
+try {
+  const t = JSON.parse(localStorage.getItem(TRADE_KEY));
+  if (t && t.accounts && t.positions && Array.isArray(t.history)) T = Object.assign(freshTrade(), t);
+} catch (e) { /* 壊れていたら新しい口座で始める */ }
+function saveTrade() {
+  try { localStorage.setItem(TRADE_KEY, JSON.stringify(T)); } catch (e) { /* 保存できなくても続ける */ }
+}
+function quoteOf(id) {
+  if (T.quotes[id]) return T.quotes[id];           // 取引したときに記録した決済通貨
+  const s = SYMBOLS.find(x => x.id === id);
+  if (s && s.quote) return s.quote;                // 全銘柄の一覧から選んだもの
+  const l = prettySymbol(id);
+  return l.includes('/') ? l.split('/')[1] : 'USDT';
+}
+const labelOf = id => {
+  const s = SYMBOLS.find(x => x.id === id);
+  if (s) return s.label;
+  const q = T.quotes[id];
+  return q && id.endsWith(q) ? `${id.slice(0, -q.length)}/${q}` : prettySymbol(id);
+};
+function acct(q) {
+  if (!T.accounts[q]) { const c = START_CASH[q] || 10000; T.accounts[q] = { cash: c, start: c }; }
+  return T.accounts[q];
+}
+function unrealized(sym) {
+  const p = T.positions[sym], px = T.last[sym];
+  return p && px > 0 ? p.qty * (px - p.avg) : 0;
+}
+function acctStats(q) {
+  let u = 0, margin = 0;
+  Object.keys(T.positions).forEach(sym => {
+    if (quoteOf(sym) !== q) return;
+    u += unrealized(sym);
+    margin += Math.abs(T.positions[sym].qty) * T.positions[sym].avg;
+  });
+  const a = acct(q);
+  return { cash: a.cash, equity: a.cash + u, avail: Math.max(0, a.cash + u - margin), start: a.start };
+}
+function fmtMoney(v, q, signed) {
+  if (!isFinite(v)) return '—';
+  const dg = q === 'JPY' ? 0 : q === 'BTC' || q === 'ETH' ? 6 : 2;
+  const s = Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: dg, maximumFractionDigits: dg });
+  return (v < 0 ? '-' : signed ? '+' : '') + s;
+}
+const fmtQty = v => {
+  const a = Math.abs(v);
+  return a >= 1000 ? fmtCompact(a) : a.toLocaleString('en-US', { maximumSignificantDigits: 6 });
+};
+const pnlClass = v => (v > 0 ? 'up' : v < 0 ? 'down' : '');
+
+/* 注文を約定させる。成功なら null、できないときは理由の文を返す。
+ * qty を渡すと、その数量ちょうどで約定する(決済用)。 */
+function execute(sym, side, notional, reason, qty) {
+  const px = T.last[sym];
+  if (!(px > 0)) return '価格を取得できていません。';
+  if (qty === undefined) qty = notional / px; else notional = qty * px;
+  if (!(notional > 0)) return '金額を入力してください。';
+  const q = quoteOf(sym), a = acct(q), dir = side === 'buy' ? 1 : -1;
+  const pos = T.positions[sym], fee = notional * FEE;
+  T.quotes[sym] = q;
+  let pnl = null;
+  if (pos && Math.sign(pos.qty) !== dir) {
+    // 反対向き=保有分を減らす(決済)
+    const held = Math.abs(pos.qty);
+    if (qty > held * (1 + 1e-9)) {
+      return `反対向きの注文は、保有している分(${fmtMoney(held * px, q)} ${q})までです。先に決済してから、新しく注文してください。`;
+    }
+    qty = Math.min(qty, held);
+    pnl = qty * (px - pos.avg) * Math.sign(pos.qty);
+    a.cash += pnl - fee;
+    pos.qty -= Math.sign(pos.qty) * qty;
+    if (Math.abs(pos.qty) <= held * 1e-9) delete T.positions[sym];
+  } else {
+    const st = acctStats(q);
+    if (notional + fee > st.avail + 1e-9) {
+      return `使える金額が足りません(使える金額: ${fmtMoney(st.avail, q)} ${q}、手数料込みで ${fmtMoney(notional + fee, q)} ${q} 必要)。`;
+    }
+    a.cash -= fee;
+    if (pos) {
+      pos.avg = (Math.abs(pos.qty) * pos.avg + qty * px) / (Math.abs(pos.qty) + qty);
+      pos.qty += dir * qty;
+    } else {
+      T.positions[sym] = { qty: dir * qty, avg: px, tp: null, sl: null, opened: Date.now() };
+    }
+  }
+  T.history.unshift({ t: Date.now(), sym, side, qty, price: px, fee, pnl, reason: reason || 'manual' });
+  T.history.length = Math.min(T.history.length, 3000);
+  saveTrade();
+  return null;
+}
+function closePosition(sym, reason) {
+  const p = T.positions[sym];
+  if (!p) return 'ポジションがありません。';
+  return execute(sym, p.qty > 0 ? 'sell' : 'buy', 0, reason, Math.abs(p.qty));
+}
+// 利確・損切りの価格が、いまの価格と向きに合っているか調べる
+function checkLevels(dir, px, tp, sl) {
+  if (tp !== null && !(dir > 0 ? tp > px : tp < px)) {
+    return dir > 0 ? '買いの利確は、いまの価格より高くしてください。' : '売りの利確は、いまの価格より低くしてください。';
+  }
+  if (sl !== null && !(dir > 0 ? sl < px : sl > px)) {
+    return dir > 0 ? '買いの損切りは、いまの価格より低くしてください。' : '売りの損切りは、いまの価格より高くしてください。';
+  }
+  return null;
+}
+function checkTriggers(sym) {
+  const p = T.positions[sym], px = T.last[sym];
+  if (!p || !(px > 0)) return;
+  const long = p.qty > 0;
+  let reason = null;
+  if (p.tp !== null && (long ? px >= p.tp : px <= p.tp)) reason = 'tp';
+  else if (p.sl !== null && (long ? px <= p.sl : px >= p.sl)) reason = 'sl';
+  if (!reason) return;
+  const q = quoteOf(sym);
+  if (closePosition(sym, reason) === null) {
+    const h = T.history[0];
+    toast(`${labelOf(sym)}:${reason === 'tp' ? '利確' : '損切り'}の価格に届いたので決済しました(損益 ${fmtMoney(h.pnl - h.fee, q, true)} ${q})`);
+  }
+}
+let toastTimer = 0;
+function toast(text) {
+  const box = $('toast');
+  box.textContent = text; box.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { box.hidden = true; }, 6000);
+}
+// 価格が更新されるたびに呼ばれる
+function tradeTick() {
+  const n = state.bars.length;
+  if (!state.live || !n) return;
+  T.last[state.symbol] = state.bars[n - 1].c;
+  checkTriggers(state.symbol);
+  renderTrade();
+}
+// 表示していない銘柄のポジションも、価格を取りにいって利確・損切りを判定する
+function pollPositions() {
+  if (!state.live || document.hidden) return;
+  Object.keys(T.positions).filter(sym => sym !== state.symbol).forEach(sym => {
+    fetchKlines(sym, '1m', 1).then(rows => {
+      T.last[sym] = rows[rows.length - 1].c;
+      checkTriggers(sym);
+      saveTrade(); renderTrade(); draw();
+    }).catch(() => { /* 次の周期でやり直す */ });
+  });
+}
+
+function setHtml(node, html) { if (node.innerHTML !== html) node.innerHTML = html; }
+function setTxt(id, text, cls) {
+  const n = $(id);
+  if (n.textContent !== text) n.textContent = text;
+  if (cls !== undefined && n.className !== cls) n.className = cls;
+}
+const numOrNull = id => { const v = parseFloat($(id).value); return isFinite(v) && v > 0 ? v : null; };
+let posKey = '';
+function renderTrade() {
+  const sym = state.symbol, q = quoteOf(sym), st = acctStats(q);
+  const px = state.live ? T.last[sym] : NaN, pos = T.positions[sym];
+  document.querySelectorAll('.trQuote').forEach(n => { if (n.textContent !== q) n.textContent = q; });
+  setTxt('trSym', curSymbol().label);
+  setTxt('trPrice', fmtPrice(px));
+  $('trBuy').disabled = $('trSell').disabled = !(px > 0);
+  if (!(px > 0)) setTxt('trMsg', state.loading ? '' : '実際の価格を取得できていないため、いまは注文できません。');
+  else if ($('trMsg').textContent.startsWith('実際の価格')) setTxt('trMsg', '');
+
+  $('trPos').hidden = !pos;
+  if (pos) {
+    const u = unrealized(sym), base = Math.abs(pos.qty) * pos.avg;
+    setTxt('pSide', pos.qty > 0 ? '買い(ロング)' : '売り(ショート)', pos.qty > 0 ? 'up' : 'down');
+    setTxt('pQty', `${fmtQty(pos.qty)}(${fmtMoney(Math.abs(pos.qty) * (px > 0 ? px : pos.avg), q)} ${q} 分)`);
+    setTxt('pAvg', fmtPrice(pos.avg));
+    setTxt('pPnl', `${fmtMoney(u, q, true)} ${q}(${(base ? u / base * 100 : 0).toFixed(2)}%)`, pnlClass(u));
+    // 入力中の値を消さないよう、ポジションが変わったときだけ入力欄を書き換える
+    const key = [sym, pos.opened, pos.tp, pos.sl].join('|');
+    if (key !== posKey) {
+      posKey = key;
+      $('pTp').value = pos.tp === null ? '' : pos.tp;
+      $('pSl').value = pos.sl === null ? '' : pos.sl;
+      setTxt('pMsg', '');
+    }
+  } else posKey = '';
+
+  const closed = T.history.filter(h => h.pnl !== null && quoteOf(h.sym) === q);
+  const wins = closed.filter(h => h.pnl - h.fee > 0).length;
+  const total = st.equity - st.start;
+  setTxt('aEq', `${fmtMoney(st.equity, q)}(${fmtMoney(total, q, true)})`, pnlClass(total));
+  setTxt('aCash', fmtMoney(st.cash, q));
+  setTxt('aAvail', fmtMoney(st.avail, q));
+  setTxt('aReal', fmtMoney(st.cash - st.start, q, true), pnlClass(st.cash - st.start));
+  setTxt('aStat', closed.length ? `${closed.length} 回 / ${(wins / closed.length * 100).toFixed(0)}%` : 'まだありません');
+
+  const others = Object.keys(T.positions).filter(s => s !== sym);
+  setHtml($('trOthers'), others.map(s => {
+    const p = T.positions[s], u = unrealized(s), oq = quoteOf(s);
+    return `<button type="button" data-sym="${s}"><span>${labelOf(s)} <span class="dim">${p.qty > 0 ? '買い' : '売り'}</span></span>` +
+      `<span class="${pnlClass(u)}">${fmtMoney(u, oq, true)} ${oq}</span></button>`;
+  }).join(''));
+
+  setHtml($('trHist'), T.history.length ? T.history.slice(0, 40).map(h => {
+    const hq = quoteOf(h.sym), d = new Date(h.t);
+    const when = `${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    const why = h.reason === 'tp' ? '・利確' : h.reason === 'sl' ? '・損切り' : '';
+    const net = h.pnl === null ? null : h.pnl - h.fee;
+    return `<div class="h-row"><span><span class="${h.side === 'buy' ? 'up' : 'down'}">${h.side === 'buy' ? '買い' : '売り'}</span> ${labelOf(h.sym)}${why}</span>` +
+      `<span class="h-pnl ${net === null ? 'dim' : pnlClass(net)}">${net === null ? '新規' : fmtMoney(net, hq, true) + ' ' + hq}</span>` +
+      `<span class="dim">${fmtQty(h.qty)} @ ${fmtPrice(h.price)}</span><span class="dim h-pnl">${when}</span></div>`;
+  }).join('') : '<span class="dim">まだ取引がありません。</span>');
+
+  const u = pos ? unrealized(sym) : 0;
+  setTxt('tbText', pos
+    ? `${pos.qty > 0 ? '買い' : '売り'}を保有中 損益 ${fmtMoney(u, q, true)} ${q}`
+    : `デモ資金 ${fmtMoney(st.equity, q)} ${q}`, pos ? pnlClass(u) : '');
+}
+
+// チャートに建値・利確・損切りの線と、売買した位置の印を描く
+function drawTrade(pane, i0, i1) {
+  if (!state.live) return;
+  const pw = plotW(), bars = state.bars, sym = state.symbol, pos = T.positions[sym];
+  const tags = [];
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, pane.y, pw, pane.h); ctx.clip();
+  T.history.forEach(h => {
+    if (h.sym !== sym) return;
+    const i = clamp(Math.floor(idxOfTime(h.t) + 1e-6), 0, bars.length - 1);
+    if (i < i0 || i > i1) return;
+    const x = xOf(i), buy = h.side === 'buy';
+    const y = buy ? pane.yOf(bars[i].l) + 6 : pane.yOf(bars[i].h) - 6, s = buy ? 1 : -1;
+    ctx.fillStyle = buy ? UP : DOWN;
+    ctx.strokeStyle = THEMES[state.theme].bg; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 5, y + 9 * s); ctx.lineTo(x + 5, y + 9 * s); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  });
+  if (pos) {
+    const line = (price, color, dash, text) => {
+      const y = Math.round(pane.yOf(price)) + 0.5;
+      ctx.strokeStyle = color; ctx.lineWidth = 1.2; ctx.setLineDash(dash);
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(pw, y); ctx.stroke();
+      ctx.setLineDash([]);
+      if (y > pane.y + 8 && y < pane.y + pane.h - 8) {
+        const w = ctx.measureText(text).width + 10, x = Math.max(4, pw - w - 6);
+        ctx.fillStyle = color; ctx.fillRect(x, y - 9, w, 18);
+        ctx.fillStyle = '#ffffff'; ctx.textAlign = 'left'; ctx.fillText(text, x + 5, y);
+        tags.push([y, price, color]);
+      }
+    };
+    const q = quoteOf(sym), u = unrealized(sym);
+    line(pos.avg, pos.qty > 0 ? '#1f9d8f' : '#e0463f', [], `${pos.qty > 0 ? '買い' : '売り'} ${fmtMoney(u, q, true)} ${q}`);
+    if (pos.tp !== null) line(pos.tp, '#1f9d8f', [5, 4], '利確');
+    if (pos.sl !== null) line(pos.sl, '#e0463f', [5, 4], '損切り');
+  }
+  ctx.lineWidth = 1;
+  ctx.restore();
+  tags.forEach(([y, price, color]) => axisTag(y, fmtPrice(price), color, '#ffffff', pane));
+}
+
+function bindTrade() {
+  const panel = $('trade'), btn = $('tradeBtn');
+  const setOpen = on => {
+    state.tradeOpen = on;
+    panel.hidden = !on;
+    btn.setAttribute('aria-pressed', String(on));
+    save();
+  };
+  setOpen(state.tradeOpen && window.innerWidth > 760); // スマホでは閉じた状態から始める
+  btn.addEventListener('click', () => setOpen(panel.hidden));
+  $('trClose').addEventListener('click', () => setOpen(false));
+  $('tbOpen').addEventListener('click', () => setOpen(true));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && window.innerWidth <= 760) setOpen(false); });
+
+  const amt = $('trAmt');
+  amt.value = acct(quoteOf(state.symbol)).start / 10;
+  document.querySelector('.tr-quick').addEventListener('click', e => {
+    const pct = parseFloat(e.target.dataset.pct);
+    if (!pct) return;
+    const q = quoteOf(state.symbol), v = acctStats(q).avail * pct / (1 + FEE);
+    amt.value = q === 'JPY' ? Math.floor(v) : Math.floor(v * 100) / 100;
+  });
+  const order = side => {
+    const sym = state.symbol, px = T.last[sym], dir = side === 'buy' ? 1 : -1;
+    const tp = numOrNull('trTp'), sl = numOrNull('trSl');
+    const had = T.positions[sym], opening = !had || Math.sign(had.qty) === dir;
+    let err = opening && px > 0 ? checkLevels(dir, px, tp, sl) : null;
+    if (!err) err = execute(sym, side, parseFloat(amt.value) || 0);
+    if (err) { setTxt('trMsg', err, 'msg down'); return; }
+    const pos = T.positions[sym];
+    if (pos && opening) {
+      if (tp !== null) pos.tp = tp;
+      if (sl !== null) pos.sl = sl;
+      saveTrade();
+    }
+    $('trTp').value = ''; $('trSl').value = '';
+    const h = T.history[0], q = quoteOf(sym);
+    setTxt('trMsg', `${side === 'buy' ? '買い' : '売り'}ました:${fmtQty(h.qty)} @ ${fmtPrice(h.price)}` +
+      (h.pnl === null ? '' : `(損益 ${fmtMoney(h.pnl - h.fee, q, true)} ${q})`), 'msg');
+    renderTrade(); draw();
+  };
+  $('trBuy').addEventListener('click', () => order('buy'));
+  $('trSell').addEventListener('click', () => order('sell'));
+
+  $('pSave').addEventListener('click', () => {
+    const pos = T.positions[state.symbol];
+    if (!pos) return;
+    const tp = numOrNull('pTp'), sl = numOrNull('pSl');
+    const err = checkLevels(Math.sign(pos.qty), T.last[state.symbol], tp, sl);
+    if (err) { setTxt('pMsg', err, 'msg down'); return; }
+    pos.tp = tp; pos.sl = sl;
+    saveTrade(); renderTrade(); draw();
+    setTxt('pMsg', '保存しました。', 'msg');
+  });
+  $('pClose').addEventListener('click', () => {
+    const sym = state.symbol, q = quoteOf(sym), err = closePosition(sym, 'manual');
+    if (err) { setTxt('pMsg', err, 'msg down'); return; }
+    const h = T.history[0];
+    setTxt('trMsg', `決済しました(損益 ${fmtMoney(h.pnl - h.fee, q, true)} ${q})`, 'msg');
+    renderTrade(); draw();
+  });
+  $('trOthers').addEventListener('click', e => {
+    const b = e.target.closest('button[data-sym]');
+    if (!b) return;
+    const sel = $('symbol'), id = b.dataset.sym;
+    // 一覧から消した銘柄のポジションでも、開けるように戻す
+    if (!SYMBOLS.some(s => s.id === id)) {
+      SYMBOLS.push({ id, label: labelOf(id), base: 100, quote: quoteOf(id) });
+      sel.insertBefore(el('option', { value: id, text: labelOf(id) }), sel.lastChild);
+    }
+    sel.value = b.dataset.sym;
+    sel.dispatchEvent(new Event('change'));
+  });
+  // 押し間違いで消えないよう、リセットは2回押しで実行する
+  const reset = $('aReset');
+  let armed = 0;
+  reset.addEventListener('click', () => {
+    if (Date.now() - armed > 4000) {
+      armed = Date.now(); reset.textContent = 'もう一度押すとリセット(取り消せません)';
+      setTimeout(() => { reset.textContent = '口座をリセット'; }, 4000);
+      return;
+    }
+    armed = 0; reset.textContent = '口座をリセット';
+    const last = T.last, quotes = T.quotes;
+    T = freshTrade(); T.last = last; T.quotes = quotes;
+    saveTrade(); renderTrade(); draw();
+    setTxt('trMsg', '口座をリセットしました。', 'msg');
+  });
+  const onSymbol = () => {
+    if ($('symbol').value === '__add') return;
+    amt.value = acct(quoteOf(state.symbol)).start / 10;
+    $('trTp').value = ''; $('trSl').value = ''; setTxt('trMsg', '');
+    renderTrade();
+  };
+  $('symbol').addEventListener('change', onSymbol);
+  $('symbol').addEventListener('symbolpicked', onSymbol);
+  bindAnalysis();
+  renderTrade();
+}
+
+// ---------------------------------------------------------------- 成績の分析
+/* 履歴を古い順にたどり、口座残高の推移と各種の指標を計算する。
+ * 損益はすべて手数料を引いた後の金額。 */
+function tradeStats(q) {
+  const start = acct(q).start;
+  const events = T.history.filter(h => quoteOf(h.sym) === q).slice().reverse();
+  const curve = [{ t: events.length ? events[0].t : Date.now(), v: start }];
+  const closed = [], bySym = {};
+  let cash = start, fees = 0, peak = start, maxDD = 0, maxDDPct = 0;
+  let run = 0, bestRun = 0, worstRun = 0;
+  events.forEach(h => {
+    fees += h.fee;
+    cash += (h.pnl === null ? 0 : h.pnl) - h.fee;
+    curve.push({ t: h.t, v: cash });
+    peak = Math.max(peak, cash);
+    if (peak - cash > maxDD) { maxDD = peak - cash; maxDDPct = peak ? maxDD / peak * 100 : 0; }
+    const s = bySym[h.sym] || (bySym[h.sym] = { sym: h.sym, n: 0, wins: 0, net: 0 });
+    if (h.pnl === null) { s.net -= h.fee; return; }
+    const net = h.pnl - h.fee;
+    closed.push(net);
+    s.n++; s.net += net; if (net > 0) s.wins++;
+    run = net > 0 ? Math.max(1, run + 1) : net < 0 ? Math.min(-1, run - 1) : 0;
+    bestRun = Math.max(bestRun, run); worstRun = Math.min(worstRun, run);
+  });
+  const wins = closed.filter(v => v > 0), losses = closed.filter(v => v < 0);
+  const sum = arr => arr.reduce((x, y) => x + y, 0);
+  const grossWin = sum(wins), grossLoss = -sum(losses);
+  return {
+    start, cash, fees, curve, maxDD, maxDDPct, bestRun, worstRun: -worstRun,
+    n: closed.length, wins: wins.length, losses: losses.length,
+    net: cash - start,
+    avgWin: wins.length ? grossWin / wins.length : NaN,
+    avgLoss: losses.length ? -grossLoss / losses.length : NaN,
+    best: closed.length ? Math.max(...closed) : NaN,
+    worst: closed.length ? Math.min(...closed) : NaN,
+    pf: grossLoss > 0 ? grossWin / grossLoss : NaN,
+    bySym: Object.values(bySym).sort((x, y) => y.net - x.net),
+  };
+}
+function drawCurve(cv, st) {
+  const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (!w) return;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const c = cv.getContext('2d'), th = THEMES[state.theme];
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+  const pts = st.curve, padL = 8, padR = 62, padT = 10, padB = 10;
+  let lo = Math.min(st.start, ...pts.map(p => p.v)), hi = Math.max(st.start, ...pts.map(p => p.v));
+  if (hi === lo) { hi += 1; lo -= 1; }
+  const span = hi - lo; lo -= span * 0.08; hi += span * 0.08;
+  const X = i => padL + (pts.length > 1 ? i / (pts.length - 1) : 0.5) * (w - padL - padR);
+  const Y = v => padT + (hi - v) / (hi - lo) * (h - padT - padB);
+  const color = st.cash >= st.start ? UP : DOWN;
+  c.font = '11px -apple-system, "Segoe UI", "Hiragino Sans", sans-serif'; c.textBaseline = 'middle';
+  // 開始時の資金(基準線)
+  c.strokeStyle = th.cross; c.setLineDash([3, 3]); c.lineWidth = 1;
+  c.beginPath(); c.moveTo(padL, Y(st.start)); c.lineTo(w - padR, Y(st.start)); c.stroke(); c.setLineDash([]);
+  if (pts.length > 1) {
+    c.beginPath(); c.moveTo(X(0), Y(st.start));
+    pts.forEach((p, i) => c.lineTo(X(i), Y(p.v)));
+    c.lineTo(X(pts.length - 1), Y(st.start)); c.closePath();
+    c.fillStyle = rgba(color, 0.14); c.fill();
+    c.beginPath(); pts.forEach((p, i) => (i ? c.lineTo(X(i), Y(p.v)) : c.moveTo(X(i), Y(p.v))));
+    c.strokeStyle = color; c.lineWidth = 2; c.lineJoin = 'round'; c.stroke();
+  }
+  c.fillStyle = th.text; c.textAlign = 'left';
+  c.fillText('開始', w - padR + 6, Y(st.start));
+  const last = pts[pts.length - 1].v;
+  if (Math.abs(Y(last) - Y(st.start)) > 13) { c.fillStyle = color; c.fillText('現在', w - padR + 6, Y(last)); }
+}
+function renderAnalysis() {
+  const body = $('anBody'), sel = $('anQuote');
+  const used = [...new Set(T.history.map(h => quoteOf(h.sym)))];
+  const cur = quoteOf(state.symbol);
+  if (!used.includes(cur)) used.unshift(cur);
+  const want = used.includes(sel.value) ? sel.value : cur;
+  sel.textContent = '';
+  used.forEach(q => sel.appendChild(el('option', { value: q, text: `${q} の口座` })));
+  sel.value = want;
+  sel.hidden = used.length < 2;
+  const q = want, st = tradeStats(q), m = (v, s) => (isFinite(v) ? `${fmtMoney(v, q, s)} ${q}` : '—');
+  const kpi = (label, value, cls, hint) =>
+    `<div class="kpi"><span class="dim">${label}</span><strong class="${cls || ''}">${value}</strong>${hint ? `<small>${hint}</small>` : ''}</div>`;
+  const pfText = isFinite(st.pf) ? st.pf.toFixed(2) : st.wins && !st.losses ? '負けなし' : '—';
+  let html = `<div class="kpis">` +
+    kpi('確定した損益', m(st.net, true), pnlClass(st.net), `開始資金 ${fmtMoney(st.start, q)} → ${fmtMoney(st.cash, q)}(${(st.net / st.start * 100).toFixed(2)}%)`) +
+    kpi('勝率', st.n ? `${(st.wins / st.n * 100).toFixed(0)}%` : '—', '', `決済 ${st.n} 回(勝ち ${st.wins}・負け ${st.losses})`) +
+    kpi('プロフィットファクター', pfText, isFinite(st.pf) ? pnlClass(st.pf - 1) : '', '利益の合計 ÷ 損失の合計。1 より大きければ全体でプラス') +
+    kpi('最大ドローダウン', st.maxDD > 0 ? `${m(-st.maxDD)}` : '—', st.maxDD > 0 ? 'down' : '', st.maxDD > 0 ? `資金がいちばん多かった時点から、最大で ${st.maxDDPct.toFixed(2)}% 減った` : '資金のピークからの最大の落ち込み') +
+    kpi('平均利益 / 平均損失', `${isFinite(st.avgWin) ? fmtMoney(st.avgWin, q, true) : '—'} / ${isFinite(st.avgLoss) ? fmtMoney(st.avgLoss, q, true) : '—'}`, '', '勝ったとき・負けたときの1回あたりの平均') +
+    kpi('最大の勝ち / 負け', `${isFinite(st.best) && st.best > 0 ? fmtMoney(st.best, q, true) : '—'} / ${isFinite(st.worst) && st.worst < 0 ? fmtMoney(st.worst, q, true) : '—'}`, '', `最長の連勝 ${st.bestRun} 回・連敗 ${st.worstRun} 回`) +
+    kpi('手数料の合計', m(st.fees), '', '損益にはすでに含めています') +
+    `</div><h3>資金の推移</h3><canvas id="anCurve" class="curve" role="img" aria-label="取引ごとの口座残高の推移"></canvas>` +
+    `<p class="dim small">横軸は取引の順番です。保有中のポジションの含み損益は含みません。</p><h3>銘柄ごとの成績</h3>`;
+  html += st.bySym.length
+    ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>銘柄</th><th>決済</th><th>勝率</th><th>損益 (${q})</th></tr></thead><tbody>` +
+      st.bySym.map(s => `<tr><td>${labelOf(s.sym)}</td><td>${s.n}</td><td>${s.n ? (s.wins / s.n * 100).toFixed(0) + '%' : '—'}</td><td class="${pnlClass(s.net)}">${fmtMoney(s.net, q, true)}</td></tr>`).join('') +
+      `</tbody></table></div>`
+    : `<p class="dim">まだ取引がありません。デモトレードで売買すると、ここに成績が出ます。</p>`;
+  if (st.n > 0 && st.n < 30) html += `<p class="dim small">決済が ${st.n} 回と少ないため、勝率などの数字は偶然に大きく左右されます。目安として見てください。</p>`;
+  body.innerHTML = html;
+  drawCurve($('anCurve'), st);
+}
+function exportCsv() {
+  const cell = v => `"${String(v).replace(/"/g, '""')}"`;
+  const rows = [['日時', '銘柄', '売買', '数量', '価格', '決済通貨', '手数料', '損益(手数料込み)', '種類']];
+  T.history.slice().reverse().forEach(h => {
+    rows.push([fmtDate(h.t, true), labelOf(h.sym), h.side === 'buy' ? '買い' : '売り', h.qty, h.price, quoteOf(h.sym), h.fee,
+      h.pnl === null ? '' : h.pnl - h.fee,
+      h.pnl === null ? '新規' : h.reason === 'tp' ? '決済(利確)' : h.reason === 'sl' ? '決済(損切り)' : '決済']);
+  });
+  // 先頭の BOM は、Excel で日本語が文字化けしないようにするため
+  const blob = new Blob(['﻿' + rows.map(r => r.map(cell).join(',')).join('\r\n')], { type: 'text/csv' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `demo-trades_${fmtDate(Date.now())}.csv`;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+function bindAnalysis() {
+  const ov = $('anOverlay');
+  const close = () => { ov.hidden = true; };
+  $('anOpen').addEventListener('click', () => { ov.hidden = false; renderAnalysis(); });
+  $('anClose').addEventListener('click', close);
+  $('anQuote').addEventListener('change', renderAnalysis);
+  $('anCsv').addEventListener('click', exportCsv);
+  ov.addEventListener('pointerdown', e => { if (e.target === ov) close(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  window.addEventListener('resize', () => { if (!ov.hidden) renderAnalysis(); });
+}
+
 // ---------------------------------------------------------------- 起動
 load();
 buildTopbar();
+bindTrade();
 bindPointer();
 new ResizeObserver(resize).observe(wrap);
 resize();
 loadData();
 setInterval(poll, 15000);
+setInterval(pollPositions, 15000);
 setInterval(() => { if (!document.hidden && !dlg.ind) draw(); }, 1000); // 残り時間の表示を進める
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 })();

@@ -36,6 +36,7 @@
   <div class="spacer"></div>
 
   <span id="status" class="badge" role="status" title="データの取得元">読み込み中</span>
+  <button id="tradeBtn" class="ctl btn" type="button" aria-pressed="false">デモトレード</button>
   <button id="themeBtn" class="ctl btn icon" type="button" aria-label="ライト/ダークを切り替える" title="ライト/ダークを切り替える"></button>
 </header>
 
@@ -44,6 +45,7 @@
   <button id="retryBtn" class="ctl btn small" type="button">再読み込み</button>
 </div>
 
+<div class="main-row">
 <main id="chartWrap" class="chart-wrap">
   <canvas id="chart" tabindex="0" aria-label="価格チャート。左右キーで移動、上下キーで拡大・縮小"></canvas>
   <div id="legends"></div>
@@ -56,6 +58,94 @@
     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 3l5 5-5 5M9 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
   </button>
 </main>
+
+<aside id="trade" class="trade" aria-label="デモトレード" hidden>
+  <div class="tr-head">
+    <div>
+      <h2>デモトレード</h2>
+      <small>仮想の資金です。実際のお金は動きません</small>
+    </div>
+    <button id="trClose" class="x" type="button" aria-label="デモトレードを閉じる">×</button>
+  </div>
+  <div class="tr-body">
+    <section class="tr-card">
+      <div class="tr-price"><span id="trSym"></span><strong id="trPrice">—</strong></div>
+      <label class="row">
+        <span class="lbl">金額 (<span class="trQuote"></span>)<small>いくら分を売買するか</small></span>
+        <input id="trAmt" class="ctl" type="number" inputmode="decimal" min="0" step="any">
+      </label>
+      <div class="tr-quick" role="group" aria-label="使える金額に対する割合">
+        <button type="button" data-pct="0.1">10%</button>
+        <button type="button" data-pct="0.25">25%</button>
+        <button type="button" data-pct="0.5">50%</button>
+        <button type="button" data-pct="1">100%</button>
+      </div>
+      <label class="row">
+        <span class="lbl">利確の価格<small>任意。届いたら自動で決済</small></span>
+        <input id="trTp" class="ctl" type="number" inputmode="decimal" min="0" step="any" placeholder="なし">
+      </label>
+      <label class="row">
+        <span class="lbl">損切りの価格<small>任意。届いたら自動で決済</small></span>
+        <input id="trSl" class="ctl" type="number" inputmode="decimal" min="0" step="any" placeholder="なし">
+      </label>
+      <div class="tr-btns">
+        <button id="trSell" class="tr-btn sell" type="button">売り<small>下がると利益</small></button>
+        <button id="trBuy" class="tr-btn buy" type="button">買い<small>上がると利益</small></button>
+      </div>
+      <p id="trMsg" class="msg" role="status"></p>
+    </section>
+
+    <section id="trPos" class="tr-card" hidden>
+      <h3>保有中のポジション</h3>
+      <dl class="tr-dl">
+        <dt>方向</dt><dd id="pSide"></dd>
+        <dt>数量</dt><dd id="pQty"></dd>
+        <dt>平均取得価格</dt><dd id="pAvg"></dd>
+        <dt>評価損益</dt><dd id="pPnl"></dd>
+      </dl>
+      <label class="row"><span class="lbl">利確の価格</span><input id="pTp" class="ctl" type="number" inputmode="decimal" min="0" step="any" placeholder="なし"></label>
+      <label class="row"><span class="lbl">損切りの価格</span><input id="pSl" class="ctl" type="number" inputmode="decimal" min="0" step="any" placeholder="なし"></label>
+      <div class="tr-btns">
+        <button id="pSave" class="ctl btn" type="button">利確・損切りを保存</button>
+        <button id="pClose" class="ctl btn primary" type="button">決済する</button>
+      </div>
+      <p id="pMsg" class="msg" role="status"></p>
+    </section>
+
+    <section class="tr-card">
+      <h3>口座 (<span class="trQuote"></span>)</h3>
+      <dl class="tr-dl">
+        <dt>評価額</dt><dd id="aEq"></dd>
+        <dt>残高</dt><dd id="aCash"></dd>
+        <dt>使える金額</dt><dd id="aAvail"></dd>
+        <dt>確定した損益</dt><dd id="aReal"></dd>
+        <dt>決済回数 / 勝率</dt><dd id="aStat"></dd>
+      </dl>
+      <div id="trOthers"></div>
+      <div class="tr-btns">
+        <button id="anOpen" class="ctl btn" type="button">成績を分析</button>
+        <button id="aReset" class="ctl btn" type="button">口座をリセット</button>
+      </div>
+    </section>
+
+    <section class="tr-card">
+      <h3>取引履歴</h3>
+      <div id="trHist" class="tr-hist"></div>
+    </section>
+
+    <p class="tr-note">
+      約定は、表示中の最新価格で即時に行う簡易的な計算です。手数料は売買金額の 0.1% として差し引いています。
+      利確・損切りは、このページを開いている間だけ判定します。実際の取引とは結果が異なります。
+    </p>
+  </div>
+</aside>
+</div>
+
+<div id="tradeBar" class="trade-bar">
+  <span id="tbText"></span>
+  <button id="tbOpen" class="ctl btn primary" type="button">注文する</button>
+</div>
+<div id="toast" class="toast" role="status" hidden></div>
 
 <div id="overlay" class="overlay" hidden>
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
@@ -78,15 +168,32 @@
   </div>
 </div>
 
+<div id="anOverlay" class="overlay" hidden>
+  <div class="dialog wide" role="dialog" aria-modal="true" aria-labelledby="anTitle">
+    <div class="dlg-head">
+      <h2 id="anTitle">デモトレードの成績</h2>
+      <button id="anClose" class="x" type="button" aria-label="閉じる">×</button>
+    </div>
+    <div class="an-tools">
+      <select id="anQuote" class="ctl" aria-label="口座を選ぶ"></select>
+      <div class="spacer"></div>
+      <button id="anCsv" class="ctl btn" type="button">履歴を CSV で保存</button>
+    </div>
+    <div id="anBody" class="dlg-body an-body"></div>
+  </div>
+</div>
+
 <div id="symOverlay" class="overlay" hidden>
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="symTitle">
-    <div class="dlg-head"><h2 id="symTitle">銘柄を追加</h2></div>
+    <div class="dlg-head"><h2 id="symTitle">銘柄を選ぶ</h2></div>
     <div class="dlg-body">
       <label class="row">
-        <span class="lbl">通貨ペア<small>Binance で取引されているもの(例: DOGEUSDT、BTCJPY)</small></span>
-        <input id="symInput" class="ctl" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="20" placeholder="DOGEUSDT">
+        <span class="lbl">検索<small>Binance で取引中の銘柄から探します(例: DOGE、BTCJPY)</small></span>
+        <input id="symInput" class="ctl" type="search" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="20" placeholder="DOGE">
       </label>
+      <div id="symChips" class="chips" role="group" aria-label="決済通貨で絞り込む"></div>
       <p id="symMsg" class="msg" role="status"></p>
+      <div id="symResults" class="results"></div>
       <div id="symList"></div>
     </div>
     <div class="dlg-foot">

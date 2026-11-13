@@ -118,7 +118,8 @@ body {
 .menu .sect { margin: 8px 10px 2px; }
 
 /* ---------- チャート ---------- */
-.chart-wrap { position: relative; flex: 1 1 0; min-height: 0; }
+.main-row { display: flex; flex: 1 1 0; min-height: 0; }
+.chart-wrap { position: relative; flex: 1 1 0; min-width: 0; min-height: 0; }
 #chart {
   position: absolute; inset: 0; width: 100%; height: 100%;
   display: block; touch-action: none; cursor: crosshair; outline: none;
@@ -325,3 +326,128 @@ body {
 }
 
 .row .btn.small { width: auto; height: 30px; }
+
+/* ---------- デモトレード ---------- */
+.trade {
+  display: flex; flex-direction: column;
+  flex: 0 0 310px; min-height: 0;
+  border-left: 1px solid var(--line); background: var(--panel);
+}
+.trade[hidden], .toast[hidden], .tr-card[hidden] { display: none; }
+.tr-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+  padding: 10px 8px 8px 14px; border-bottom: 1px solid var(--line);
+}
+.tr-head h2 { margin: 0; font-size: 15px; }
+.tr-head small, .tr-note { color: var(--muted); font-size: 11px; line-height: 1.6; }
+.tr-body { flex: 1 1 auto; overflow-y: auto; padding: 0 14px 14px; overscroll-behavior: contain; }
+.tr-card { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.tr-card h3 { margin: 0 0 6px; font-size: 13px; }
+.tr-card .row .ctl { width: 124px; }
+.tr-price { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.tr-price strong { font-size: 20px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; text-align: right; }
+.tr-quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 2px 0 6px; }
+.tr-quick button {
+  height: 28px; border: 1px solid var(--line); border-radius: 6px;
+  background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer;
+}
+.tr-quick button:hover { background: var(--hover); color: var(--text); }
+.tr-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.tr-btns .ctl { height: 38px; padding: 0 6px; white-space: normal; line-height: 1.25; }
+.tr-btn {
+  min-height: 46px; padding: 5px 6px; border: 0; border-radius: 8px;
+  color: #fff; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
+}
+.tr-btn small { display: block; font-size: 10.5px; font-weight: 400; opacity: .9; }
+.tr-btn.buy { background: #1f9d8f; }
+.tr-btn.sell { background: #e0463f; }
+.tr-btn:hover { filter: brightness(1.08); }
+.tr-btn:disabled { opacity: .45; cursor: default; filter: none; }
+.tr-dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0 0 6px; }
+.tr-dl dt { color: var(--muted); }
+.tr-dl dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.up { color: #1a9d8a; }
+.down { color: #e0463f; }
+.tr-hist { font-size: 12px; }
+.tr-hist .h-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 0 8px;
+  padding: 5px 0; border-top: 1px dashed var(--line); font-variant-numeric: tabular-nums;
+}
+.tr-hist .h-row:first-child { border-top: 0; }
+.tr-hist .dim, #trOthers .dim { color: var(--muted); }
+.tr-hist .h-pnl { text-align: right; }
+#trOthers button {
+  display: flex; justify-content: space-between; gap: 8px; width: 100%;
+  margin: 0 0 6px; padding: 6px 8px;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: transparent; color: var(--text); font: inherit; font-size: 12px; cursor: pointer; text-align: left;
+}
+#trOthers button:hover { background: var(--hover); }
+.tr-note { margin: 12px 0 0; }
+.trade-bar { display: none; }
+.toast {
+  position: fixed; left: 50%; top: 56px; transform: translateX(-50%); z-index: 60;
+  max-width: calc(100vw - 24px); padding: 8px 14px; border-radius: 8px;
+  background: var(--primary); color: var(--primary-text);
+  box-shadow: var(--shadow); font-size: 13px; text-align: center; overflow-wrap: anywhere;
+}
+#tradeBtn[aria-pressed="true"] { background: var(--hover); font-weight: 700; }
+
+@media (max-width: 760px) {
+  /* スマホ・狭い画面:下に細いバーを置き、注文画面は下からのシートで開く */
+  #tradeBtn { display: none; }
+  .trade {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    max-height: 86dvh; border-left: 0; border-radius: 14px 14px 0 0;
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, .28);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tr-card .row .ctl { width: 132px; height: 36px; font-size: 16px; }
+  .tr-quick button { height: 34px; }
+  .tr-btn { min-height: 52px; }
+  .trade-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 6px 10px; border-top: 1px solid var(--line); background: var(--panel);
+    font-size: 12px; font-variant-numeric: tabular-nums;
+  }
+  .trade-bar span { min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
+  .trade-bar .btn { flex: 0 0 auto; height: 36px; padding: 0 16px; }
+}
+
+/* ---------- 銘柄の検索 ---------- */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
+.chips button {
+  height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px;
+  background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer;
+}
+.chips button.on { background: var(--primary); border-color: var(--primary); color: var(--primary-text); }
+.results { max-height: 34vh; overflow-y: auto; margin-top: 4px; border-top: 1px solid var(--line); overscroll-behavior: contain; }
+.results:empty { display: none; }
+.results button {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; min-height: 40px; padding: 4px 6px;
+  border: 0; border-bottom: 1px solid var(--line); background: transparent;
+  color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.results button:hover { background: var(--hover); }
+.results small { color: var(--muted); }
+#symOk[hidden] { display: none; }
+
+/* ---------- 成績の分析 ---------- */
+.dialog.wide { width: min(720px, 100%); }
+.an-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 18px 8px; border-bottom: 1px solid var(--line); }
+.an-tools select[hidden] { display: none; }
+.an-body h3 { margin: 16px 0 6px; font-size: 13px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.kpi { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.kpi span, .kpi small { display: block; font-size: 11px; line-height: 1.5; }
+.kpi small, .dim { color: var(--muted); }
+.kpi strong { display: block; margin: 2px 0; font-size: 17px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.small { font-size: 11px; margin: 4px 0 0; }
+.curve { display: block; width: 100%; height: 170px; border: 1px solid var(--line); border-radius: 8px; }
+.tbl-wrap { overflow-x: auto; }
+.tbl { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.tbl th, .tbl td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.tbl th { color: var(--muted); font-weight: 400; font-size: 11px; }
+.tbl th:first-child, .tbl td:first-child { text-align: left; }
+@media (max-width: 760px) { .kpis { grid-template-columns: 1fr 1fr; } .kpi strong { font-size: 15px; } }
