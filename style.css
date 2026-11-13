@@ -253,7 +253,11 @@ body {
 .dlg-body :focus-visible { outline-offset: 2px; }
 
 @media (max-width: 560px) {
-  .brand-name, .long { display: none; }
+  .brand, .long { display: none; }
+  /* 正常時は点だけにして、銘柄名の表示幅を確保する */
+  .badge.live .txt { display: none; }
+  .badge.live { padding: 2px 6px; }
+  .badge.live::before { margin-right: 0; }
   .short { display: inline; }
   .topbar { gap: 4px 6px; }
   /* iOS は 16px 未満の入力欄にフォーカスすると画面が勝手に拡大するため */

@@ -447,7 +447,7 @@ function openStream() {
 }
 async function poll() {
   if (!state.live || document.hidden) return;
-  if (ws && ws.readyState === 1) return;
+  if (ws && ws.readyState <= 1) return; // 配信中・接続中は任せる
   const token = state.loadToken, iv = curInterval();
   try {
     const tail = await fetchKlines(state.symbol, iv.api, 3);
@@ -479,7 +479,9 @@ function maybeLoadMore() {
 function setStatus(cls, text) {
   const el = $('status');
   el.className = 'badge' + (cls ? ' ' + cls : '');
-  el.textContent = text;
+  el.innerHTML = '<span class="txt"></span>';
+  el.firstChild.textContent = text;
+  el.setAttribute('aria-label', 'データの状態: ' + text);
 }
 function setLoading(on) {
   state.loading = on;
@@ -494,9 +496,12 @@ function priceDigits(v) {
   if (a >= 0.01) return 5;
   return 8;
 }
-const fmtPrice = v => isFinite(v)
-  ? v.toLocaleString('en-US', { minimumFractionDigits: priceDigits(v), maximumFractionDigits: priceDigits(v) })
-  : '—';
+// ref を渡すと、その価格と同じ小数桁でそろえる(前日比などの小さな値用)
+const fmtPrice = (v, ref) => {
+  if (!isFinite(v)) return '—';
+  const dg = priceDigits(ref === undefined ? v : ref);
+  return v.toLocaleString('en-US', { minimumFractionDigits: dg, maximumFractionDigits: dg });
+};
 function fmtCompact(v) {
   if (!isFinite(v)) return '—';
   const a = Math.abs(v);
@@ -575,6 +580,11 @@ function resize() {
 }
 
 // ---------------------------------------------------------------- 描画
+// 凡例が載る上端のぶんだけ、目盛りの上側に余白を足す
+function headroom(lo, hi, pane, px) {
+  const t = Math.min(px, pane.h * 0.35);
+  return (hi - lo) * t / (pane.h - t);
+}
 function niceTicks(min, max, count) {
   const span = max - min;
   if (!(span > 0)) return [];
@@ -586,6 +596,7 @@ function niceTicks(min, max, count) {
   for (let v = Math.ceil(min / step) * step; v <= max; v += step) out.push(v);
   return out;
 }
+let tickLabels = [];  // 目盛りの数字。ラベルと重なるものは最後に省く
 let placedTags = []; // この描画で置いたラベルの位置(重なり防止用)
 function axisTag(y, text, bg, fg, pane, free) {
   const h = 18;
@@ -615,7 +626,7 @@ function draw() {
 function render() {
   if (!W) return;
   const th = THEMES[state.theme];
-  placedTags = [];
+  placedTags = []; tickLabels = [];
   layout();
   clampView();
   const pw = plotW();
@@ -633,12 +644,17 @@ function render() {
   if (n) {
     const step = Math.max(1, Math.ceil(78 / state.barW));
     const intraday = curInterval().ms < 864e5;
+    // 分足・時間足は、きりのよい時刻(毎時0分、0時など)に目盛りを置く
+    const need = step * barSpan();
+    const period = [9e5, 18e5, 36e5, 72e5, 144e5, 216e5, 432e5, 864e5, 1728e5, 6048e5].find(v => v >= need) || 6048e5;
     let prev = null;
-    for (let i = Math.ceil(i0 / step) * step; i <= i1; i += step) {
+    for (let i = intraday ? i0 : Math.ceil(i0 / step) * step; i <= i1; i += intraday ? 1 : step) {
       const d = new Date(bars[i].t);
       let text;
       if (intraday) {
-        text = !prev || prev.getDate() !== d.getDate()
+        const local = bars[i].t - d.getTimezoneOffset() * 6e4;
+        if (local % period) continue;
+        text = d.getHours() === 0 && d.getMinutes() === 0
           ? `${d.getMonth() + 1}/${d.getDate()}` : `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
       } else if (!prev || prev.getFullYear() !== d.getFullYear()) text = String(d.getFullYear());
       else if (prev.getMonth() !== d.getMonth()) text = `${d.getMonth() + 1}月`;
@@ -671,6 +687,9 @@ function render() {
   ctx.fillStyle = th.text; ctx.textAlign = 'center';
   timeTicks.forEach(t => { if (t.x > 16 && t.x < pw - 16) ctx.fillText(t.text, t.x, H - TIME_H / 2); });
 
+  ctx.fillStyle = th.text; ctx.textAlign = 'left';
+  tickLabels.forEach(t => { if (!placedTags.some(p => Math.abs(p - t.y) < 15)) ctx.fillText(t.text, pw + 5, t.y); });
+
   drawCrosshair(th);
   updateLegends();
   maybeLoadMore();
@@ -689,7 +708,7 @@ function gridAndAxis(pane, min, max, yOf, th, fmt) {
   ctx.fillStyle = th.text; ctx.textAlign = 'left';
   ticks.forEach(v => {
     const y = yOf(v);
-    if (y > pane.y + 8 && y < pane.y + pane.h - 8) ctx.fillText(fmt(v), pw + 5, y);
+    if (y > pane.y + 8 && y < pane.y + pane.h - 8) tickLabels.push({ y, text: fmt(v) });
   });
 }
 
@@ -702,7 +721,7 @@ function drawMain(pane, i0, i1, th) {
   if (!isFinite(lo)) return;
   if (hi === lo) { hi += 1; lo -= 1; }
   const padV = (hi - lo) * 0.1;
-  const min = lo - padV * 1.6, max = hi + padV;
+  const min = lo - padV * 1.6, max = hi + padV * 0.5 + headroom(lo - padV * 1.6, hi, pane, compact ? 78 : 44);
   const yOf = v => pane.y + pane.h - (v - min) / (max - min) * pane.h;
   pane.yOf = yOf; pane.vOf = y => min + (pane.y + pane.h - y) / pane.h * (max - min); pane.fmt = fmtPrice;
 
@@ -775,7 +794,7 @@ function drawIndicator(pane, i0, i1, th) {
   }
   if (hi === lo) { hi += 1; lo -= 1; }
   const padV = (hi - lo) * 0.12;
-  const min = lo - padV, max = hi + padV;
+  const min = lo - padV, max = hi + padV * 0.5 + headroom(lo - padV, hi, pane, compact ? 50 : 24);
   const yOf = v => pane.y + pane.h - (v - min) / (max - min) * pane.h;
   pane.yOf = yOf; pane.vOf = y => min + (pane.y + pane.h - y) / pane.h * (max - min); pane.fmt = fmtCompact;
 
@@ -858,7 +877,7 @@ function drawSimple(pane, i0, i1, th) {
   if (!isFinite(lo) || !isFinite(hi)) { lo = -1; hi = 1; }
   if (hi === lo) { hi += 1; lo -= 1; }
   const padV = out.fixed ? 0 : (hi - lo) * 0.12;
-  const min = lo - padV, max = hi + padV;
+  const min = lo - padV, max = hi + padV * 0.5 + (out.fixed ? 0 : headroom(lo - padV, hi, pane, compact ? 30 : 24));
   const yOf = v => pane.y + pane.h - (v - min) / (max - min) * pane.h;
   pane.yOf = yOf; pane.vOf = y => min + (pane.y + pane.h - y) / pane.h * (max - min); pane.fmt = fmtCompact;
   gridAndAxis(pane, min, max, yOf, th, fmtCompact);
@@ -1169,7 +1188,7 @@ function updateLegends() {
       const items = [b.o, b.h, b.l, b.c].map((v, k) => [names[k], fmtPrice(v), col]);
       if (prev) {
         const d = b.c - prev.c;
-        items.push(['', `${d >= 0 ? '+' : ''}${fmtPrice(d)} (${d >= 0 ? '+' : ''}${(d / prev.c * 100).toFixed(2)}%)`, d >= 0 ? UP : DOWN]);
+        items.push(['', `${d >= 0 ? '+' : ''}${fmtPrice(d, b.c)} (${d >= 0 ? '+' : ''}${(d / prev.c * 100).toFixed(2)}%)`, d >= 0 ? UP : DOWN]);
       }
       items.push(['出来高', fmtCompact(b.v), col]);
       setVals(el, items);
