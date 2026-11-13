@@ -586,9 +586,20 @@ function niceTicks(min, max, count) {
   for (let v = Math.ceil(min / step) * step; v <= max; v += step) out.push(v);
   return out;
 }
-function axisTag(y, text, bg, fg, pane) {
+let placedTags = []; // この描画で置いたラベルの位置(重なり防止用)
+function axisTag(y, text, bg, fg, pane, free) {
   const h = 18;
-  const yy = clamp(y, pane.y + h / 2, pane.y + pane.h - h / 2);
+  let yy = clamp(y, pane.y + h / 2, pane.y + pane.h - h / 2);
+  if (!free) {
+    // すでにあるラベルと重なるときは、すぐ下にずらす
+    for (let k = 0; k < 6; k++) {
+      const hit = placedTags.find(p => Math.abs(p - yy) < h);
+      if (hit === undefined) break;
+      yy = hit + h;
+    }
+    yy = clamp(yy, pane.y + h / 2, pane.y + pane.h - h / 2);
+    placedTags.push(yy);
+  }
   ctx.fillStyle = bg;
   ctx.fillRect(plotW(), yy - h / 2, axisW, h);
   ctx.fillStyle = fg;
@@ -604,6 +615,7 @@ function draw() {
 function render() {
   if (!W) return;
   const th = THEMES[state.theme];
+  placedTags = [];
   layout();
   clampView();
   const pw = plotW();
@@ -663,6 +675,8 @@ function render() {
   updateLegends();
   maybeLoadMore();
   $('toLatest').hidden = state.loading || !n || state.end >= n - 0.5;
+  const title = n ? `${fmtPrice(bars[n - 1].c)} ${curSymbol().label}${state.live ? '' : '(デモ)'} | Gold Trade Chart` : 'Gold Trade Chart';
+  if (document.title !== title) document.title = title;
 }
 
 function gridAndAxis(pane, min, max, yOf, th, fmt) {
@@ -963,6 +977,32 @@ function drawDrawings(pane) {
     if (y > pane.y && y < pane.y + pane.h) axisTag(y, fmtPrice(price), DRAW_COLOR, '#ffffff', pane);
   });
 }
+function saveImage() {
+  const dpr = canvas.width / W, pad = 8 * dpr;
+  const out = document.createElement('canvas');
+  out.width = canvas.width; out.height = canvas.height;
+  const c = out.getContext('2d');
+  c.drawImage(canvas, 0, 0);
+  // 凡例は画像に入らないので、銘柄・時間足・日時を左上に書き込む
+  const th = THEMES[state.theme];
+  const text = `${curSymbol().label} · ${curInterval().label} · ${fmtDate(Date.now(), true)}${state.live ? '' : ' · デモデータ'}`;
+  c.font = `${12 * dpr}px -apple-system, "Segoe UI", "Hiragino Sans", sans-serif`;
+  c.textBaseline = 'middle';
+  c.fillStyle = th.bg;
+  c.fillRect(pad / 2, pad / 2, c.measureText(text).width + pad * 2, 22 * dpr);
+  c.fillStyle = th.text;
+  c.fillText(text, pad * 1.5, pad / 2 + 11 * dpr);
+  out.toBlob(blob => {
+    if (!blob) return;
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${state.symbol}_${state.interval}_${fmtDate(Date.now())}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  }, 'image/png');
+}
 function setTool(tool) {
   state.tool = tool; state.pending = null;
   if (tool) state.sel = null;
@@ -973,7 +1013,7 @@ function updateHint() {
   let text = '';
   if (state.tool === 'h') text = '線を置きたい価格をタップ';
   else if (state.tool === 't') text = state.pending ? '終点をタップ' : '始点をタップ';
-  else if (state.sel) text = 'ドラッグで移動できます';
+  else if (state.sel) text = state.sel.type === 't' ? 'ドラッグで移動(端の点で向きを変更)' : 'ドラッグで移動できます';
   box.hidden = !text;
   $('hintText').textContent = text;
   btn.textContent = state.tool ? '中止' : '削除';
@@ -996,6 +1036,15 @@ function handleTap(pos, tol) {
   }
   if (!inMain) return;
   const pt = { t: timeOfIdx(idxAtX(pos.x)), price: pane.vOf(pos.y) };
+  // 近くに4本値(始値・高値・安値・終値)があれば、そこにぴったり合わせる
+  const bar = state.bars[Math.round(idxAtX(pos.x))];
+  if (bar) {
+    let best = 8;
+    [bar.o, bar.h, bar.l, bar.c].forEach(v => {
+      const d = Math.abs(pane.yOf(v) - pos.y);
+      if (d < best) { best = d; pt.price = v; }
+    });
+  }
   if (state.tool === 'h') { curDrawings().push({ type: 'h', p1: pt }); setTool(null); }
   else if (!state.pending) { state.pending = pt; updateHint(); }
   else { curDrawings().push({ type: 't', p1: state.pending, p2: pt }); setTool(null); }
@@ -1019,7 +1068,7 @@ function drawCrosshair(th) {
   ctx.stroke(); ctx.setLineDash([]);
 
   const pane = panes.find(p => hv.y >= p.y && hv.y < p.y + p.h);
-  if (pane && pane.vOf) axisTag(hv.y, pane.fmt(pane.vOf(hv.y)), th.tagBg, th.tagText, pane);
+  if (pane && pane.vOf) axisTag(hv.y, pane.fmt(pane.vOf(hv.y)), th.tagBg, th.tagText, pane, true);
 
   const text = fmtDate(state.bars[i].t, curInterval().ms < 864e5);
   const tw = ctx.measureText(text).width + 12;
@@ -1363,7 +1412,8 @@ function buildTopbar() {
   const toggleDraw = on => { dMenu.hidden = !on; dBtn.setAttribute('aria-expanded', String(on)); };
   [['水平線', '決めた価格に横線を引く', () => setTool('h')],
    ['トレンドライン', '2点を結ぶ線を引く', () => setTool('t')],
-   ['すべて削除', 'この銘柄の線を全部消す', () => { state.drawings[state.symbol] = []; state.sel = null; save(); setTool(null); }],
+   ['線をすべて削除', 'この銘柄に引いた線を全部消す', () => { state.drawings[state.symbol] = []; state.sel = null; save(); setTool(null); }],
+   ['画像として保存', 'いまのチャートを PNG 画像でダウンロード', () => { state.hover = null; render(); saveImage(); }],
   ].forEach(([name, hint, fn]) => {
     const b = el('button', { type: 'button', text: name });
     b.appendChild(el('small', { text: hint }));
@@ -1445,7 +1495,15 @@ function bindPointer() {
     } else if (pts.size === 1 && !state.tool && state.sel && hitDrawing(p, e.pointerType === 'mouse' ? 6 : 16) === state.sel) {
       // 選択中の線をつかんだ:チャートは動かさず、線だけ動かす
       resizing = null;
-      dragD = { start: p, orig: JSON.parse(JSON.stringify(state.sel)) };
+      const tol = e.pointerType === 'mouse' ? 8 : 18;
+      let keys = ['p1', 'p2'];
+      if (state.sel.type === 't') {
+        // 端の点をつかんだときは、その点だけ動かす(向きや長さを変えられる)
+        const ends = drawingPoints(state.sel, panes[0]);
+        const k = ends.findIndex(q => Math.hypot(q.x - p.x, q.y - p.y) <= tol);
+        if (k >= 0) keys = [k ? 'p2' : 'p1'];
+      }
+      dragD = { start: p, keys, orig: JSON.parse(JSON.stringify(state.sel)) };
     } else {
       resizing = null;
       if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); }
@@ -1469,7 +1527,7 @@ function bindPointer() {
       pts.set(e.pointerId, p);
       const dv = pane.vOf(p.y) - pane.vOf(dragD.start.y);
       const di = Math.round((p.x - dragD.start.x) / state.barW);
-      ['p1', 'p2'].forEach(k => {
+      dragD.keys.forEach(k => {
         if (!o[k]) return;
         d[k].price = o[k].price + dv;
         if (d.type === 't') d[k].t = timeOfIdx(Math.round(idxOfTime(o[k].t)) + di);
