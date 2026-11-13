@@ -871,7 +871,7 @@ function drawIndicator(pane, i0, i1, th) {
     }
     ctx.lineWidth = 1;
   }
-  if (p.pivots && p.showPlot) {
+  if (p.pivots && p.showPlot && bw >= 3) { // 縮小しすぎると印だらけになるので出さない
     const N = Math.max(1, Math.round(p.pivotLen) || 1), v = out.val, last = state.bars.length - 1;
     ctx.strokeStyle = '#5b7fd6'; ctx.fillStyle = th.bg; ctx.lineWidth = 1.3;
     for (let i = Math.max(N, i0); i <= Math.min(last - N, i1); i++) {
@@ -1442,6 +1442,25 @@ function buildTopbar() {
   // 銘柄の追加:実際にデータが取れるか確かめてから一覧に入れる
   const symOv = $('symOverlay'), symIn = $('symInput'), symMsg = $('symMsg'), symOk = $('symOk');
   const closeSym = () => { symOv.hidden = true; sel.focus(); };
+  const fillCustom = () => {
+    const box = $('symList');
+    box.textContent = '';
+    const mine = SYMBOLS.slice(BUILTIN);
+    if (mine.length) box.appendChild(el('div', { class: 'sect', text: '追加した銘柄' }));
+    mine.forEach(s => {
+      const del = el('button', { type: 'button', class: 'ctl btn small', text: '削除' });
+      del.setAttribute('aria-label', `${s.label} を一覧から削除`);
+      del.addEventListener('click', () => {
+        SYMBOLS.splice(SYMBOLS.indexOf(s), 1);
+        delete state.drawings[s.id];
+        const wasCurrent = state.symbol === s.id;
+        if (wasCurrent) state.symbol = SYMBOLS[0].id;
+        fillSymbols(); fillCustom(); save();
+        if (wasCurrent) { state.sel = null; setTool(null); loadData(); }
+      });
+      box.appendChild(el('div', { class: 'row' }, [el('span', { class: 'lbl', text: s.label }), del]));
+    });
+  };
   const addSymbol = async () => {
     const id = symIn.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (id.length < 5) { symMsg.textContent = '「DOGEUSDT」のように、通貨ペアを続けて入力してください。'; return; }
@@ -1465,7 +1484,7 @@ function buildTopbar() {
   sel.addEventListener('change', () => {
     if (sel.value === '__add') {
       sel.value = state.symbol;
-      symIn.value = ''; symMsg.textContent = ''; symOv.hidden = false; symIn.focus();
+      symIn.value = ''; symMsg.textContent = ''; fillCustom(); symOv.hidden = false; symIn.focus();
       return;
     }
     state.symbol = sel.value; save(); loadData();
@@ -1493,13 +1512,28 @@ function buildTopbar() {
     rsi: '買われすぎ・売られすぎの目安(0〜100)',
     macd: '2本の平均線の差で、流れの強さと向きを見る',
   };
-  Object.entries(IND_TYPES).forEach(([type, T]) => {
-    const b = el('button', { type: 'button', text: T.name }, []);
-    b.appendChild(el('small', { text: hints[type] }));
-    b.addEventListener('click', () => { addIndicator(type); toggleMenu(false); });
-    menu.appendChild(b);
-  });
-  const toggleMenu = on => { menu.hidden = !on; btn.setAttribute('aria-expanded', String(on)); };
+  const fillIndMenu = () => {
+    menu.textContent = '';
+    Object.entries(IND_TYPES).forEach(([type, T]) => {
+      const b = el('button', { type: 'button', text: T.name }, []);
+      b.appendChild(el('small', { text: hints[type] }));
+      b.addEventListener('click', () => { addIndicator(type); toggleMenu(false); });
+      menu.appendChild(b);
+    });
+    // この時間足で非表示にしているものは凡例が出ないので、ここから設定を開けるようにする
+    const off = state.indicators.filter(i => !shownHere(i));
+    if (off.length) menu.appendChild(el('div', { class: 'sect', text: 'この時間足では非表示のもの' }));
+    off.forEach(ind => {
+      const b = el('button', { type: 'button', text: IND_TYPES[ind.type].name }, []);
+      b.appendChild(el('small', { text: '設定を開いて「可視性」で表示に戻せます' }));
+      b.addEventListener('click', () => { toggleMenu(false); openDialog(ind); dlg.tab = 'vis'; renderDialog(); });
+      menu.appendChild(b);
+    });
+  };
+  const toggleMenu = on => {
+    if (on) fillIndMenu();
+    menu.hidden = !on; btn.setAttribute('aria-expanded', String(on));
+  };
   btn.addEventListener('click', e => { e.stopPropagation(); toggleMenu(menu.hidden); });
   document.addEventListener('click', e => {
     if (!menu.contains(e.target)) toggleMenu(false);

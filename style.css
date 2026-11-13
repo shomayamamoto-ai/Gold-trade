@@ -115,6 +115,7 @@ body {
 }
 .menu button:hover { background: var(--hover); }
 .menu small { display: block; color: var(--muted); }
+.menu .sect { margin: 8px 10px 2px; }
 
 /* ---------- チャート ---------- */
 .chart-wrap { position: relative; flex: 1 1 0; min-height: 0; }
@@ -322,3 +323,5 @@ body {
   .banner { padding: 2px 12px; }
   .dialog { max-height: 96vh; }
 }
+
+.row .btn.small { width: auto; height: 30px; }
