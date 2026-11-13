@@ -179,7 +179,16 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, .18); cursor: pointer;
 }
 .fab:hover { background: var(--hover); }
-.loading[hidden], .fab[hidden], .banner[hidden] { display: none; }
+.hint {
+  position: absolute; left: 50%; bottom: 36px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px;
+  max-width: calc(100% - 24px); padding: 6px 8px 6px 14px;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--panel); box-shadow: 0 2px 10px rgba(0, 0, 0, .2);
+  font-size: 12px; white-space: nowrap;
+}
+#chart.placing { cursor: copy; }
+.loading[hidden], .fab[hidden], .banner[hidden], .hint[hidden] { display: none; }
 
 .banner {
   display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
@@ -259,7 +268,12 @@ body {
   .ctl { height: 34px; }
   .btn.icon { width: 34px; }
   .btn.small { height: 28px; }
-  #symbol { min-width: 0; flex: 0 1 auto; }
+  #symbol { min-width: 0; flex: 1 1 0; }
+  .topbar > .spacer { display: none; }
+  /* メニューはボタンの位置に関係なく、画面幅いっぱいに出す */
+  .topbar { position: relative; }
+  .menu-wrap { position: static; }
+  .menu { left: 10px; right: 10px; top: 44px; width: auto; }
 
   .legend { font-size: 11px; line-height: 1.55; max-width: calc(100% - 60px);
     background: color-mix(in srgb, var(--bg) 80%, transparent); }

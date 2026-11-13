@@ -79,13 +79,21 @@ const IND_TYPES = {
   },
   // overlay: 専用のペインを持たず、ローソク足の上に重ねて描く
   ma: { name: '移動平均線 (MA)', overlay: true },
+  // simple: 線と棒だけで描く、定番の指標
+  rsi: { name: 'RSI', simple: true },
+  macd: { name: 'MACD', simple: true },
 };
+const DRAW_COLOR = '#2f80ed';
 const MA_KINDS = [['sma', '単純 (SMA)'], ['ema', '指数 (EMA)'], ['rma', 'Smoothed (RMA)']];
 
 function defaultParams(type) {
   const vis = {};
   INTERVALS.forEach(iv => { vis[iv.id] = true; });
   if (type === 'ma') return { kind: 'sma', len: 20, source: 'close', color: '#f5a623', width: 1.5, vis };
+  if (type === 'rsi') return { len: 14, source: 'close', upper: 70, lower: 30, color: '#7e57c2', weight: 1, vis };
+  if (type === 'macd') {
+    return { fast: 12, slow: 26, signal: 9, source: 'close', colMacd: '#2f80ed', colSignal: '#f5a623', weight: 1, vis };
+  }
   return Object.assign({
     baseline: true,
     agg: 'smoothed',
@@ -131,6 +139,10 @@ const state = {
   hover: null,        // {x, y}
   mainWeight: 2.6,    // メインペインの高さの比率
   loading: false,
+  drawings: {},       // 銘柄ごとの線 {type:'h'|'t', p1:{t,price}, p2}
+  tool: null,         // 'h' = 水平線 / 't' = トレンドライン
+  pending: null,      // トレンドラインの1点目
+  sel: null,          // 選択中の線
   loadToken: 0,
 };
 let nextId = 1;
@@ -145,7 +157,7 @@ const legendsEl = $('legends');
 function save() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({
-      symbol: state.symbol, interval: state.interval, theme: state.theme, mainWeight: state.mainWeight,
+      symbol: state.symbol, interval: state.interval, theme: state.theme, mainWeight: state.mainWeight, drawings: state.drawings,
       indicators: state.indicators.map(i => ({ type: i.type, hidden: i.hidden, p: i.p })),
     }));
   } catch (e) { /* 保存できなくても表示は続ける */ }
@@ -158,6 +170,7 @@ function load() {
   if (s && THEMES[s.theme]) state.theme = s.theme;
   else if (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) state.theme = 'dark';
   if (s && s.mainWeight > 0) state.mainWeight = s.mainWeight;
+  if (s && s.drawings && typeof s.drawings === 'object') state.drawings = s.drawings;
   const list = s && Array.isArray(s.indicators)
     ? s.indicators.filter(i => i && IND_TYPES[i.type])
     : [{ type: 'ma' }, { type: 'ccOnly' }, { type: 'enhanced' }];
@@ -261,10 +274,36 @@ function computeMA(bars, p) {
   const val = p.kind === 'ema' ? rma(src, n, 2 / (n + 1)) : p.kind === 'rma' ? rma(src, n) : sma(src, n);
   return { val };
 }
+const lenOf = v => Math.max(1, Math.round(v) || 1);
+/* RSI: 直近の「上げ幅の平均」と「下げ幅の平均」の比を 0〜100 にしたもの */
+function computeRSI(bars, p) {
+  const n = lenOf(p.len), up = [NaN], dn = [NaN];
+  for (let i = 1; i < bars.length; i++) {
+    const d = srcOf(bars[i], p.source) - srcOf(bars[i - 1], p.source);
+    up.push(Math.max(d, 0)); dn.push(Math.max(-d, 0));
+  }
+  const au = rma(up, n), ad = rma(dn, n);
+  const val = au.map((u, i) => !isFinite(u) ? NaN : ad[i] === 0 ? 100 : 100 - 100 / (1 + u / ad[i]));
+  return {
+    lines: [{ name: 'RSI', val, color: p.color }], hist: null,
+    bands: [+p.upper, +p.lower], fixed: [0, 100], label: String(n),
+  };
+}
+/* MACD: 短期EMA − 長期EMA。シグナルはその EMA、棒は両者の差 */
+function computeMACD(bars, p) {
+  const src = bars.map(b => srcOf(b, p.source));
+  const f = lenOf(p.fast), s = lenOf(p.slow), g = lenOf(p.signal);
+  const ef = rma(src, f, 2 / (f + 1)), es = rma(src, s, 2 / (s + 1));
+  const macd = ef.map((v, i) => v - es[i]);
+  const sig = rma(macd, g, 2 / (g + 1));
+  return {
+    lines: [{ name: 'MACD', val: macd, color: p.colMacd }, { name: 'シグナル', val: sig, color: p.colSignal }],
+    hist: macd.map((v, i) => v - sig[i]), bands: [0], fixed: null, label: `${f} ${s} ${g}`,
+  };
+}
 function recompute() {
-  state.indicators.forEach(ind => {
-    ind.out = ind.type === 'ma' ? computeMA(state.bars, ind.p) : computeCC(state.bars, ind.p);
-  });
+  const fns = { ma: computeMA, rsi: computeRSI, macd: computeMACD };
+  state.indicators.forEach(ind => { ind.out = (fns[ind.type] || computeCC)(state.bars, ind.p); });
 }
 
 // ---------------------------------------------------------------- データ
@@ -605,7 +644,8 @@ function render() {
     timeTicks.forEach(t => { const x = Math.round(t.x) + 0.5; ctx.moveTo(x, pane.y); ctx.lineTo(x, pane.y + pane.h); });
     ctx.stroke();
     ctx.restore();
-    if (n) (pane.ind ? drawIndicator : drawMain)(pane, i0, i1, th);
+    if (n && !pane.ind) { drawMain(pane, i0, i1, th); drawDrawings(pane); }
+    else if (n) (IND_TYPES[pane.ind.type].simple ? drawSimple : drawIndicator)(pane, i0, i1, th);
     // 区切り線
     ctx.strokeStyle = th.axis;
     ctx.beginPath();
@@ -791,6 +831,177 @@ function drawIndicator(pane, i0, i1, th) {
   }
 }
 
+function drawSimple(pane, i0, i1, th) {
+  const ind = pane.ind, out = ind.out, pw = plotW(), bw = state.barW;
+  if (!out) return;
+  let lo = Infinity, hi = -Infinity;
+  if (out.fixed) [lo, hi] = out.fixed;
+  else {
+    const all = out.lines.map(l => l.val).concat(out.hist ? [out.hist] : []);
+    for (let i = i0; i <= i1; i++) all.forEach(arr => { if (isFinite(arr[i])) { lo = Math.min(lo, arr[i]); hi = Math.max(hi, arr[i]); } });
+    out.bands.forEach(v => { lo = Math.min(lo, v); hi = Math.max(hi, v); });
+  }
+  if (!isFinite(lo) || !isFinite(hi)) { lo = -1; hi = 1; }
+  if (hi === lo) { hi += 1; lo -= 1; }
+  const padV = out.fixed ? 0 : (hi - lo) * 0.12;
+  const min = lo - padV, max = hi + padV;
+  const yOf = v => pane.y + pane.h - (v - min) / (max - min) * pane.h;
+  pane.yOf = yOf; pane.vOf = y => min + (pane.y + pane.h - y) / pane.h * (max - min); pane.fmt = fmtCompact;
+  gridAndAxis(pane, min, max, yOf, th, fmtCompact);
+  if (ind.hidden) return;
+
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, pane.y, pw, pane.h); ctx.clip();
+  if (out.bands.length === 2) {
+    ctx.fillStyle = rgba(out.lines[0].color, 0.08);
+    ctx.fillRect(0, yOf(out.bands[0]), pw, yOf(out.bands[1]) - yOf(out.bands[0]));
+  }
+  ctx.strokeStyle = th.cross; ctx.setLineDash([2, 3]);
+  ctx.beginPath();
+  out.bands.forEach(v => { const y = Math.round(yOf(v)) + 0.5; ctx.moveTo(0, y); ctx.lineTo(pw, y); });
+  ctx.stroke(); ctx.setLineDash([]);
+  if (out.hist) {
+    const body = Math.max(1, Math.floor(bw * 0.72)), y0 = yOf(0);
+    for (let i = i0; i <= i1; i++) {
+      const v = out.hist[i];
+      if (!isFinite(v)) continue;
+      const growing = Math.abs(v) >= Math.abs(out.hist[i - 1]); // 勢いが増している棒は濃く
+      ctx.fillStyle = rgba(v >= 0 ? UP : DOWN, growing ? 0.85 : 0.4);
+      const y = yOf(v);
+      ctx.fillRect(Math.round(xOf(i) - body / 2), Math.min(y, y0), body, Math.max(1, Math.abs(y - y0)));
+    }
+  }
+  ctx.lineWidth = 1.5; ctx.lineJoin = 'round';
+  out.lines.forEach(l => {
+    ctx.strokeStyle = l.color;
+    ctx.beginPath();
+    let pen = false;
+    for (let i = Math.max(0, i0 - 1); i <= Math.min(state.bars.length - 1, i1 + 1); i++) {
+      if (!isFinite(l.val[i])) { pen = false; continue; }
+      if (pen) ctx.lineTo(xOf(i), yOf(l.val[i])); else ctx.moveTo(xOf(i), yOf(l.val[i]));
+      pen = true;
+    }
+    ctx.stroke();
+  });
+  ctx.lineWidth = 1;
+  ctx.restore();
+  const l0 = out.lines[0], lv = l0.val[state.bars.length - 1];
+  if (isFinite(lv)) {
+    const y = yOf(lv);
+    if (y > pane.y && y < pane.y + pane.h) axisTag(y, fmtCompact(lv), l0.color, '#ffffff', pane);
+  }
+}
+
+// ---------------------------------------------------------------- 線を引く
+const barSpan = () => { const iv = curInterval(); return iv.ms * iv.group; };
+// 時刻 → 足の位置(小数)。最新の足より先は、足の間隔で延長する
+function idxOfTime(t) {
+  const bars = state.bars, n = bars.length;
+  if (!n) return 0;
+  if (t >= bars[n - 1].t) return n - 1 + (t - bars[n - 1].t) / barSpan();
+  if (t <= bars[0].t) return (t - bars[0].t) / barSpan();
+  let lo = 0, hi = n - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (bars[m].t <= t) lo = m; else hi = m; }
+  return lo + (t - bars[lo].t) / (bars[hi].t - bars[lo].t);
+}
+function timeOfIdx(i) {
+  const bars = state.bars, n = bars.length;
+  const k = Math.round(i);
+  if (k >= n) return bars[n - 1].t + (k - n + 1) * barSpan();
+  if (k < 0) return bars[0].t + k * barSpan();
+  return bars[k].t;
+}
+const idxAtX = x => startIdx() + (x - state.barW / 2) / state.barW;
+const curDrawings = () => state.drawings[state.symbol] || (state.drawings[state.symbol] = []);
+function drawingPoints(d, pane) {
+  return [d.p1, d.p2].filter(Boolean).map(p => ({ x: xOf(idxOfTime(p.t)), y: pane.yOf(p.price) }));
+}
+function hitDrawing(pos, tol) {
+  const pane = panes[0];
+  if (!pane || !pane.yOf || pos.x > plotW() || pos.y > pane.y + pane.h) return null;
+  const list = curDrawings();
+  for (let k = list.length - 1; k >= 0; k--) {
+    const d = list[k];
+    if (d.type === 'h') { if (Math.abs(pos.y - pane.yOf(d.p1.price)) <= tol) return d; continue; }
+    const [a, b] = drawingPoints(d, pane);
+    const dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
+    const u = len2 ? clamp(((pos.x - a.x) * dx + (pos.y - a.y) * dy) / len2, 0, 1) : 0;
+    if (Math.hypot(pos.x - (a.x + u * dx), pos.y - (a.y + u * dy)) <= tol) return d;
+  }
+  return null;
+}
+function drawDrawings(pane) {
+  const pw = plotW(), tags = [];
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, pane.y, pw, pane.h); ctx.clip();
+  ctx.strokeStyle = DRAW_COLOR; ctx.fillStyle = DRAW_COLOR;
+  curDrawings().forEach(d => {
+    const on = d === state.sel;
+    ctx.lineWidth = on ? 2.5 : 1.4;
+    ctx.beginPath();
+    if (d.type === 'h') {
+      const y = Math.round(pane.yOf(d.p1.price)) + 0.5;
+      ctx.moveTo(0, y); ctx.lineTo(pw, y); ctx.stroke();
+      tags.push([y, d.p1.price]);
+    } else {
+      const [a, b] = drawingPoints(d, pane);
+      ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      if (on) [a, b].forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill(); });
+    }
+  });
+  // トレンドラインの2点目を選んでいる間の下書き
+  if (state.tool === 't' && state.pending && state.hover) {
+    const a = { x: xOf(idxOfTime(state.pending.t)), y: pane.yOf(state.pending.price) };
+    ctx.lineWidth = 1.4; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(state.hover.x, state.hover.y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(a.x, a.y, 4, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.lineWidth = 1;
+  ctx.restore();
+  tags.forEach(([y, price]) => {
+    if (y > pane.y && y < pane.y + pane.h) axisTag(y, fmtPrice(price), DRAW_COLOR, '#ffffff', pane);
+  });
+}
+function setTool(tool) {
+  state.tool = tool; state.pending = null;
+  if (tool) state.sel = null;
+  updateHint(); draw();
+}
+function updateHint() {
+  const box = $('hint'), btn = $('hintBtn');
+  let text = '';
+  if (state.tool === 'h') text = '線を置きたい価格をタップ';
+  else if (state.tool === 't') text = state.pending ? '終点をタップ' : '始点をタップ';
+  else if (state.sel) text = 'ドラッグで移動できます';
+  box.hidden = !text;
+  $('hintText').textContent = text;
+  btn.textContent = state.tool ? '中止' : '削除';
+  canvas.classList.toggle('placing', !!state.tool);
+}
+function removeSelected() {
+  if (!state.sel) return;
+  state.drawings[state.symbol] = curDrawings().filter(d => d !== state.sel);
+  state.sel = null;
+  save(); updateHint(); draw();
+}
+// 動かさずに離した(タップ)ときの処理
+function handleTap(pos, tol) {
+  const pane = panes[0];
+  const inMain = pane && pane.vOf && pos.x <= plotW() && pos.y < pane.y + pane.h && state.bars.length;
+  if (!state.tool) {
+    state.sel = inMain ? hitDrawing(pos, tol) : null;
+    updateHint();
+    return;
+  }
+  if (!inMain) return;
+  const pt = { t: timeOfIdx(idxAtX(pos.x)), price: pane.vOf(pos.y) };
+  if (state.tool === 'h') { curDrawings().push({ type: 'h', p1: pt }); setTool(null); }
+  else if (!state.pending) { state.pending = pt; updateHint(); }
+  else { curDrawings().push({ type: 't', p1: state.pending, p2: pt }); setTool(null); }
+  save();
+}
+
 function hoverIndex() {
   const n = state.bars.length;
   if (!n) return -1;
@@ -918,6 +1129,11 @@ function updateLegends() {
     const ind = pane.ind, p = ind.p, T = IND_TYPES[ind.type];
     el.classList.toggle('off', !!ind.hidden);
     setText(el, '.name', T.name);
+    if (T.simple) {
+      setText(el, '.params', ind.out ? ind.out.label : '');
+      setVals(el, ind.out && i >= 0 ? ind.out.lines.map(l => [l.name === T.name ? '' : l.name, fmtCompact(l.val[i]), l.color]) : []);
+      return;
+    }
     const aggLabel = (AGGS.find(a => a[0] === p.agg) || ['', ''])[1];
     setText(el, '.params', p.statusParams ? `${aggLabel} ${p.maLen} / ${p.volMaLen}` : '');
     const items = [];
@@ -957,7 +1173,7 @@ function openDialog(ind) {
   dlg.tab = 'params';
   dlg.opener = document.activeElement;
   $('dlgTitle').textContent = IND_TYPES[ind.type].name;
-  document.querySelector('.tab[data-tab="style"]').hidden = isOverlay(ind);
+  document.querySelector('.tab[data-tab="style"]').hidden = !IND_TYPES[ind.type].labels;
   $('overlay').hidden = false;
   renderDialog();
   $('dlgOk').focus();
@@ -1028,7 +1244,7 @@ function fRange(key, text, min, max, step) {
   return el('label', { class: 'row' }, [labelCell(text), input]);
 }
 function renderDialog() {
-  const ind = dlg.ind, T = IND_TYPES[ind.type], L = T.labels;
+  const ind = dlg.ind, T = IND_TYPES[ind.type], L = T.labels || {};
   const body = $('dlgBody');
   body.textContent = '';
   document.querySelectorAll('.tab').forEach(t => {
@@ -1045,6 +1261,23 @@ function renderDialog() {
       fSelect('source', 'ソース', SOURCES),
       fColor('color', '線の色'),
       fNumber('width', '線の太さ', 0.5, 5, 0.5)
+    );
+  } else if (ind.type === 'rsi' && dlg.tab === 'params') {
+    add(
+      fNumber('len', '期間', 1, 500, 1),
+      fSelect('source', 'ソース', SOURCES),
+      fNumber('upper', '上の基準線', 50, 100, 1, 'これより上は「買われすぎ」の目安'),
+      fNumber('lower', '下の基準線', 0, 50, 1, 'これより下は「売られすぎ」の目安'),
+      fColor('color', '線の色')
+    );
+  } else if (ind.type === 'macd' && dlg.tab === 'params') {
+    add(
+      fNumber('fast', '短期の期間', 1, 500, 1),
+      fNumber('slow', '長期の期間', 1, 500, 1),
+      fNumber('signal', 'シグナルの期間', 1, 500, 1),
+      fSelect('source', 'ソース', SOURCES),
+      fColor('colMacd', 'MACD の色'),
+      fColor('colSignal', 'シグナルの色')
     );
   } else if (dlg.tab === 'params') {
     add(
@@ -1110,6 +1343,8 @@ function buildTopbar() {
     ccOnly: '値動きの向きと強さで重みづけした出来高',
     enhanced: '上の値に、ゼロ上下で色が変わる SMA 線を追加',
     ma: 'ローソク足に重ねる平均線。何本でも追加できます',
+    rsi: '買われすぎ・売られすぎの目安(0〜100)',
+    macd: '2本の平均線の差で、流れの強さと向きを見る',
   };
   Object.entries(IND_TYPES).forEach(([type, T]) => {
     const b = el('button', { type: 'button', text: T.name }, []);
@@ -1123,6 +1358,23 @@ function buildTopbar() {
     if (!menu.contains(e.target)) toggleMenu(false);
     if (!e.target.closest('.legend')) legendEls.forEach(x => x.classList.remove('open'));
   });
+
+  const dMenu = $('drawMenu'), dBtn = $('drawBtn');
+  const toggleDraw = on => { dMenu.hidden = !on; dBtn.setAttribute('aria-expanded', String(on)); };
+  [['水平線', '決めた価格に横線を引く', () => setTool('h')],
+   ['トレンドライン', '2点を結ぶ線を引く', () => setTool('t')],
+   ['すべて削除', 'この銘柄の線を全部消す', () => { state.drawings[state.symbol] = []; state.sel = null; save(); setTool(null); }],
+  ].forEach(([name, hint, fn]) => {
+    const b = el('button', { type: 'button', text: name });
+    b.appendChild(el('small', { text: hint }));
+    b.addEventListener('click', () => { toggleDraw(false); fn(); });
+    dMenu.appendChild(b);
+  });
+  dBtn.addEventListener('click', e => { e.stopPropagation(); toggleMenu(false); toggleDraw(dMenu.hidden); });
+  btn.addEventListener('click', () => toggleDraw(false));
+  document.addEventListener('click', e => { if (!dMenu.contains(e.target)) toggleDraw(false); });
+  $('hintBtn').addEventListener('click', () => { if (state.tool) setTool(null); else removeSelected(); });
+  sel.addEventListener('change', () => { state.sel = null; setTool(null); });
 
   const paintTheme = () => {
     document.documentElement.dataset.theme = state.theme;
@@ -1144,11 +1396,15 @@ function buildTopbar() {
   $('dlgReset').addEventListener('click', () => {
     const w = dlg.ind.p.weight;
     dlg.ind.p = defaultParams(dlg.ind.type);
-    dlg.ind.p.weight = w;
+    if (w) dlg.ind.p.weight = w;
     renderDialog(); applyLive();
   });
   $('overlay').addEventListener('pointerdown', e => { if (e.target === $('overlay')) closeDialog(false); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDialog(false); toggleMenu(false); } });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    closeDialog(false); toggleMenu(false); toggleDraw(false);
+    if (state.tool || state.sel) { state.sel = null; setTool(null); }
+  });
 }
 
 // ---------------------------------------------------------------- 操作
@@ -1172,7 +1428,7 @@ function paneWeight(k, v) {
 }
 function bindPointer() {
   const pts = new Map();
-  let pinch = 0, resizing = null, moved = 0;
+  let pinch = 0, resizing = null, moved = 0, dragD = null;
   const pos = e => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
 
   canvas.addEventListener('pointerdown', e => {
@@ -1186,6 +1442,10 @@ function bindPointer() {
       panes.forEach((pn, j) => paneWeight(j, pn.h));
       resizing = { k, y: p.y, a: panes[k].h, b: panes[k + 1].h };
       state.hover = null;
+    } else if (pts.size === 1 && !state.tool && state.sel && hitDrawing(p, e.pointerType === 'mouse' ? 6 : 16) === state.sel) {
+      // 選択中の線をつかんだ:チャートは動かさず、線だけ動かす
+      resizing = null;
+      dragD = { start: p, orig: JSON.parse(JSON.stringify(state.sel)) };
     } else {
       resizing = null;
       if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); }
@@ -1200,6 +1460,20 @@ function bindPointer() {
       const d = clamp(p.y - resizing.y, 48 - resizing.a, resizing.b - 48);
       paneWeight(resizing.k, resizing.a + d);
       paneWeight(resizing.k + 1, resizing.b - d);
+      draw();
+      return;
+    }
+    if (dragD && prev) {
+      const pane = panes[0], d = state.sel, o = dragD.orig;
+      moved += Math.abs(p.x - prev.x) + Math.abs(p.y - prev.y);
+      pts.set(e.pointerId, p);
+      const dv = pane.vOf(p.y) - pane.vOf(dragD.start.y);
+      const di = Math.round((p.x - dragD.start.x) / state.barW);
+      ['p1', 'p2'].forEach(k => {
+        if (!o[k]) return;
+        d[k].price = o[k].price + dv;
+        if (d.type === 't') d[k].t = timeOfIdx(Math.round(idxOfTime(o[k].t)) + di);
+      });
       draw();
       return;
     }
@@ -1221,7 +1495,12 @@ function bindPointer() {
   });
   const up = e => {
     pts.delete(e.pointerId); pinch = 0;
+    const special = !!resizing || (dragD && moved > 8);
     if (resizing) { resizing = null; save(); }
+    if (dragD) { dragD = null; save(); }
+    if (!special && moved <= 8 && e.type === 'pointerup' && !pts.size) {
+      handleTap(pos(e), e.pointerType === 'mouse' ? 6 : 16);
+    }
     if (!pts.size) canvas.classList.remove('grabbing');
     // タッチ操作:タップなら十字線を残し、スワイプ後は消す
     if (e.pointerType !== 'mouse' && (e.type !== 'pointerup' || moved > 8)) state.hover = null;
@@ -1251,6 +1530,7 @@ function bindPointer() {
     else if (e.key === 'ArrowDown' || e.key === '-') zoomAt(plotW(), 1 / 1.2);
     else if (e.key === 'End') state.end = state.bars.length + 5;
     else if (e.key === 'Home') state.end = 0;
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && state.sel) removeSelected();
     else return;
     e.preventDefault(); draw();
   });
