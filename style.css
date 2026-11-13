@@ -134,6 +134,13 @@ body {
   pointer-events: auto;
   background: color-mix(in srgb, var(--bg) 72%, transparent);
 }
+.stack {
+  position: absolute; left: 6px; top: 4px;
+  display: flex; flex-direction: column; align-items: flex-start;
+  max-width: calc(100% - 80px); pointer-events: none;
+}
+.stack .legend { position: static; max-width: 100%; }
+.legend .more { display: none; }
 .legend:hover { background: var(--panel); box-shadow: 0 0 0 1px var(--line); }
 .legend .name { font-weight: 600; }
 .legend .dim { color: var(--muted); }
@@ -189,7 +196,7 @@ body {
   display: flex; align-items: center; justify-content: center;
   padding: 12px; background: rgba(0, 0, 0, .25);
 }
-.overlay[hidden], .menu[hidden] { display: none; }
+.overlay[hidden], .menu[hidden], .tab[hidden] { display: none; }
 .dialog {
   display: flex; flex-direction: column;
   width: min(460px, 100%); max-height: min(92vh, 720px);
@@ -257,7 +264,19 @@ body {
   .legend { font-size: 11px; line-height: 1.55; max-width: calc(100% - 60px);
     background: color-mix(in srgb, var(--bg) 80%, transparent); }
   .legend .params { display: none; }
-  .legend .tools button { width: 30px; height: 28px; }
+  .legend .tools button { width: 34px; height: 30px; }
+  .stack { max-width: calc(100% - 60px); }
+  /* 操作ボタンはたたんでおき、「…」を押したときだけ出す */
+  .legend .tools { display: none; }
+  .legend.open .tools { display: inline-flex; }
+  .legend.open { background: var(--panel); box-shadow: 0 0 0 1px var(--line); }
+  .legend .more {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 22px; padding: 0;
+    border: 0; border-radius: 4px; background: transparent;
+    color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer;
+  }
+  .legend .name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .legend .vals span { margin-right: 6px; }
   .fab { right: 64px; }
 

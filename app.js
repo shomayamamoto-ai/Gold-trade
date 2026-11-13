@@ -77,11 +77,15 @@ const IND_TYPES = {
     },
     defaults: { agg: 'simple', showMa: true, signMa: true },
   },
+  // overlay: 専用のペインを持たず、ローソク足の上に重ねて描く
+  ma: { name: '移動平均線 (MA)', overlay: true },
 };
+const MA_KINDS = [['sma', '単純 (SMA)'], ['ema', '指数 (EMA)'], ['rma', 'Smoothed (RMA)']];
 
 function defaultParams(type) {
   const vis = {};
   INTERVALS.forEach(iv => { vis[iv.id] = true; });
+  if (type === 'ma') return { kind: 'sma', len: 20, source: 'close', color: '#f5a623', width: 1.5, vis };
   return Object.assign({
     baseline: true,
     agg: 'smoothed',
@@ -156,7 +160,7 @@ function load() {
   if (s && s.mainWeight > 0) state.mainWeight = s.mainWeight;
   const list = s && Array.isArray(s.indicators)
     ? s.indicators.filter(i => i && IND_TYPES[i.type])
-    : [{ type: 'ccOnly' }, { type: 'enhanced' }];
+    : [{ type: 'ma' }, { type: 'ccOnly' }, { type: 'enhanced' }];
   list.forEach(i => addIndicator(i.type, i.p, i.hidden, true));
 }
 
@@ -251,8 +255,16 @@ function computeCC(bars, p) {
   const ma = sma(val, Math.max(1, Math.round(p.volMaLen) || 1));
   return { val, ma };
 }
+function computeMA(bars, p) {
+  const src = bars.map(b => srcOf(b, p.source));
+  const n = Math.max(1, Math.round(p.len) || 1);
+  const val = p.kind === 'ema' ? rma(src, n, 2 / (n + 1)) : p.kind === 'rma' ? rma(src, n) : sma(src, n);
+  return { val };
+}
 function recompute() {
-  state.indicators.forEach(ind => { ind.out = computeCC(state.bars, ind.p); });
+  state.indicators.forEach(ind => {
+    ind.out = ind.type === 'ma' ? computeMA(state.bars, ind.p) : computeCC(state.bars, ind.p);
+  });
 }
 
 // ---------------------------------------------------------------- データ
@@ -272,13 +284,13 @@ function groupBars(raw, group, ms) {
   }
   return out;
 }
-async function fetchKlines(symbol, api, limit) {
+async function fetchKlines(symbol, api, limit, endTime) {
   let lastErr;
   for (const host of HOSTS) {
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), 8000);
     try {
-      const res = await fetch(`${host}/api/v3/klines?symbol=${symbol}&interval=${api}&limit=${limit}`, { signal: ac.signal });
+      const res = await fetch(`${host}/api/v3/klines?symbol=${symbol}&interval=${api}&limit=${limit}${endTime ? '&endTime=' + endTime : ''}`, { signal: ac.signal });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const rows = await res.json();
       if (!Array.isArray(rows) || !rows.length) throw new Error('empty');
@@ -324,6 +336,8 @@ async function loadData() {
   const iv = curInterval(), sym = curSymbol();
   setStatus('', '読み込み中');
   setLoading(true);
+  closeStream();
+  more.busy = false; more.done = false; more.retryAt = 0;
   try {
     const raw = await fetchKlines(sym.id, iv.api, 1000);
     if (token !== state.loadToken) return;
@@ -332,6 +346,7 @@ async function loadData() {
     $('banner').hidden = true;
     setLoading(false);
     setBars(raw, true);
+    openStream();
   } catch (e) {
     if (token !== state.loadToken) return;
     state.live = false;
@@ -341,25 +356,86 @@ async function loadData() {
     setBars(demoBars(sym, iv, 600), true);
   }
 }
+// 新しく届いた足を末尾に反映する
+function mergeTail(tail) {
+  const raw = state.raw.slice();
+  if (!raw.length) return;
+  const atEnd = state.end >= state.bars.length - 0.01;
+  const before = state.bars.length;
+  for (const b of tail) {
+    const last = raw[raw.length - 1];
+    if (b.t === last.t) raw[raw.length - 1] = b;
+    else if (b.t > last.t) raw.push(b);
+    else if (raw.length > 1 && b.t === raw[raw.length - 2].t) raw[raw.length - 2] = b;
+  }
+  setBars(raw, false);
+  if (atEnd) state.end += state.bars.length - before; // 最新を見ているときは追従する
+}
+// リアルタイム配信。つながらないときは下の poll が代わりを務める
+let ws = null;
+const STREAMS = ['wss://data-stream.binance.vision/ws/', 'wss://stream.binance.com:9443/ws/'];
+function closeStream() {
+  const s = ws;
+  ws = null;
+  if (s) { try { s.close(); } catch (e) { /* 何もしない */ } }
+}
+function openStream() {
+  closeStream();
+  if (!state.live || !window.WebSocket) return;
+  const token = state.loadToken;
+  const name = `${state.symbol.toLowerCase()}@kline_${curInterval().api}`;
+  let k = 0;
+  const connect = () => {
+    if (token !== state.loadToken || k >= STREAMS.length) return;
+    let opened = false, s;
+    try { s = new WebSocket(STREAMS[k] + name); } catch (e) { k++; connect(); return; }
+    ws = s;
+    s.onopen = () => { opened = true; };
+    s.onmessage = ev => {
+      if (token !== state.loadToken) return;
+      try {
+        const m = JSON.parse(ev.data).k;
+        if (m) mergeTail([{ t: +m.t, o: +m.o, h: +m.h, l: +m.l, c: +m.c, v: +m.v }]);
+      } catch (e) { /* 壊れたメッセージは読み飛ばす */ }
+    };
+    s.onclose = () => {
+      if (ws !== s) return;
+      ws = null;
+      if (!opened) { k++; connect(); }
+    };
+  };
+  connect();
+}
 async function poll() {
   if (!state.live || document.hidden) return;
+  if (ws && ws.readyState === 1) return;
   const token = state.loadToken, iv = curInterval();
   try {
     const tail = await fetchKlines(state.symbol, iv.api, 3);
     if (token !== state.loadToken) return;
-    const raw = state.raw.slice();
-    const atEnd = state.end >= state.bars.length - 0.01;
-    const before = state.bars.length;
-    for (const b of tail) {
-      const last = raw[raw.length - 1];
-      if (b.t === last.t) raw[raw.length - 1] = b;
-      else if (b.t > last.t) raw.push(b);
-      else if (raw.length > 1 && b.t === raw[raw.length - 2].t) raw[raw.length - 2] = b;
-    }
-    setBars(raw, false);
-    if (atEnd) state.end += state.bars.length - before; // 最新を見ているときは追従する
-    draw();
+    mergeTail(tail);
+    if (!ws) openStream();
   } catch (e) { /* 次の周期でやり直す */ }
+}
+// 左端に近づいたら、さらに古い足を読み足す
+const more = { busy: false, done: false, retryAt: 0 };
+function maybeLoadMore() {
+  if (!state.live || more.busy || more.done || !state.raw.length) return;
+  if (startIdx() > 30 || Date.now() < more.retryAt) return;
+  if (state.raw.length >= 20000) { more.done = true; return; }
+  more.busy = true;
+  const token = state.loadToken, first = state.raw[0].t;
+  fetchKlines(state.symbol, curInterval().api, 1000, first - 1).then(rows => {
+    if (token !== state.loadToken) return;
+    const older = rows.filter(b => b.t < first);
+    if (older.length < 2) { more.done = true; return; }
+    const before = state.bars.length;
+    setBars(older.concat(state.raw), false);
+    state.end += state.bars.length - before; // 見ている場所がずれないようにする
+  }).catch(e => {
+    if (token !== state.loadToken) return;
+    if (e && e.message === 'empty') more.done = true; else more.retryAt = Date.now() + 10000;
+  }).finally(() => { if (token === state.loadToken) more.busy = false; });
 }
 function setStatus(cls, text) {
   const el = $('status');
@@ -391,6 +467,12 @@ function fmtCompact(v) {
   return a >= 10 ? v.toFixed(1) : a >= 0.1 ? v.toFixed(2) : v.toFixed(4);
 }
 const pad2 = n => String(n).padStart(2, '0');
+function fmtRemain(ms) {
+  const s = Math.floor(ms / 1000), d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600);
+  const m = Math.floor(s % 3600 / 60);
+  if (d > 0) return `${d}日 ${h}時間`;
+  return h > 0 ? `${pad2(h)}:${pad2(m)}:${pad2(s % 60)}` : `${pad2(m)}:${pad2(s % 60)}`;
+}
 function fmtDate(t, withTime) {
   const d = new Date(t);
   const ymd = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -408,9 +490,12 @@ let W = 0, H = 0, axisW = 64, compact = false;
 const TIME_H = 24;
 let panes = [];
 
+const shownHere = i => i.p.vis[state.interval] !== false;
+const isOverlay = i => !!IND_TYPES[i.type].overlay;
 function visibleIndicators() {
-  return state.indicators.filter(i => i.p.vis[state.interval] !== false);
+  return state.indicators.filter(i => shownHere(i) && !isOverlay(i));
 }
+const visibleOverlays = () => state.indicators.filter(i => shownHere(i) && isOverlay(i));
 function layout() {
   compact = W < 520;
   axisW = compact ? 54 : 66;
@@ -536,6 +621,7 @@ function render() {
 
   drawCrosshair(th);
   updateLegends();
+  maybeLoadMore();
   $('toLatest').hidden = state.loading || !n || state.end >= n - 0.5;
 }
 
@@ -590,6 +676,21 @@ function drawMain(pane, i0, i1, th) {
     const yo = Math.round(yOf(b.o)), yc = Math.round(yOf(b.c));
     ctx.fillRect(left, Math.min(yo, yc), body, Math.max(1, Math.abs(yc - yo)));
   }
+  // 重ねて描くインジケーター(移動平均線)
+  visibleOverlays().forEach(ind => {
+    if (ind.hidden || !ind.out) return;
+    const val = ind.out.val;
+    ctx.strokeStyle = ind.p.color; ctx.lineWidth = +ind.p.width || 1.5; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    let pen = false;
+    for (let i = Math.max(0, i0 - 1); i <= Math.min(bars.length - 1, i1 + 1); i++) {
+      if (!isFinite(val[i])) { pen = false; continue; }
+      if (pen) ctx.lineTo(xOf(i), yOf(val[i])); else ctx.moveTo(xOf(i), yOf(val[i]));
+      pen = true;
+    }
+    ctx.stroke();
+    ctx.lineWidth = 1;
+  });
   // 最新の価格ライン
   const last = bars[bars.length - 1];
   const col = last.c >= last.o ? UP : DOWN;
@@ -598,7 +699,14 @@ function drawMain(pane, i0, i1, th) {
   ctx.beginPath(); ctx.moveTo(0, ly); ctx.lineTo(pw, ly); ctx.stroke();
   ctx.setLineDash([]);
   ctx.restore();
-  if (ly > pane.y && ly < pane.y + pane.h) axisTag(ly, fmtPrice(last.c), col, '#ffffff', pane);
+  if (ly > pane.y && ly < pane.y + pane.h) {
+    // 価格の下に、この足が確定するまでの残り時間を出す
+    const iv = curInterval();
+    const left = last.t + iv.ms * iv.group - Date.now();
+    const y = clamp(ly, pane.y + 9, pane.y + pane.h - (left > 0 ? 27 : 9));
+    axisTag(y, fmtPrice(last.c), col, '#ffffff', pane);
+    if (left > 0) axisTag(y + 18, fmtRemain(left), col, '#ffffff', pane);
+  }
 }
 
 function drawIndicator(pane, i0, i1, th) {
@@ -720,7 +828,16 @@ const ICONS = {
   moon: svg('<path d="M13.5 9.5A6 6 0 0 1 6.5 2.5a6 6 0 1 0 7 7z"/>'),
 };
 const legendEls = new Map();
-function legendFor(key, ind) {
+let stackEl = null;
+function mainStack() {
+  if (!stackEl) {
+    stackEl = document.createElement('div');
+    stackEl.className = 'stack';
+    legendsEl.appendChild(stackEl);
+  }
+  return stackEl;
+}
+function legendFor(key, ind, parent) {
   let el = legendEls.get(key);
   if (el) return el;
   el = document.createElement('div');
@@ -739,8 +856,19 @@ function legendFor(key, ind) {
     });
     el.appendChild(tools);
     el.addEventListener('dblclick', () => openDialog(ind));
+    // スマホでは操作ボタンをたたんでおき、「…」で開く
+    const moreBtn = document.createElement('button');
+    moreBtn.type = 'button'; moreBtn.className = 'more'; moreBtn.textContent = '⋯';
+    moreBtn.setAttribute('aria-label', '操作ボタンを表示');
+    moreBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const open = !el.classList.contains('open');
+      legendEls.forEach(x => x.classList.remove('open'));
+      el.classList.toggle('open', open);
+    });
+    el.insertBefore(moreBtn, tools);
   }
-  legendsEl.appendChild(el);
+  (parent || legendsEl).appendChild(el);
   legendEls.set(key, el);
   return el;
 }
@@ -759,9 +887,18 @@ function updateLegends() {
   panes.forEach(pane => {
     const key = pane.ind ? 'ind' + pane.ind.id : 'main';
     used.add(key);
-    const el = legendFor(key, pane.ind);
-    el.style.top = (pane.y + 4) + 'px';
+    const el = legendFor(key, pane.ind, pane.ind ? null : mainStack());
+    if (pane.ind) el.style.top = (pane.y + 4) + 'px';
     if (!pane.ind) {
+      mainStack().style.top = (pane.y + 4) + 'px';
+      visibleOverlays().forEach(ov => {
+        const k = 'ind' + ov.id, le = legendFor(k, ov, mainStack());
+        used.add(k);
+        le.classList.toggle('off', !!ov.hidden);
+        setText(le, '.name', 'MA');
+        setText(le, '.params', `${ov.p.kind.toUpperCase()} ${ov.p.len}`);
+        setVals(le, ov.out && i >= 0 ? [['', fmtPrice(ov.out.val[i]), ov.p.color]] : []);
+      });
       setText(el, '.name', `${curSymbol().label} · ${curInterval().label}`);
       setText(el, '.params', state.live ? 'Binance' : 'デモ');
       el.classList.add('main');
@@ -820,6 +957,7 @@ function openDialog(ind) {
   dlg.tab = 'params';
   dlg.opener = document.activeElement;
   $('dlgTitle').textContent = IND_TYPES[ind.type].name;
+  document.querySelector('.tab[data-tab="style"]').hidden = isOverlay(ind);
   $('overlay').hidden = false;
   renderDialog();
   $('dlgOk').focus();
@@ -900,7 +1038,15 @@ function renderDialog() {
   body.scrollTop = 0;
   const add = (...nodes) => nodes.forEach(nd => body.appendChild(nd));
 
-  if (dlg.tab === 'params') {
+  if (ind.type === 'ma' && dlg.tab === 'params') {
+    add(
+      fSelect('kind', '種類', MA_KINDS),
+      fNumber('len', '期間', 1, 500, 1, '何本分の足を平均するか'),
+      fSelect('source', 'ソース', SOURCES),
+      fColor('color', '線の色'),
+      fNumber('width', '線の太さ', 0.5, 5, 0.5)
+    );
+  } else if (dlg.tab === 'params') {
     add(
       fCheck('baseline', 'Baseline Chart', 'オン:ゼロラインからの面グラフ/オフ:棒グラフ'),
       fSelect('agg', 'Aggregation', AGGS, '足ごとの値をどうならすか'),
@@ -963,6 +1109,7 @@ function buildTopbar() {
   const hints = {
     ccOnly: '値動きの向きと強さで重みづけした出来高',
     enhanced: '上の値に、ゼロ上下で色が変わる SMA 線を追加',
+    ma: 'ローソク足に重ねる平均線。何本でも追加できます',
   };
   Object.entries(IND_TYPES).forEach(([type, T]) => {
     const b = el('button', { type: 'button', text: T.name }, []);
@@ -972,7 +1119,10 @@ function buildTopbar() {
   });
   const toggleMenu = on => { menu.hidden = !on; btn.setAttribute('aria-expanded', String(on)); };
   btn.addEventListener('click', e => { e.stopPropagation(); toggleMenu(menu.hidden); });
-  document.addEventListener('click', e => { if (!menu.contains(e.target)) toggleMenu(false); });
+  document.addEventListener('click', e => {
+    if (!menu.contains(e.target)) toggleMenu(false);
+    if (!e.target.closest('.legend')) legendEls.forEach(x => x.classList.remove('open'));
+  });
 
   const paintTheme = () => {
     document.documentElement.dataset.theme = state.theme;
@@ -1114,5 +1264,6 @@ new ResizeObserver(resize).observe(wrap);
 resize();
 loadData();
 setInterval(poll, 15000);
+setInterval(() => { if (!document.hidden && !dlg.ind) draw(); }, 1000); // 残り時間の表示を進める
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 })();
