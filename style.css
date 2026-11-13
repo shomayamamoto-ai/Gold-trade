@@ -244,6 +244,8 @@ body {
   border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer;
 }
 .row input[type="range"] { flex: 0 0 auto; width: 132px; }
+.msg { min-height: 1.5em; margin: 6px 0 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.btn:disabled { opacity: .5; cursor: default; }
 .check { display: flex; align-items: center; gap: 8px; min-height: 36px; cursor: pointer; }
 .check input { width: 17px; height: 17px; accent-color: var(--primary); flex: 0 0 auto; }
 .sect { margin: 12px 0 2px; color: var(--muted); font-size: 11px; }

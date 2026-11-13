@@ -78,6 +78,24 @@
   </div>
 </div>
 
+<div id="symOverlay" class="overlay" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="symTitle">
+    <div class="dlg-head"><h2 id="symTitle">銘柄を追加</h2></div>
+    <div class="dlg-body">
+      <label class="row">
+        <span class="lbl">通貨ペア<small>Binance で取引されているもの(例: DOGEUSDT、BTCJPY)</small></span>
+        <input id="symInput" class="ctl" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="20" placeholder="DOGEUSDT">
+      </label>
+      <p id="symMsg" class="msg" role="status"></p>
+    </div>
+    <div class="dlg-foot">
+      <div class="spacer"></div>
+      <button id="symCancel" class="ctl btn" type="button">キャンセル</button>
+      <button id="symOk" class="ctl btn primary" type="button">追加</button>
+    </div>
+  </div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>

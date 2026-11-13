@@ -12,7 +12,15 @@ const SYMBOLS = [
   { id: 'ETHUSDT', label: 'ETH/USDT', base: 3000 },
   { id: 'XRPUSDT', label: 'XRP/USDT', base: 1.4 },
   { id: 'SOLUSDT', label: 'SOL/USDT', base: 150 },
+  { id: 'XRPJPY', label: 'XRP/JPY', base: 165 },
+  { id: 'PEPEUSDT', label: 'PEPE/USDT', base: 0.0000045 },
 ];
+const BUILTIN = SYMBOLS.length; // これより後ろは、利用者が追加した銘柄
+// 'DOGEUSDT' → 'DOGE/USDT' のように、読みやすい名前にする
+function prettySymbol(id) {
+  const q = ['FDUSD', 'USDT', 'USDC', 'JPY', 'BTC', 'ETH', 'BNB', 'EUR', 'TRY'].find(x => id.endsWith(x) && id.length > x.length);
+  return q ? `${id.slice(0, -q.length)}/${q}` : id;
+}
 // api: 取引所に問い合わせる足 / group: 何本まとめて1本にするか
 const INTERVALS = [
   { id: '15m', label: '15分', api: '15m', ms: 9e5, group: 1 },
@@ -160,6 +168,7 @@ function save() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({
       symbol: state.symbol, interval: state.interval, theme: state.theme, mainWeight: state.mainWeight, drawings: state.drawings,
+      custom: SYMBOLS.slice(BUILTIN).map(x => x.id),
       indicators: state.indicators.map(i => ({ type: i.type, hidden: i.hidden, p: i.p })),
     }));
   } catch (e) { /* 保存できなくても表示は続ける */ }
@@ -167,6 +176,13 @@ function save() {
 function load() {
   let s = null;
   try { s = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) { s = null; }
+  if (s && Array.isArray(s.custom)) {
+    s.custom.forEach(id => {
+      if (typeof id === 'string' && /^[A-Z0-9]{5,20}$/.test(id) && !SYMBOLS.some(x => x.id === id)) {
+        SYMBOLS.push({ id, label: prettySymbol(id), base: 100 });
+      }
+    });
+  }
   if (s && SYMBOLS.some(x => x.id === s.symbol)) state.symbol = s.symbol;
   if (s && INTERVALS.some(x => x.id === s.interval)) state.interval = s.interval;
   if (s && THEMES[s.theme]) state.theme = s.theme;
@@ -546,6 +562,12 @@ const visibleOverlays = () => state.indicators.filter(i => shownHere(i) && isOve
 function layout() {
   compact = W < 520;
   axisW = compact ? 54 : 66;
+  // 小数の桁が多い銘柄(PEPE など)でも数字が切れないよう、軸の幅を広げる
+  const lastBar = state.bars[state.bars.length - 1];
+  if (lastBar) {
+    ctx.font = '11px -apple-system, "Segoe UI", "Hiragino Sans", sans-serif';
+    axisW = Math.max(axisW, Math.ceil(ctx.measureText(fmtPrice(lastBar.h)).width) + 12);
+  }
   const inds = visibleIndicators();
   const total = H - TIME_H;
   const weights = [state.mainWeight].concat(inds.map(i => i.p.weight || 1));
@@ -1186,9 +1208,10 @@ function updateLegends() {
     const key = pane.ind ? 'ind' + pane.ind.id : 'main';
     used.add(key);
     const el = legendFor(key, pane.ind, pane.ind ? null : mainStack());
-    if (pane.ind) el.style.top = (pane.y + 4) + 'px';
+    if (pane.ind) { el.style.top = (pane.y + 4) + 'px'; el.style.maxWidth = (plotW() - 10) + 'px'; }
     if (!pane.ind) {
       mainStack().style.top = (pane.y + 4) + 'px';
+      mainStack().style.maxWidth = (plotW() - 10) + 'px';
       visibleOverlays().forEach(ov => {
         const k = 'ind' + ov.id, le = legendFor(k, ov, mainStack());
         used.add(k);
@@ -1409,9 +1432,44 @@ function renderDialog() {
 // ---------------------------------------------------------------- 上部バー
 function buildTopbar() {
   const sel = $('symbol');
-  SYMBOLS.forEach(s => sel.appendChild(el('option', { value: s.id, text: s.label })));
-  sel.value = state.symbol;
-  sel.addEventListener('change', () => { state.symbol = sel.value; save(); loadData(); });
+  const fillSymbols = () => {
+    sel.textContent = '';
+    SYMBOLS.forEach(s => sel.appendChild(el('option', { value: s.id, text: s.label })));
+    sel.appendChild(el('option', { value: '__add', text: '+ 銘柄を追加…' }));
+    sel.value = state.symbol;
+  };
+  fillSymbols();
+  // 銘柄の追加:実際にデータが取れるか確かめてから一覧に入れる
+  const symOv = $('symOverlay'), symIn = $('symInput'), symMsg = $('symMsg'), symOk = $('symOk');
+  const closeSym = () => { symOv.hidden = true; sel.focus(); };
+  const addSymbol = async () => {
+    const id = symIn.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (id.length < 5) { symMsg.textContent = '「DOGEUSDT」のように、通貨ペアを続けて入力してください。'; return; }
+    if (!SYMBOLS.some(x => x.id === id)) {
+      symOk.disabled = true; symMsg.textContent = '確認中…';
+      try { await fetchKlines(id, '1d', 1); } catch (e) {
+        symMsg.textContent = `「${id}」のデータを取得できませんでした。つづりを確認してください(通信できないときも追加できません)。`;
+        symOk.disabled = false;
+        return;
+      }
+      symOk.disabled = false;
+      SYMBOLS.push({ id, label: prettySymbol(id), base: 100 });
+    }
+    state.symbol = id; state.sel = null;
+    fillSymbols(); closeSym(); setTool(null); save(); loadData();
+  };
+  symOk.addEventListener('click', addSymbol);
+  symIn.addEventListener('keydown', e => { if (e.key === 'Enter') addSymbol(); });
+  $('symCancel').addEventListener('click', closeSym);
+  symOv.addEventListener('pointerdown', e => { if (e.target === symOv) closeSym(); });
+  sel.addEventListener('change', () => {
+    if (sel.value === '__add') {
+      sel.value = state.symbol;
+      symIn.value = ''; symMsg.textContent = ''; symOv.hidden = false; symIn.focus();
+      return;
+    }
+    state.symbol = sel.value; save(); loadData();
+  });
 
   const seg = $('intervals');
   INTERVALS.forEach(iv => {
@@ -1493,6 +1551,7 @@ function buildTopbar() {
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
     closeDialog(false); toggleMenu(false); toggleDraw(false);
+    if (!symOv.hidden) closeSym();
     if (state.tool || state.sel) { state.sel = null; setTool(null); }
   });
 }
