@@ -92,12 +92,12 @@ function defaultParams(type) {
     wick: 0,
     adLen: 14,
     volMaLen: 14,
-    colAbove: '#4caf50',
-    colBelow: '#1b7f3b',
+    colAbove: '#66bb6a',
+    colBelow: '#2e7d32',
     colMa: '#2ecc40',
     colMaNeg: '#e53935',
     opAbove: 0.6,
-    opBelow: 0.95,
+    opBelow: 1,
     showPlot: true,
     showMa: false,
     signMa: false,
@@ -108,6 +108,7 @@ function defaultParams(type) {
     axisLabel: true,
     statusValues: true,
     statusParams: true,
+    weight: 1,          // ペインの高さの比率
     vis,
   }, IND_TYPES[type].defaults);
 }
@@ -124,6 +125,8 @@ const state = {
   barW: 8,
   end: 0,             // 画面右端にあたる足の位置(小数)
   hover: null,        // {x, y}
+  mainWeight: 2.6,    // メインペインの高さの比率
+  loading: false,
   loadToken: 0,
 };
 let nextId = 1;
@@ -138,7 +141,7 @@ const legendsEl = $('legends');
 function save() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({
-      symbol: state.symbol, interval: state.interval, theme: state.theme,
+      symbol: state.symbol, interval: state.interval, theme: state.theme, mainWeight: state.mainWeight,
       indicators: state.indicators.map(i => ({ type: i.type, hidden: i.hidden, p: i.p })),
     }));
   } catch (e) { /* 保存できなくても表示は続ける */ }
@@ -149,6 +152,8 @@ function load() {
   if (s && SYMBOLS.some(x => x.id === s.symbol)) state.symbol = s.symbol;
   if (s && INTERVALS.some(x => x.id === s.interval)) state.interval = s.interval;
   if (s && THEMES[s.theme]) state.theme = s.theme;
+  else if (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) state.theme = 'dark';
+  if (s && s.mainWeight > 0) state.mainWeight = s.mainWeight;
   const list = s && Array.isArray(s.indicators)
     ? s.indicators.filter(i => i && IND_TYPES[i.type])
     : [{ type: 'ccOnly' }, { type: 'enhanced' }];
@@ -318,18 +323,21 @@ async function loadData() {
   const token = ++state.loadToken;
   const iv = curInterval(), sym = curSymbol();
   setStatus('', '読み込み中');
+  setLoading(true);
   try {
     const raw = await fetchKlines(sym.id, iv.api, 1000);
     if (token !== state.loadToken) return;
     state.live = true;
     setStatus('live', 'ライブ');
-    showNotice('');
+    $('banner').hidden = true;
+    setLoading(false);
     setBars(raw, true);
   } catch (e) {
     if (token !== state.loadToken) return;
     state.live = false;
-    setStatus('demo', 'デモデータ');
-    showNotice('価格データを取得できなかったため、見本用のデモデータを表示しています。実際の価格ではありません。');
+    setStatus('demo', 'デモ');
+    $('banner').hidden = false;
+    setLoading(false);
     setBars(demoBars(sym, iv, 600), true);
   }
 }
@@ -358,14 +366,9 @@ function setStatus(cls, text) {
   el.className = 'badge' + (cls ? ' ' + cls : '');
   el.textContent = text;
 }
-let noticeTimer = 0;
-function showNotice(text) {
-  const el = $('notice');
-  el.hidden = !text;
-  el.textContent = text;
-  clearTimeout(noticeTimer);
-  // 案内は数秒で消す(右上の「デモデータ」表示は残る)
-  if (text) noticeTimer = setTimeout(() => { el.hidden = true; }, 8000);
+function setLoading(on) {
+  state.loading = on;
+  $('loading').hidden = !on;
 }
 
 // ---------------------------------------------------------------- 書式
@@ -401,7 +404,7 @@ function rgba(hex, a) {
 }
 
 // ---------------------------------------------------------------- レイアウト
-let W = 0, H = 0, axisW = 64;
+let W = 0, H = 0, axisW = 64, compact = false;
 const TIME_H = 24;
 let panes = [];
 
@@ -409,10 +412,11 @@ function visibleIndicators() {
   return state.indicators.filter(i => i.p.vis[state.interval] !== false);
 }
 function layout() {
-  axisW = W < 520 ? 54 : 66;
+  compact = W < 520;
+  axisW = compact ? 54 : 66;
   const inds = visibleIndicators();
   const total = H - TIME_H;
-  const weights = [inds.length ? 2.6 : 1].concat(inds.map(() => 1));
+  const weights = [state.mainWeight].concat(inds.map(i => i.p.weight || 1));
   const sum = weights.reduce((a, b) => a + b, 0);
   panes = [];
   let y = 0;
@@ -467,7 +471,13 @@ function axisTag(y, text, bg, fg, pane) {
   ctx.textAlign = 'left';
   ctx.fillText(text, plotW() + 5, yy);
 }
+let drawQueued = false;
 function draw() {
+  if (drawQueued) return;
+  drawQueued = true;
+  requestAnimationFrame(() => { drawQueued = false; render(); });
+}
+function render() {
   if (!W) return;
   const th = THEMES[state.theme];
   layout();
@@ -526,6 +536,7 @@ function draw() {
 
   drawCrosshair(th);
   updateLegends();
+  $('toLatest').hidden = state.loading || !n || state.end >= n - 0.5;
 }
 
 function gridAndAxis(pane, min, max, yOf, th, fmt) {
@@ -700,6 +711,14 @@ function drawCrosshair(th) {
 }
 
 // ---------------------------------------------------------------- 凡例
+const svg = d => `<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const ICONS = {
+  eye: svg('<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>'),
+  gear: svg('<circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>'),
+  trash: svg('<path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 8.5h6.6l.7-8.5M6.7 7v3.5M9.3 7v3.5"/>'),
+  sun: svg('<circle cx="8" cy="8" r="3"/><path d="M8 1v1.6M8 13.4V15M1 8h1.6M13.4 8H15M3 3l1.2 1.2M11.8 11.8L13 13M3 13l1.2-1.2M11.8 4.2L13 3"/>'),
+  moon: svg('<path d="M13.5 9.5A6 6 0 0 1 6.5 2.5a6 6 0 1 0 7 7z"/>'),
+};
 const legendEls = new Map();
 function legendFor(key, ind) {
   let el = legendEls.get(key);
@@ -710,11 +729,11 @@ function legendFor(key, ind) {
   if (ind) {
     const tools = document.createElement('span');
     tools.className = 'tools';
-    [['👁', '表示/非表示', () => { ind.hidden = !ind.hidden; save(); draw(); }],
-     ['⚙', '設定', () => openDialog(ind)],
-     ['🗑', '削除', () => removeIndicator(ind)]].forEach(([icon, label, fn]) => {
+    [[ICONS.eye, '表示/非表示', () => { ind.hidden = !ind.hidden; save(); draw(); }],
+     [ICONS.gear, '設定', () => openDialog(ind)],
+     [ICONS.trash, '削除', () => removeIndicator(ind)]].forEach(([icon, label, fn]) => {
       const b = document.createElement('button');
-      b.type = 'button'; b.textContent = icon; b.title = label; b.setAttribute('aria-label', label);
+      b.type = 'button'; b.innerHTML = icon; b.title = label; b.setAttribute('aria-label', label);
       b.addEventListener('click', fn);
       tools.appendChild(b);
     });
@@ -745,10 +764,12 @@ function updateLegends() {
     if (!pane.ind) {
       setText(el, '.name', `${curSymbol().label} · ${curInterval().label}`);
       setText(el, '.params', state.live ? 'Binance' : 'デモ');
+      el.classList.add('main');
       const b = state.bars[i];
       if (!b) { setVals(el, []); return; }
       const prev = state.bars[i - 1], col = b.c >= b.o ? UP : DOWN;
-      const items = [['始値', fmtPrice(b.o), col], ['高値', fmtPrice(b.h), col], ['安値', fmtPrice(b.l), col], ['終値', fmtPrice(b.c), col]];
+      const names = compact ? ['始', '高', '安', '終'] : ['始値', '高値', '安値', '終値'];
+      const items = [b.o, b.h, b.l, b.c].map((v, k) => [names[k], fmtPrice(v), col]);
       if (prev) {
         const d = b.c - prev.c;
         items.push(['', `${d >= 0 ? '+' : ''}${fmtPrice(d)} (${d >= 0 ? '+' : ''}${(d / prev.c * 100).toFixed(2)}%)`, d >= 0 ? UP : DOWN]);
@@ -791,12 +812,13 @@ function removeIndicator(ind) {
 }
 
 // ---------------------------------------------------------------- 設定ダイアログ
-const dlg = { ind: null, backup: null, tab: 'params' };
+const dlg = { ind: null, backup: null, tab: 'params', opener: null };
 
 function openDialog(ind) {
   dlg.ind = ind;
   dlg.backup = JSON.parse(JSON.stringify(ind.p));
   dlg.tab = 'params';
+  dlg.opener = document.activeElement;
   $('dlgTitle').textContent = IND_TYPES[ind.type].name;
   $('overlay').hidden = false;
   renderDialog();
@@ -807,6 +829,7 @@ function closeDialog(keep) {
   if (!keep) dlg.ind.p = dlg.backup;
   dlg.ind = null;
   $('overlay').hidden = true;
+  if (dlg.opener && dlg.opener.isConnected) dlg.opener.focus();
   recompute(); save(); draw();
 }
 function applyLive() { recompute(); draw(); }
@@ -870,7 +893,11 @@ function renderDialog() {
   const ind = dlg.ind, T = IND_TYPES[ind.type], L = T.labels;
   const body = $('dlgBody');
   body.textContent = '';
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === dlg.tab));
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('on', t.dataset.tab === dlg.tab);
+    t.setAttribute('aria-selected', String(t.dataset.tab === dlg.tab));
+  });
+  body.scrollTop = 0;
   const add = (...nodes) => nodes.forEach(nd => body.appendChild(nd));
 
   if (dlg.tab === 'params') {
@@ -922,9 +949,11 @@ function buildTopbar() {
   INTERVALS.forEach(iv => {
     const b = el('button', { type: 'button', text: iv.label });
     b.classList.toggle('on', iv.id === state.interval);
+    b.setAttribute('aria-pressed', String(iv.id === state.interval));
     b.addEventListener('click', () => {
+      if (state.interval === iv.id) return;
       state.interval = iv.id;
-      [...seg.children].forEach(c => c.classList.toggle('on', c === b));
+      [...seg.children].forEach(c => { c.classList.toggle('on', c === b); c.setAttribute('aria-pressed', String(c === b)); });
       save(); loadData();
     });
     seg.appendChild(b);
@@ -945,11 +974,17 @@ function buildTopbar() {
   btn.addEventListener('click', e => { e.stopPropagation(); toggleMenu(menu.hidden); });
   document.addEventListener('click', e => { if (!menu.contains(e.target)) toggleMenu(false); });
 
+  const paintTheme = () => {
+    document.documentElement.dataset.theme = state.theme;
+    $('themeBtn').innerHTML = state.theme === 'light' ? ICONS.moon : ICONS.sun;
+  };
+  paintTheme();
   $('themeBtn').addEventListener('click', () => {
     state.theme = state.theme === 'light' ? 'dark' : 'light';
-    document.documentElement.dataset.theme = state.theme;
-    save(); draw();
+    paintTheme(); save(); draw();
   });
+  $('retryBtn').addEventListener('click', loadData);
+  $('toLatest').addEventListener('click', () => { state.end = state.bars.length + 5; draw(); });
 
   document.querySelectorAll('.tab').forEach(t =>
     t.addEventListener('click', () => { dlg.tab = t.dataset.tab; renderDialog(); }));
@@ -957,7 +992,9 @@ function buildTopbar() {
   $('dlgCancel').addEventListener('click', () => closeDialog(false));
   $('dlgClose').addEventListener('click', () => closeDialog(false));
   $('dlgReset').addEventListener('click', () => {
+    const w = dlg.ind.p.weight;
     dlg.ind.p = defaultParams(dlg.ind.type);
+    dlg.ind.p.weight = w;
     renderDialog(); applyLive();
   });
   $('overlay').addEventListener('pointerdown', e => { if (e.target === $('overlay')) closeDialog(false); });
@@ -971,34 +1008,73 @@ function zoomAt(x, factor) {
   state.end = idx - x / bw + plotW() / bw;
   state.barW = bw;
 }
+// ペインの境目(上のペインの番号)を返す。なければ -1
+function dividerAt(y, tol) {
+  for (let k = 0; k < panes.length - 1; k++) {
+    if (Math.abs(y - (panes[k].y + panes[k].h)) <= tol) return k;
+  }
+  return -1;
+}
+function paneWeight(k, v) {
+  const ind = panes[k].ind;
+  if (v === undefined) return ind ? ind.p.weight || 1 : state.mainWeight;
+  if (ind) ind.p.weight = v; else state.mainWeight = v;
+}
 function bindPointer() {
   const pts = new Map();
-  let pinch = 0;
+  let pinch = 0, resizing = null, moved = 0;
   const pos = e => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
 
   canvas.addEventListener('pointerdown', e => {
     canvas.setPointerCapture(e.pointerId);
-    pts.set(e.pointerId, pos(e));
-    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); }
-    state.hover = pos(e); draw();
+    const p = pos(e);
+    pts.set(e.pointerId, p);
+    moved = 0;
+    const k = pts.size === 1 ? dividerAt(p.y, e.pointerType === 'mouse' ? 4 : 12) : -1;
+    if (k >= 0) {
+      // 高さの比率をいったんピクセルにそろえてから、境目の上下だけ動かす
+      panes.forEach((pn, j) => paneWeight(j, pn.h));
+      resizing = { k, y: p.y, a: panes[k].h, b: panes[k + 1].h };
+      state.hover = null;
+    } else {
+      resizing = null;
+      if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); }
+      state.hover = p;
+      canvas.classList.add('grabbing');
+    }
+    draw();
   });
   canvas.addEventListener('pointermove', e => {
     const p = pos(e), prev = pts.get(e.pointerId);
+    if (resizing && prev) {
+      const d = clamp(p.y - resizing.y, 48 - resizing.a, resizing.b - 48);
+      paneWeight(resizing.k, resizing.a + d);
+      paneWeight(resizing.k + 1, resizing.b - d);
+      draw();
+      return;
+    }
     if (prev && pts.size === 1) {
+      moved += Math.abs(p.x - prev.x) + Math.abs(p.y - prev.y);
       state.end -= (p.x - prev.x) / state.barW;
       pts.set(e.pointerId, p);
     } else if (prev && pts.size === 2) {
+      moved += 10;
       pts.set(e.pointerId, p);
       const [a, b] = [...pts.values()];
       const dist = Math.hypot(a.x - b.x, a.y - b.y);
       if (pinch > 0 && dist > 0) zoomAt((a.x + b.x) / 2, dist / pinch);
       pinch = dist;
+    } else if (!prev && e.pointerType === 'mouse') {
+      canvas.style.cursor = dividerAt(p.y, 4) >= 0 ? 'ns-resize' : '';
     }
     state.hover = p; draw();
   });
   const up = e => {
     pts.delete(e.pointerId); pinch = 0;
-    if (e.pointerType !== 'mouse' && e.type !== 'pointerup') state.hover = null;
+    if (resizing) { resizing = null; save(); }
+    if (!pts.size) canvas.classList.remove('grabbing');
+    // タッチ操作:タップなら十字線を残し、スワイプ後は消す
+    if (e.pointerType !== 'mouse' && (e.type !== 'pointerup' || moved > 8)) state.hover = null;
     draw();
   };
   canvas.addEventListener('pointerup', up);
@@ -1011,15 +1087,29 @@ function bindPointer() {
     else zoomAt(Math.min(p.x, plotW()), Math.exp(-e.deltaY * 0.0015));
     draw();
   }, { passive: false });
-  canvas.addEventListener('dblclick', () => { resetViewport(); draw(); });
+  canvas.addEventListener('dblclick', e => {
+    const k = dividerAt(pos(e).y, 4);
+    if (k >= 0) { state.mainWeight = 2.6; state.indicators.forEach(i => { i.p.weight = 1; }); save(); }
+    else resetViewport();
+    draw();
+  });
+  canvas.addEventListener('keydown', e => {
+    const span = plotW() / state.barW;
+    if (e.key === 'ArrowLeft') state.end -= Math.max(1, span * 0.1);
+    else if (e.key === 'ArrowRight') state.end += Math.max(1, span * 0.1);
+    else if (e.key === 'ArrowUp' || e.key === '+') zoomAt(plotW(), 1.2);
+    else if (e.key === 'ArrowDown' || e.key === '-') zoomAt(plotW(), 1 / 1.2);
+    else if (e.key === 'End') state.end = state.bars.length + 5;
+    else if (e.key === 'Home') state.end = 0;
+    else return;
+    e.preventDefault(); draw();
+  });
 }
 
 // ---------------------------------------------------------------- 起動
 load();
-document.documentElement.dataset.theme = state.theme;
 buildTopbar();
 bindPointer();
-$('notice').addEventListener('click', () => showNotice(''));
 new ResizeObserver(resize).observe(wrap);
 resize();
 loadData();
