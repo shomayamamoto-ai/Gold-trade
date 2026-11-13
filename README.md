@@ -30,6 +30,12 @@
   右上に「デモデータ」と出ているときは、実際の価格ではありません。
 - 「金」は金に連動するトークン PAXG の価格で、金の現物価格そのものではありません。
 
+## 写真(TradingView)と合わせた点
+
+- 2日足の区切り方(2025-03-08 が足の始まりになる並び)
+- `Volume (c-c) Only` は青緑、`Volume/MA with Enhanced Histogram` は緑の配色
+- 山と谷に付く丸印(スタイルタブでオン/オフ)
+
 ## インジケーターの計算
 
 `Volume (c-c) Only` と `Volume/MA with Enhanced Histogram` は、

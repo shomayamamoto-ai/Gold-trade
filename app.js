@@ -62,7 +62,7 @@ const IND_TYPES = {
       colBelow: 'Volume(c-c) Below SMA Color',
       colMa: 'SMA of Volume(c-c) Color',
     },
-    defaults: { agg: 'smoothed', showMa: false, signMa: false },
+    defaults: { agg: 'smoothed', showMa: false, signMa: false, colAbove: '#4db6ac', colBelow: '#1f8a70', opAbove: 0.75 },
   },
   enhanced: {
     name: 'Volume/MA with Enhanced Histogram',
@@ -120,6 +120,8 @@ function defaultParams(type) {
     axisLabel: true,
     statusValues: true,
     statusParams: true,
+    pivots: true,       // 山と谷に丸印を付ける
+    pivotLen: 8,        // 前後この本数の中で最大・最小なら山・谷とみなす
     weight: 1,          // ペインの高さの比率
     vis,
   }, IND_TYPES[type].defaults);
@@ -309,12 +311,13 @@ function recompute() {
 // ---------------------------------------------------------------- データ
 function groupBars(raw, group, ms) {
   if (group <= 1) return raw.slice();
-  const span = ms * group, out = [];
+  const out = [];
   let cur = null, key = null;
   for (const b of raw) {
-    const k = Math.floor(b.t / span);
+    // 区切りは TradingView の2日足に合わせてある(例: 2025-03-08 が足の始まり)
+    const k = Math.floor((b.t / ms + group - 1) / group);
     if (k !== key) {
-      cur = { t: k * span, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v };
+      cur = { t: (k * group - (group - 1)) * ms, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v };
       out.push(cur); key = k;
     } else {
       cur.h = Math.max(cur.h, b.h); cur.l = Math.min(cur.l, b.l);
@@ -846,6 +849,22 @@ function drawIndicator(pane, i0, i1, th) {
     }
     ctx.lineWidth = 1;
   }
+  if (p.pivots && p.showPlot) {
+    const N = Math.max(1, Math.round(p.pivotLen) || 1), v = out.val, last = state.bars.length - 1;
+    ctx.strokeStyle = '#5b7fd6'; ctx.fillStyle = th.bg; ctx.lineWidth = 1.3;
+    for (let i = Math.max(N, i0); i <= Math.min(last - N, i1); i++) {
+      if (!isFinite(v[i]) || !isFinite(v[i - N])) continue;
+      let hi2 = true, lo2 = true;
+      for (let k = i - N; k <= i + N && (hi2 || lo2); k++) {
+        if (k === i) continue;
+        if (v[k] >= v[i]) hi2 = false;
+        if (v[k] <= v[i]) lo2 = false;
+      }
+      if (!hi2 && !lo2) continue;
+      ctx.beginPath(); ctx.arc(xOf(i), yOf(v[i]), 3.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    ctx.lineWidth = 1;
+  }
   if (p.showZero) {
     ctx.strokeStyle = p.zeroColor; ctx.setLineDash([2, 3]);
     ctx.beginPath(); ctx.moveTo(0, Math.round(y0) + 0.5); ctx.lineTo(pw, Math.round(y0) + 0.5); ctx.stroke();
@@ -1368,6 +1387,8 @@ function renderDialog() {
       fCheck('showPlot', T.plotName),
       fRange('opAbove', '色 0 の濃さ(SMA より上)', 0.1, 1, 0.05),
       fRange('opBelow', '色 1 の濃さ(SMA より下)', 0.1, 1, 0.05),
+      fCheck('pivots', '山と谷の丸印'),
+      fNumber('pivotLen', '山・谷の判定に使う前後の本数', 1, 100, 1),
       fCheck('showMa', T.maName),
       fNumber('maWidth', '線の太さ', 0.5, 5, 0.5),
       fCheck('showZero', 'ゼロライン'),
