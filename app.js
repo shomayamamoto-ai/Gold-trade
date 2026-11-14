@@ -595,25 +595,37 @@ const STREAMS = ['wss://data-stream.binance.vision/stream?streams=', 'wss://stre
 const mono = () => performance.now(); // 端末の時計を変えても巻き戻らない経過時間。価格の鮮度はこれで測る
 let clockOffset = 0, clockReady = false; // 取引所の時計 − 端末の時計
 const tnow = () => Date.now() + clockOffset; // 取引所の時計での現在時刻(取引の記録に使う)
-const feed = { lo: Infinity, hi: -Infinity, okAt: -1e9, lastMsg: -1e9, lastTick: 0, tick: null, timer: 0, bid: NaN, ask: NaN, quoteAt: 0, quoteSym: '' }; // 配信の状態
+const feed = { lo: Infinity, hi: -Infinity, okAt: -1e9, lastMsg: -1e9, lastTick: 0, tick: null, timer: 0, vol: 0, cost: 0, qRaf: 0, n: 0, bid: NaN, ask: NaN, quoteAt: 0, quoteSym: '' }; // 配信の状態
 function closeStream() {
   const s = ws;
   ws = null;
-  clearTimeout(feed.timer); feed.timer = 0; feed.tick = null;
+  clearTimeout(feed.timer); feed.timer = 0; feed.tick = null; feed.vol = 0;
   feed.bid = feed.ask = NaN; feed.quoteAt = -1e9; feed.lo = Infinity; feed.hi = -Infinity;
   renderQuote();
   if (s) { try { s.close(); } catch (e) { /* 何もしない */ } }
 }
-// 約定(1件ごとの売買)を、いちばん新しい足に反映する。件数が多いので、描き直しは 0.2 秒に1回までにする
+/* 約定(1件ごとの売買)を、いちばん新しい足に反映する。
+ * 画面は1秒に約60回しか描けないので、反映は「画面の1コマ(約16ミリ秒)に1回」まで細かくする。
+ * インジケーターが多くて計算が重いときは、操作が固まらないよう、かかった時間の3倍まで間隔を空ける。
+ * 間に届いた約定の高値・安値(feed.lo / hi)と数量(feed.vol)は、まとめて反映するので取りこぼさない */
+const TICK_MIN = 16, TICK_MAX = 250;
+function queueTick() {
+  if (feed.timer) return;
+  // 別のタブを見ている間は描く必要がないので、ゆっくりでよい(利確・損切りの判定は続ける)
+  feed.timer = setTimeout(applyTick, document.hidden ? TICK_MAX : clamp(feed.cost * 3, TICK_MIN, TICK_MAX));
+}
 function applyTick() {
   feed.timer = 0;
-  const tk = feed.tick, raw = state.raw;
-  feed.tick = null;
+  const tk = feed.tick, raw = state.raw, vol = feed.vol;
+  feed.tick = null; feed.vol = 0;
   if (!tk || !raw.length) return;
   const last = raw[raw.length - 1];
-  if (tk.t < last.t || tk.p === last.c) return;
-  noteTick(tk.p > last.c ? 1 : -1);
-  mergeTail([{ t: last.t, o: last.o, h: Math.max(last.h, tk.p), l: Math.min(last.l, tk.p), c: tk.p, v: last.v }]);
+  if (tk.t < last.t || (tk.p === last.c && !(vol > 0))) return;
+  if (tk.p !== last.c) noteTick(tk.p > last.c ? 1 : -1);
+  const t0 = mono();
+  mergeTail([{ t: last.t, o: last.o, h: Math.max(last.h, tk.p), l: Math.min(last.l, tk.p), c: tk.p, v: last.v + vol }]);
+  feed.cost = feed.cost * 0.7 + (mono() - t0) * 0.3; // 反映にかかった時間(ならした値)
+  feed.n++;
 }
 // 値が動いたことを、目で分かるようにする
 let flashTimer = 0;
@@ -658,8 +670,17 @@ function openStream() {
   const token = state.loadToken;
   const sym = state.symbol.toLowerCase();
   // 足の更新(kline)に加えて、約定(aggTrade)も受け取り、1件ごとの値動きを表示する
-  // depth5 は板(買い注文・売り注文)の上位。取引がない間も、気配値の動きが分かる
-  const name = `${sym}@kline_${curInterval().api}/${sym}@aggTrade/${sym}@depth5@1000ms`;
+  // bookTicker は、いちばん良い買い注文・売り注文の価格が変わるたびに届く(気配値をすぐに反映する)
+  // depth5 は 0.1 秒ごとに必ず届くので、取引がない間も「つながっている」ことが分かる
+  const name = `${sym}@kline_${curInterval().api}/${sym}@aggTrade/${sym}@bookTicker/${sym}@depth5@100ms`;
+  let klineE = 0; // 最後に届いた足の更新の時刻。これより後の約定だけ、出来高に足す(二重に数えない)
+  const quoteIn = (bid, ask) => {
+    if (!(bid > 0) || !(ask > 0)) return;
+    const moved = bid !== feed.bid || ask !== feed.ask;
+    feed.bid = bid; feed.ask = ask; // 売買の約定価格には、届いた瞬間の値を使う
+    feed.quoteAt = mono(); feed.quoteSym = streamSym;
+    if (moved && !feed.qRaf) feed.qRaf = requestAnimationFrame(() => { feed.qRaf = 0; renderQuote(); }); // 表示は1コマに1回
+  };
   const streamSym = state.symbol;
   let k = 0;
   const connect = () => {
@@ -680,16 +701,15 @@ function openStream() {
         if (d.e === 'kline' && d.k) {
           const m = d.k, prev = state.raw[state.raw.length - 1];
           if (prev && +m.c !== prev.c) noteTick(+m.c > prev.c ? 1 : -1);
+          klineE = +d.E || 0; feed.vol = 0; // 足の更新には、ここまでの出来高がすでに入っている
           mergeTail([{ t: +m.t, o: +m.o, h: +m.h, l: +m.l, c: +m.c, v: +m.v }]);
         } else if (d.e === 'aggTrade') {
           feed.tick = { t: +d.T, p: +d.p };
           feed.lo = Math.min(feed.lo, +d.p); feed.hi = Math.max(feed.hi, +d.p); // 間引いている間の高値・安値も覚えておく
-          if (!feed.timer) feed.timer = setTimeout(applyTick, 200);
-        } else if (d.bids && d.asks && d.bids[0] && d.asks[0]) {
-          feed.bid = +d.bids[0][0]; feed.ask = +d.asks[0][0];
-          feed.quoteAt = mono(); feed.quoteSym = streamSym;
-          renderQuote();
-        }
+          if (+d.T > klineE && +d.q > 0) feed.vol += +d.q;
+          queueTick();
+        } else if (d.b !== undefined && d.a !== undefined && !d.bids) quoteIn(+d.b, +d.a);
+        else if (d.bids && d.asks && d.bids[0] && d.asks[0]) quoteIn(+d.bids[0][0], +d.asks[0][0]);
       } catch (e) { /* 壊れたメッセージは読み飛ばす */ }
     };
     s.onclose = () => {
@@ -713,7 +733,7 @@ async function poll() {
   }
   const quiet = mono() - feed.lastMsg;
   // 配信が届いている間は任せる。黙ったままなら、こちらから取りにいく
-  if (ws && ws.readyState <= 1 && quiet < 4000) return;
+  if (ws && ws.readyState <= 1 && quiet < 2500) return;
   // 1分以上なにも届かなければ、つなぎ直す
   if (ws && quiet > 60000) closeStream();
   const token = state.loadToken, iv = curInterval();
@@ -2433,7 +2453,8 @@ function execute(sym, side, notional, reason, qty, opts) {
     const held = Math.abs(pos.qty);
     // 保有分より多い注文は、保有分ちょうどの決済として扱う(反対向きへの乗りかえはしない)。
     // 同じ金額で売って買い戻すと、価格の差でわずかに数量が増え、以前は決済できなかった
-    if (qty > held) { qty = held; notional = qty * px; fee = notional * FEE; }
+    // 保有分の 98% 以上を決済する注文も、全部の決済として扱う(価格が動いた分の、ごく小さな端数を残さない)
+    if (qty >= held * 0.98) { qty = held; notional = qty * px; fee = notional * FEE; }
     pnl = qty * (px - pos.avg) * Math.sign(pos.qty);
     feeIn = (pos.feeOpen || 0) * (qty / held);
     pos.feeOpen = (pos.feeOpen || 0) - feeIn;
@@ -3682,8 +3703,8 @@ bindPointer();
 new ResizeObserver(resize).observe(wrap);
 resize();
 loadData();
-setInterval(poll, 5000);
-setInterval(pollPositions, 15000);
+setInterval(poll, 2000);          // 配信が止まったときの代わり(届いている間は何もしない)
+setInterval(pollPositions, 5000); // いま見ていない銘柄のポジション・指値注文
 setInterval(() => {
   if (document.hidden) return;
   if (!dlg.ind) draw();   // 残り時間の表示を進める
