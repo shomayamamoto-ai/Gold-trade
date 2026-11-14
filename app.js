@@ -182,7 +182,7 @@ function customFromText(text) {
 function defaultParams(type) {
   const vis = {};
   INTERVALS.forEach(iv => { vis[iv.id] = true; });
-  if (GT.DEFS[type]) return Object.assign(GT.defaults(type), GT.DEFS[type].overlay ? {} : { weight: 1 }, { vis });
+  if (GT.DEFS[type]) return Object.assign(GT.defaults(type), GT.DEFS[type].overlay ? {} : { weight: 1 }, GT.DEFS[type].custom ? { alert: false } : {}, { vis });
   if (type === 'ma') return { kind: 'sma', len: 20, source: 'close', color: '#f5a623', width: 1.5, vis };
   if (type === 'rsi') return { len: 14, source: 'close', upper: 70, lower: 30, color: '#7e57c2', weight: 1, vis };
   if (type === 'macd') {
@@ -411,6 +411,29 @@ function recompute() {
     try {
       ind.out = IND_TYPES[ind.type].generic ? GT.DEFS[ind.type].compute(state.bars, ind.p) : (fns[ind.type] || computeCC)(state.bars, ind.p);
     } catch (e) { ind.out = null; } // 1つの計算が失敗しても、ほかの表示は続ける
+  });
+  checkAlerts();
+}
+/* 「合図が出たら知らせる」をオンにした自作インジケーターについて、足が確定したときに合図を調べる。
+ * 知らせるのは、見ている間に新しく確定した足だけ(開いた直後や、銘柄・時間足を変えた直後には出さない) */
+function checkAlerts() {
+  const n = state.bars.length;
+  if (n < 3) return;
+  const closed = state.bars[n - 2], key = `${state.symbol}|${state.interval}`;
+  state.indicators.forEach(ind => {
+    if (!ind.p.alert || !ind.out || !ind.out.marks || !ind.out.marks.length) { ind.alertKey = null; return; }
+    const fresh = ind.alertKey === key && ind.alertT === state.bars[n - 3].t; // 直前に見ていた足の、ちょうど次の足が確定した
+    ind.alertKey = key;
+    if (ind.alertT === closed.t) return;
+    ind.alertT = closed.t;
+    if (!fresh) return;
+    ind.out.marks.forEach(m => {
+      if (!(m.val[n - 2] > 0 || m.val[n - 2] < 0)) return;
+      const iv = INTERVALS.find(x => x.id === state.interval);
+      const text = `${m.dir === 'up' ? '▲' : '▼'} ${labelOf(state.symbol)}(${iv ? iv.label : ''})で「${IND_TYPES[ind.type].name}」の合図:${m.name}`;
+      toast(text);
+      try { if (window.Notification && Notification.permission === 'granted' && document.hidden) new Notification('Gold Trade Chart', { body: text }); } catch (e) { /* 通知を出せなくても、画面の表示は出ている */ }
+    });
   });
 }
 
@@ -1710,7 +1733,21 @@ function renderDialog() {
     if (T.custom) {
       const edit = el('button', { class: 'ctl btn', type: 'button', text: '式を編集する' });
       edit.addEventListener('click', () => { const id = ind.type; closeDialog(true); openMaker(id); });
-      add(el('div', { class: 'mk-actions' }, [edit]));
+      const acts = [edit];
+      if (ind.out && ind.out.marks && ind.out.marks.length) {
+        const bt = el('button', { class: 'ctl btn', type: 'button', text: '過去データで試す' });
+        bt.addEventListener('click', () => { closeDialog(true); openBacktest(ind); });
+        acts.push(bt);
+      }
+      add(el('div', { class: 'mk-actions' }, acts));
+      if (ind.out && ind.out.marks && ind.out.marks.length) {
+        const chk = fCheck('alert', '合図が出たら知らせる', 'このページを開いている間、足が確定して合図が出たら画面に表示します');
+        chk.querySelector('input').addEventListener('change', e => {
+          // 別のタブを見ているときにも気づけるよう、ブラウザの通知を使ってよいか尋ねる(断っても画面には出ます)
+          try { if (e.target.checked && window.Notification && Notification.permission === 'default') Notification.requestPermission(); } catch (err) { /* 通知が使えない環境 */ }
+        });
+        add(chk);
+      }
     }
     GT.DEFS[ind.type].params.forEach(q => {
       if (q.type === 'color') add(fColor(q.key, q.label));
@@ -2060,6 +2097,7 @@ function buildTopbar() {
   $('overlay').addEventListener('pointerdown', e => { if (e.target === $('overlay')) closeDialog(false); });
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
+    if (!$('btOverlay').hidden) { $('btOverlay').hidden = true; return; }
     if (!$('mkOverlay').hidden) { closeMaker(); return; }
     closeDialog(false); toggleMenu(false); toggleDraw(false);
     if (!symOv.hidden) closeSym();
@@ -3506,11 +3544,133 @@ function bindMaker() {
   });
 }
 
+// ---------------------------------------------------------------- 合図どおりに売買した場合の成績
+const bt = { ind: null, side: 'long', exit: 'signal', hold: 10 };
+function openBacktest(ind) {
+  bt.ind = ind;
+  const marks = (ind.out && ind.out.marks) || [];
+  const hasUp = marks.some(m => m.dir === 'up'), hasDown = marks.some(m => m.dir === 'down');
+  bt.side = hasUp ? 'long' : 'short';
+  bt.exit = hasUp && hasDown ? 'signal' : 'bars';
+  $('btOverlay').hidden = false;
+  renderBacktest();
+  $('btClose').focus();
+}
+function renderBacktest() {
+  const ind = bt.ind, body = $('btBody');
+  if (!ind || !state.indicators.includes(ind) || !ind.out || !ind.out.marks) { $('btOverlay').hidden = true; return; }
+  const marks = ind.out.marks, bars = state.bars;
+  const hasUp = marks.some(m => m.dir === 'up'), hasDown = marks.some(m => m.dir === 'down');
+  const r = GT.backtest(bars, marks, { side: bt.side, exit: bt.exit, hold: bt.hold, fee: FEE });
+  const iv = INTERVALS.find(x => x.id === state.interval);
+  $('btTitle').textContent = `「${IND_TYPES[ind.type].name}」の合図で売買していたら`;
+  body.textContent = '';
+  const add = (...nodes) => nodes.forEach(nd => body.appendChild(nd));
+  const pct = (v, sign) => (isFinite(v) ? `${sign && v > 0 ? '+' : ''}${(v * 100).toFixed(Math.abs(v) >= 10 ? 0 : 2)}%` : '—');
+  const select = (label, value, options, onChange) => {
+    const sel = el('select', { class: 'ctl' }, options.map(([v, t]) => el('option', { value: v, text: t })));
+    sel.value = value;
+    sel.addEventListener('change', () => { onChange(sel.value); renderBacktest(); });
+    return el('label', { class: 'bt-ctl' }, [el('span', { class: 'dim', text: label }), sel]);
+  };
+  const sides = [];
+  if (hasUp) sides.push(['long', '▲ で買う(値上がりをねらう)']);
+  if (hasDown) sides.push(['short', '▼ で売りから入る(値下がりをねらう)']);
+  if (hasUp && hasDown) sides.push(['both', '両方(▲ で買い、▼ で売りに切りかえ)']);
+  const ctl = el('div', { class: 'bt-ctls' }, [select('入り方', bt.side, sides, v => { bt.side = v; })]);
+  const oppOk = bt.side === 'both' || (bt.side === 'long' ? hasDown : hasUp);
+  if (bt.side !== 'both') {
+    ctl.appendChild(select('手じまい', r.exitMode, (oppOk ? [['signal', '反対の合図が出たら']] : []).concat([['bars', '決めた本数がたったら']]), v => { bt.exit = v; }));
+    if (r.exitMode === 'bars') {
+      const num = el('input', { class: 'ctl', type: 'number', min: '1', max: '1000', step: '1', inputmode: 'numeric' });
+      num.value = bt.hold;
+      num.addEventListener('change', () => { bt.hold = clamp(Math.round(parseFloat(num.value)) || 10, 1, 1000); renderBacktest(); });
+      ctl.appendChild(el('label', { class: 'bt-ctl' }, [el('span', { class: 'dim', text: '何本後に手じまうか' }), num]));
+    }
+  }
+  add(ctl);
+  add(el('p', { class: 'dim small', text: `${labelOf(state.symbol)}・${iv ? iv.label : ''}足・${bars.length}本(${fmtDate(bars[0].t)} 〜 ${fmtDate(bars[bars.length - 1].t)})で計算。合図が出た足の「次の足の始値」で売買し、売買のたびに手数料 ${(FEE * 100).toFixed(1)}% を引いています。` }));
+
+  const kpi = (label, value, cls, hint) => {
+    const k = el('div', { class: 'kpi' }, [el('span', { class: 'dim', text: label }), el('strong', { class: cls || '', text: value })]);
+    if (hint) k.appendChild(el('small', { text: hint }));
+    return k;
+  };
+  const cls = v => (v > 0 ? 'up' : v < 0 ? 'down' : '');
+  const diff = r.total - r.holdRet;
+  add(el('div', { class: 'kpis' }, [
+    kpi('合図どおりの損益', pct(r.total, true), cls(r.total), '資金を毎回すべて使った場合の、期間全体の増減'),
+    kpi('何もせず持ち続けた場合', pct(r.holdRet, true), cls(r.holdRet), isFinite(diff) ? `合図どおりのほうが ${pct(Math.abs(diff))} ${diff >= 0 ? '良い' : '悪い'}` : ''),
+    kpi('勝率', r.n ? `${(r.wins / r.n * 100).toFixed(0)}%` : '—', '', `売買 ${r.n} 回(勝ち ${r.wins}・負け ${r.losses})`),
+    kpi('プロフィットファクター', isFinite(r.pf) ? r.pf.toFixed(2) : r.wins && !r.losses ? '負けなし' : '—', isFinite(r.pf) ? cls(r.pf - 1) : '', '利益の合計 ÷ 損失の合計。1 より大きければ全体でプラス'),
+    kpi('最大ドローダウン', r.maxDD > 0 ? pct(-r.maxDD) : '—', r.maxDD > 0 ? 'down' : '', '資金がいちばん多かった時点からの、最大の落ち込み'),
+    kpi('平均利益 / 平均損失', `${pct(r.avgWin, true)} / ${pct(r.avgLoss, true)}`, '', `ポジションを持っていた時間は全体の ${(r.exposure * 100).toFixed(0)}%`),
+  ]));
+  add(el('h3', { text: '資金の推移(開始時を 1 とした倍率)' }));
+  const cv = el('canvas', { id: 'btCurve', class: 'curve', role: 'img', 'aria-label': '合図どおりに売買した場合と、持ち続けた場合の資金の推移' });
+  add(cv);
+  add(el('p', { class: 'dim small', text: '色の線が合図どおり、灰色の線が持ち続けた場合です。' }));
+
+  const warn = [];
+  if (r.n === 0) warn.push('この期間では、売買が一度も成立していません。条件がきびしすぎるか、合図の向きと「入り方」が合っていない可能性があります。');
+  else if (r.n < 30) warn.push(`売買が ${r.n} 回と少ないため、結果は偶然に大きく左右されます。30回に満たない成績は、参考程度に見てください。`);
+  if (r.open) warn.push(`最後の売買は、まだ手じまいしていません(いまの含み損益 ${pct(r.open.ret, true)})。損益には含み分も入れていますが、勝率には数えていません。`);
+  warn.push('これは過去の値動きに当てはめた結果で、これからも同じようになることを示すものではありません。成績が良くなるまで式や数値を調整すると、過去にたまたま合っただけの設定になりやすくなります。別の銘柄や時間足でも試して、同じ傾向が出るかを確かめてください。');
+  warn.push('実際の売買では、注文が思った価格で通らないこと(すべり)があり、成績はここより悪くなるのがふつうです。');
+  add(el('ul', { class: 'bt-notes' }, warn.map(t => el('li', { text: t }))));
+
+  if (r.trades.length) {
+    add(el('h3', { text: `売買の記録(新しい順・${Math.min(50, r.trades.length)}件まで)` }));
+    const rows = r.trades.slice(-50).reverse().map(t => el('tr', {}, [
+      el('td', { text: t.dir > 0 ? '買い' : '売り' }), el('td', { text: fmtDate(t.t0, iv && iv.ms < 86400000) }), el('td', { text: fmtPrice(t.p0) }),
+      el('td', { text: fmtDate(t.t1, iv && iv.ms < 86400000) }), el('td', { text: fmtPrice(t.p1) }), el('td', { text: `${t.bars}本` }), el('td', { class: cls(t.ret), text: pct(t.ret, true) }),
+    ]));
+    add(el('div', { class: 'tbl-wrap' }, [el('table', { class: 'tbl' }, [
+      el('thead', {}, [el('tr', {}, ['向き', '入った日', '価格', '手じまい', '価格', '期間', '損益'].map(t => el('th', { text: t })))]), el('tbody', {}, rows)])]));
+  }
+  drawBtCurve(cv, r);
+}
+function drawBtCurve(cv, r) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), w = cv.clientWidth, h = cv.clientHeight;
+  if (!w) return;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const c = cv.getContext('2d'), th = THEMES[state.theme];
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+  const N = r.curve.length, padL = 8, padR = 56, padT = 10, padB = 10;
+  let lo = 1, hi = 1;
+  r.curve.concat(r.holdCurve).forEach(v => { if (isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); } });
+  if (hi === lo) { hi += 0.1; lo -= 0.1; }
+  const span = hi - lo; lo -= span * 0.08; hi += span * 0.08;
+  const X = i => padL + (N > 1 ? i / (N - 1) : 0.5) * (w - padL - padR), Y = v => padT + (hi - v) / (hi - lo) * (h - padT - padB);
+  const path = (arr, color, width) => {
+    c.beginPath(); arr.forEach((v, i) => (i ? c.lineTo(X(i), Y(v)) : c.moveTo(X(i), Y(v))));
+    c.strokeStyle = color; c.lineWidth = width; c.lineJoin = 'round'; c.stroke();
+  };
+  c.strokeStyle = th.cross; c.setLineDash([3, 3]); c.lineWidth = 1;
+  c.beginPath(); c.moveTo(padL, Y(1)); c.lineTo(w - padR, Y(1)); c.stroke(); c.setLineDash([]);
+  path(r.holdCurve, th.cross, 1);
+  const color = r.total >= 0 ? UP : DOWN;
+  path(r.curve, color, 2);
+  c.font = '11px -apple-system, "Segoe UI", "Hiragino Sans", sans-serif'; c.textBaseline = 'middle'; c.textAlign = 'left';
+  const ya = Y(r.curve[N - 1]); let yb = Y(r.holdCurve[N - 1]);
+  if (Math.abs(ya - yb) < 13) yb = ya + (yb >= ya ? 13 : -13); // 文字が重ならないようにずらす
+  c.fillStyle = color; c.fillText(`合図 ${r.curve[N - 1].toFixed(2)}`, w - padR + 4, ya);
+  c.fillStyle = th.text; c.fillText(`保有 ${r.holdCurve[N - 1].toFixed(2)}`, w - padR + 4, clamp(yb, 8, h - 8));
+}
+function bindBacktest() {
+  const ov = $('btOverlay');
+  $('btClose').addEventListener('click', () => { ov.hidden = true; });
+  ov.addEventListener('pointerdown', e => { if (e.target === ov) ov.hidden = true; });
+  window.addEventListener('resize', () => { if (!ov.hidden) renderBacktest(); });
+}
+
 // ---------------------------------------------------------------- 起動
 load();
 buildTopbar();
 bindTrade();
 bindMaker();
+bindBacktest();
 bindHelp();
 bindPointer();
 new ResizeObserver(resize).observe(wrap);

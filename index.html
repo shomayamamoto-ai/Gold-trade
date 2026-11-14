@@ -223,6 +223,16 @@
   </div>
 </div>
 
+<div id="btOverlay" class="overlay" hidden>
+  <div class="dialog wide" role="dialog" aria-modal="true" aria-labelledby="btTitle">
+    <div class="dlg-head">
+      <h2 id="btTitle">合図で売買していたら</h2>
+      <button id="btClose" class="x" type="button" aria-label="閉じる">×</button>
+    </div>
+    <div id="btBody" class="dlg-body an-body"></div>
+  </div>
+</div>
+
 <div id="helpOverlay" class="overlay" hidden>
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
     <div class="dlg-head">
@@ -238,7 +248,7 @@
         <dt>銘柄と時間足を変える</dt>
         <dd>左上の銘柄名から選びます。いちばん下の「すべての銘柄から探す」で、ほかの銘柄も選べます。</dd>
         <dt>インジケーターを足す</dt>
-        <dd>「<span class="touch">指標</span><span class="mouse">インジケーター</span>」から選びます(57種類・名前で検索可)。☆ を押すと「よく使う」に入ります。いちばん下の「＋ 自分で作る」では、式を書いてオリジナルの線や、売買の合図(▲▼)も作れます。設定や削除は、名前の横の<span class="touch">「⋯」</span><span class="mouse">アイコン</span>から。</dd>
+        <dd>「<span class="touch">指標</span><span class="mouse">インジケーター</span>」から選びます(57種類・名前で検索可)。☆ を押すと「よく使う」に入ります。いちばん下の「＋ 自分で作る」では、式を書いてオリジナルの線や、売買の合図(▲▼)も作れます。合図は、設定画面から「過去データで試す」「出たら知らせる」が使えます。設定や削除は、名前の横の<span class="touch">「⋯」</span><span class="mouse">アイコン</span>から。</dd>
         <dt>線を引く・画像で保存する</dt>
         <dd>「ツール」から、水平線・トレンドライン・画像の保存ができます。</dd>
         <dt>デモトレード(仮想の資金で練習)</dt>

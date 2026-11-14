@@ -595,3 +595,13 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .mk-preview { display: block; width: 100%; height: 150px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg, transparent); }
 .mk-row .mk-dir { flex: 0 0 112px; }
 @media (max-width: 760px) { .menu .menu-side { width: 44px; font-size: 17px; } }
+
+/* ---- 合図どおりに売買した場合の成績 */
+.bt-ctls { display: flex; flex-wrap: wrap; gap: 10px; margin: 4px 0 8px; }
+.bt-ctl { display: flex; flex-direction: column; gap: 3px; flex: 1 1 180px; min-width: 0; font-size: 12px; }
+.bt-ctl .ctl { width: 100%; }
+.bt-notes { margin: 10px 0 0; padding-left: 1.2em; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.bt-notes li { margin: 4px 0; overflow-wrap: anywhere; }
+#btTitle { overflow-wrap: anywhere; }
+.mk-actions { flex-wrap: wrap; }
+@media (max-width: 760px) { .bt-ctl .ctl { height: 40px; font-size: 16px; } }

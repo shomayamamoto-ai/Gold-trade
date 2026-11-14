@@ -937,6 +937,56 @@ function makeCustom(def) {
   };
 }
 
+// ================================================================ 合図どおりに売買した場合の成績(過去データでの試算)
+/* 決まり:
+ *   ・合図は、足が確定してから分かるものとして扱う。売買は「次の足の始値」で行う(先読みをしない)
+ *   ・いちばん新しい足はまだ確定していないので、その足の合図では売買しない
+ *   ・毎回、手持ちの全額で売買する(複利)。手数料は売買のたびに fee の割合を引く
+ * marks: [{ dir: 'up' | 'down', val: [...] }]
+ * opts: { side: 'long' | 'short' | 'both', exit: 'signal' | 'bars', hold: 本数, fee: 割合 } */
+function backtest(bars, marks, opts) {
+  const n = bars.length, o = opts || {}, fee = o.fee >= 0 ? o.fee : 0.001;
+  const side = ['long', 'short', 'both'].includes(o.side) ? o.side : 'long';
+  const hold = Math.max(1, Math.min(1000, Math.round(o.hold) || 10));
+  const sig = dir => { const ms = marks.filter(m => m.dir === dir); return i => ms.some(m => m.val[i] > 0 || m.val[i] < 0); };
+  const up = sig('up'), down = sig('down');
+  const hasOpp = side === 'long' ? marks.some(m => m.dir === 'down') : side === 'short' ? marks.some(m => m.dir === 'up') : true;
+  const exitMode = o.exit === 'bars' || !hasOpp ? 'bars' : 'signal';
+  let eq = 1, pos = 0, entry = 0, entryI = 0, eqAtEntry = 1, inBars = 0;
+  const trades = [], curve = [];
+  const closeAt = (i, px) => {
+    const gross = pos > 0 ? px / entry : 2 - px / entry; // 売りから入った場合は、下がった分が利益
+    eq = eqAtEntry * Math.max(0, gross) * (1 - fee);
+    trades.push({ dir: pos, t0: bars[entryI].t, t1: bars[i].t, p0: entry, p1: px, ret: eq / (eqAtEntry / (1 - fee)) - 1, bars: i - entryI });
+    pos = 0;
+  };
+  for (let i = 0; i < n; i++) {
+    if (i > 0) {
+      const u = up(i - 1), d = down(i - 1), px = bars[i].o;
+      if (pos && (exitMode === 'signal' ? (pos > 0 ? d : u) : i - entryI >= hold)) closeAt(i, px);
+      if (!pos && px > 0) {
+        const want = u && side !== 'short' ? 1 : d && side !== 'long' ? -1 : 0;
+        if (want) { pos = want; entry = px; entryI = i; eq *= 1 - fee; eqAtEntry = eq; }
+      }
+    }
+    if (pos) inBars++;
+    const c = bars[i].c; // その足の終値で評価した資金
+    curve.push(pos ? eqAtEntry * Math.max(0, pos > 0 ? c / entry : 2 - c / entry) : eq);
+  }
+  const open = pos ? { dir: pos, t0: bars[entryI].t, p0: entry, ret: curve[n - 1] / (eqAtEntry / (1 - fee)) - 1 } : null;
+  let peak = 1, maxDD = 0;
+  curve.forEach(v => { peak = Math.max(peak, v); maxDD = Math.max(maxDD, 1 - v / peak); });
+  const wins = trades.filter(t => t.ret > 0), losses = trades.filter(t => t.ret <= 0);
+  const sumW = wins.reduce((a, t) => a + t.ret, 0), sumL = losses.reduce((a, t) => a - t.ret, 0);
+  const hold0 = n ? bars[0].o : NaN, holdRet = n && hold0 > 0 ? bars[n - 1].c / hold0 * (1 - fee) - 1 : NaN;
+  return {
+    trades, open, curve, exitMode, n: trades.length, wins: wins.length, losses: losses.length,
+    total: (n ? curve[n - 1] : 1) - 1, holdRet, holdCurve: bars.map(b => (hold0 > 0 ? b.c / hold0 : 1)), maxDD,
+    pf: sumL > 0 ? sumW / sumL : NaN, avgWin: wins.length ? sumW / wins.length : NaN, avgLoss: losses.length ? -sumL / losses.length : NaN,
+    exposure: n ? inBars / n : 0,
+  };
+}
+
 const GROUPS = [
   ['trend', 'トレンド(流れの向き)'],
   ['momentum', 'オシレーター(勢い・行きすぎ)'],
@@ -951,5 +1001,5 @@ function defaults(id) {
   return out;
 }
 
-return { DEFS, GROUPS, FUNCS, defaults, makeCustom, checkFormula, parseFormula, evalFormula, helpers: { sma, ema, rma, wma, hma, dema, tema, kama, vwma, linreg, stdev, highest, lowest, sum, atr, rsi, trueRange, src } };
+return { DEFS, GROUPS, FUNCS, defaults, backtest, makeCustom, checkFormula, parseFormula, evalFormula, helpers: { sma, ema, rma, wma, hma, dema, tema, kama, vwma, linreg, stdev, highest, lowest, sum, atr, rsi, trueRange, src } };
 });
