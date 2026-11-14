@@ -2220,7 +2220,7 @@ function execute(sym, side, notional, reason, qty, opts) {
     syncIfStale();
     if (!priceOk(sym)) return '価格を最新の状態にできていないため、いまは売買できません。数秒待ってから、もう一度お試しください。';
     // 閉じていた間の利確・損切りの確認が済むまでは、売買させない(先に買い増したり、条件を変えたりできないようにする)
-    if (reconciled[sym] !== true) return '開いていなかった間の値動きを確認しています。数秒待ってから、もう一度お試しください。';
+    if (reconciled[sym] !== true || !clockReady) return '開いていなかった間の値動きを確認しています。数秒待ってから、もう一度お試しください。';
   }
   // 気配値が取れているときは、買いは売り注文の価格(ask)、売りは買い注文の価格(bid)で約定させる
   const quote = fixed ? null : liveQuote(sym);
@@ -2283,6 +2283,59 @@ function closePosition(sym, reason, opts) {
  * (あとから条件を書き換えて、過去の値動きに当てはめることはできない) */
 const reconciled = {}; // sym -> true: 確認済み / 'busy': 確認中 / なし: これから
 const recRetryAt = {};
+// ある時間帯の約定を取り寄せて、その間の最初の価格・安値・高値を返す(1分足より細かい端数を調べるため)
+async function tradeRange(sym, from, to) {
+  let lo = Infinity, hi = -Infinity, first = NaN, cur = from;
+  for (let page = 0; page < 30 && cur < to; page++) {
+    let rows = null, lastErr = null;
+    for (const host of HOSTS) {
+      const ac = new AbortController(), timer = setTimeout(() => ac.abort(), 8000);
+      try {
+        const res = await fetch(`${host}/api/v3/aggTrades?symbol=${encodeURIComponent(sym)}&startTime=${cur}&endTime=${to - 1}&limit=1000`, { signal: ac.signal });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        rows = await res.json();
+        if (!Array.isArray(rows)) throw new Error('bad');
+        break;
+      } catch (e) { lastErr = e; rows = null; } finally { clearTimeout(timer); }
+    }
+    if (!rows) throw lastErr;
+    rows.forEach(r => { const p = +r.p; if (!(p > 0)) return; if (!isFinite(first)) first = p; lo = Math.min(lo, p); hi = Math.max(hi, p); });
+    if (rows.length < 1000) break;
+    cur = +rows[rows.length - 1].T + 1;
+  }
+  return isFinite(first) ? { lo, hi, first } : null;
+}
+/* from から現在までの値動きを、もれなく順にたどる。
+ * 分の途中から始まる端数は約定の記録で、そこから先は 1分足 → 5分足 → 1時間足 → 日足 と、
+ * 区切りがそろうたびに粗い足へ上がり、現在が近づいたら細かい足へ下りる。
+ * test(安値, 高値, 最初の価格, 終わりの時刻) が true を返したら、そこでやめる。 */
+const LADDER = [['1d', 864e5], ['1h', 36e5], ['5m', 3e5], ['1m', 6e4]];
+async function scanAway(sym, from, test) {
+  let cur = from;
+  if (cur % 6e4) {
+    const to = Math.min(Math.ceil(cur / 6e4) * 6e4, tnow());
+    const r = await tradeRange(sym, cur, to);
+    if (r && test(r.lo, r.hi, r.first, to)) return;
+    cur = to;
+  }
+  for (let guard = 0; guard < 60; guard++) {
+    if (tnow() - cur < 6e4) return; // 残りの1分未満は、いまの価格での判定に任せる
+    const k = LADDER.findIndex(([, ms]) => cur % ms === 0 && cur + ms <= tnow());
+    if (k < 0) return;
+    const [api, ms] = LADDER[k];
+    // ひとつ粗い足の区切りまで進む(いちばん粗い足なら、一度に最大1000本)
+    const limit = k > 0 ? Math.min(1000, Math.round((Math.floor(cur / LADDER[k - 1][1] + 1) * LADDER[k - 1][1] - cur) / ms)) : 1000;
+    const rows = await fetchKlines(sym, api, limit, 0, cur).catch(e => { if (e && e.message === 'empty') return []; throw e; });
+    let moved = false;
+    for (const b of rows) {
+      if (b.t < cur) continue;
+      if (b.t + ms > tnow()) break; // まだ確定していない足
+      if (test(b.l, b.h, b.o, b.t + ms)) return;
+      cur = b.t + ms; moved = true;
+    }
+    if (!moved) cur += ms; // その時間帯のデータがない(取引がなかった)ときは、先へ進む
+  }
+}
 async function reconcile(sym) {
   if (reconciled[sym]) return;
   const pos = T.positions[sym];
@@ -2292,35 +2345,26 @@ async function reconcile(sym) {
   try {
     if (!clockReady) await syncClock();
     if (!clockReady) throw new Error('clock');
-    let from = Math.min(tnow(), Math.max(pos.opened, pos.levelsAt || 0, T.seen[sym] || 0));
-    // まず粗い足で全体を調べ、最後の「まだ確定していない足」の部分は、細かい足で調べ直す
-    for (let pass = 0; pass < 4; pass++) {
-      const gap = tnow() - from;
-      if (gap < 90000) break;
-      const [api, ms] = gap <= 1000 * 6e4 ? ['1m', 6e4] : gap <= 1000 * 3e5 ? ['5m', 3e5] : gap <= 1000 * 36e5 ? ['1h', 36e5] : ['1d', 864e5];
-      // from を含む足は、それより前の値動きも含むので使わない(次の足から調べる)
-      const rows = await fetchKlines(sym, api, 1000, 0, Math.ceil(from / ms) * ms).catch(e => { if (e && e.message === 'empty') return []; throw e; });
-      const p = T.positions[sym];
-      if (!p || p.id !== pos.id || p.levelsAt !== pos.levelsAt) break; // 待っている間に変わっていたら、やめる
-      const long = p.qty > 0;
-      let lastEnd = from, hit = null, hitT = 0;
-      for (const b of rows) {
-        if (b.t + ms > tnow()) break; // まだ確定していない足
-        lastEnd = b.t + ms;
-        // 同じ足の中で両方に届いていたら、不利なほう(損切り)を先とみなす。足の始値がすでに越えていたら、その始値で約定
-        if (p.sl !== null && (long ? b.l <= p.sl : b.h >= p.sl)) hit = ['sl', long ? Math.min(p.sl, b.o) : Math.max(p.sl, b.o)];
-        else if (p.tp !== null && (long ? b.h >= p.tp : b.l <= p.tp)) hit = ['tp', p.tp];
-        if (hit) { hitT = b.t + ms; break; }
-      }
-      if (hit) {
-        if (closePosition(sym, hit[0], { price: hit[1], t: hitT }) === null) {
+    const from = Math.min(tnow(), Math.max(pos.opened, pos.levelsAt || 0, T.seen[sym] || 0));
+    if (tnow() - from >= 60000) {
+      let changed = false;
+      await scanAway(sym, from, (lo, hi, open, tEnd) => {
+        const p = T.positions[sym];
+        // 待っている間に(別のタブなどで)内容が変わっていたら、いったんやめて最初からやり直す
+        if (!p || p.id !== pos.id || p.levelsAt !== pos.levelsAt) { changed = true; return true; }
+        const long = p.qty > 0;
+        let hit = null;
+        // 同じ時間帯の中で両方に届いていたら、不利なほう(損切り)を先とみなす。最初の価格がすでに越えていたら、その価格で約定
+        if (p.sl !== null && (long ? lo <= p.sl : hi >= p.sl)) hit = ['sl', long ? Math.min(p.sl, open) : Math.max(p.sl, open)];
+        else if (p.tp !== null && (long ? hi >= p.tp : lo <= p.tp)) hit = ['tp', p.tp];
+        if (!hit) return false;
+        if (closePosition(sym, hit[0], { price: hit[1], t: tEnd }) === null) {
           const h = T.history[0], q = quoteOf(sym);
           toast(`${labelOf(sym)}:ページを開いていない間に${hit[0] === 'tp' ? '利確' : '損切り'}の価格に届いていたため、その価格で決済しました(損益 ${fmtMoney(netOf(h), q, true)} ${q})`);
         }
-        break;
-      }
-      if (ms === 6e4 || lastEnd <= from) break;
-      from = lastEnd;
+        return true;
+      });
+      if (changed && T.positions[sym]) throw new Error('changed');
     }
     reconciled[sym] = true;
     T.seen[sym] = tnow();
@@ -2433,14 +2477,14 @@ function renderTrade() {
   document.querySelectorAll('.trQuote').forEach(n => { if (n.textContent !== q) n.textContent = q; });
   setTxt('trSym', curSymbol().label);
   setTxt('trPrice', fmtPrice(px));
-  const tradable = px > 0 && priceOk(sym) && reconciled[sym] === true;
+  const tradable = px > 0 && priceOk(sym) && reconciled[sym] === true && clockReady;
   $('trBuy').disabled = $('trSell').disabled = !tradable;
   // 取引所から消えた銘柄は価格が取れないので、建値での清算だけできるようにする
   const gone = !!dead[sym] && !!pos;
   $('pClose').disabled = !tradable && !gone;
-  setTxt('pClose', gone ? '建値で清算する' : '決済する');
+  setTxt('pClose', gone ? '最後の価格で清算する' : '決済する');
   $('pSave').disabled = !tradable;
-  if (gone) setTxt('pMsg', 'この銘柄は取引所で取引できなくなっています。建値(買ったときの価格)で清算できます。', 'msg');
+  if (gone) setTxt('pMsg', 'この銘柄は取引所で取引できなくなっています。最後に取得できた価格で清算できます。', 'msg');
   if (!(px > 0)) setTxt('trMsg', state.loading ? '' : '実際の価格を取得できていないため、いまは注文できません。');
   else if ($('trMsg').textContent.startsWith('実際の価格')) setTxt('trMsg', '');
 
@@ -2584,7 +2628,7 @@ function bindTrade() {
     const sym = state.symbol;
     if (syncIfStale()) { renderTrade(); return; }
     // 価格が最新で、閉じていた間の確認も済んでいるときだけ変更できる(過去の値動きを見てからの書き換えを防ぐ)
-    if (!priceOk(sym) || reconciled[sym] !== true) { setTxt('pMsg', '価格を最新の状態にできていないため、いまは変更できません。数秒待ってから、もう一度お試しください。', 'msg down'); return; }
+    if (!priceOk(sym) || reconciled[sym] !== true || !clockReady) { setTxt('pMsg', '価格を最新の状態にできていないため、いまは変更できません。数秒待ってから、もう一度お試しください。', 'msg down'); return; }
     const tp = numOrNull('pTp'), sl = numOrNull('pSl');
     const err = checkLevels(Math.sign(pos.qty), T.last[sym], tp, sl);
     if (err) { setTxt('pMsg', err, 'msg down'); return; }
@@ -2594,7 +2638,7 @@ function bindTrade() {
   });
   $('pClose').addEventListener('click', () => {
     const sym = state.symbol, q = quoteOf(sym), held = T.positions[sym];
-    const err = dead[sym] && held ? closePosition(sym, 'manual', { price: held.avg, away: false }) : closePosition(sym, 'manual');
+    const err = dead[sym] && held ? closePosition(sym, 'manual', { price: T.last[sym] > 0 ? T.last[sym] : held.avg, away: false }) : closePosition(sym, 'manual');
     if (err) { setTxt('pMsg', err, 'msg down'); return; }
     const h = T.history[0];
     setTxt('trMsg', `決済しました(損益 ${fmtMoney(netOf(h), q, true)} ${q})`, 'msg');
