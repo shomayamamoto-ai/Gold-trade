@@ -1539,10 +1539,14 @@ function drawShape(type, a, b, price1, price2, on) {
     return;
   }
   ctx.font = '11px -apple-system, "Segoe UI", "Hiragino Sans", sans-serif'; ctx.textBaseline = 'bottom'; ctx.textAlign = 'left';
-  FIB.forEach(f => {
+  // 線の間がせまいときは、文字が重ならないよう、主な水準(0・50・61.8・100%)から順に、置けるものだけ書く
+  const placed = [];
+  FIB.slice().sort((p, q) => [0, 1, 0.618, 0.5, 0.382, 0.236, 0.786].indexOf(p) - [0, 1, 0.618, 0.5, 0.382, 0.236, 0.786].indexOf(q)).forEach(f => {
     const y = Math.round(b.y + (a.y - b.y) * f) + 0.5;
     ctx.globalAlpha = f === 0 || f === 1 || f === 0.5 || f === 0.618 ? 1 : 0.6;
     ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + Math.max(w, 40), y); ctx.stroke();
+    if (placed.some(py => Math.abs(py - y) < 12)) return;
+    placed.push(y);
     ctx.fillText(`${(f * 100).toFixed(1)}%  ${fmtPrice(price2 + (price1 - price2) * f)}`, x0 + 3, y - 2);
   });
   ctx.globalAlpha = 1;
@@ -2228,6 +2232,7 @@ function buildTopbar() {
    ['垂直線', '決めた日時に縦線を引く', () => setTool('v')],
    ['長方形', '2つの角を決めて、値動きの範囲を囲む', () => setTool('r')],
    ['フィボナッチ', '上げ(下げ)の始まりと終わりを決めて、戻りの目安を引く', () => setTool('f')],
+   ['売買ルールを試す', '移動平均の交差や RSI などで売買していたら、どうなっていたかを過去データで計算', () => openRules()],
    ['表示を切りかえ', 'ローソク足 → 平均足 → ライン の順に変わります', () => {
      const k = CHART_TYPES.findIndex(c => c[0] === state.chartType);
      state.chartType = CHART_TYPES[(k + 1) % CHART_TYPES.length][0];
@@ -2975,7 +2980,10 @@ function renderTrade() {
       `<span class="${pnlClass(u)}">${fmtMoney(u, oq, true)} ${esc(oq)}</span></button>`;
   }).join(''));
 
-  setHtml($('trHist'), T.history.length ? T.history.slice(0, 40).map(h => {
+  const hf = $('trHistFilter').value;
+  const hist = T.history.filter(h => hf === 'sym' ? h.sym === sym : hf === 'win' ? h.pnl !== null && netOf(h) > 0 : hf === 'loss' ? h.pnl !== null && netOf(h) <= 0 : hf === 'auto' ? ['tp', 'sl', 'liq', 'limit'].includes(h.reason) : true);
+  setTxt('trHistCount', T.history.length ? `${hist.length} 件${hist.length > 40 ? '(新しい40件を表示)' : ''}` : '');
+  setHtml($('trHist'), hist.length ? hist.slice(0, 40).map(h => {
     const hq = quoteOf(h.sym), d = new Date(h.t);
     const when = `${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
     const why = h.reason === 'tp' ? '・利確' : h.reason === 'sl' ? '・損切り' : h.reason === 'liq' ? '・強制決済' : h.reason === 'limit' ? '・指値' : '';
@@ -2984,7 +2992,7 @@ function renderTrade() {
       `<span class="h-pnl ${net === null ? 'dim' : pnlClass(net)}">${net === null ? '新規' : fmtMoney(net, hq, true) + ' ' + esc(hq)}</span>` +
       `<span class="dim">${fmtQty(h.qty)} @ ${fmtPrice(h.price)}</span><span class="dim h-pnl">${when}</span>` +
       `${h.note ? `<span class="h-note">メモ:${esc(h.note)}</span>` : ''}</div>`;
-  }).join('') : '<span class="dim">まだ取引がありません。</span>');
+  }).join('') : `<span class="dim">${T.history.length ? 'この条件に合う取引はありません。' : 'まだ取引がありません。'}</span>`);
 
   const u = pos ? unrealized(sym) : 0;
   setTxt('tbText', pos
@@ -3122,6 +3130,38 @@ function bindTrade() {
 
   const amt = $('trAmt');
   amt.value = acct(quoteOf(state.symbol)).start / 10;
+  /* 注文の大きさは「金額」でも「数量」でも入れられる。中では、いつも金額に直して扱う。
+   * 数量から金額への換算には、実際に約定する側の価格(買いは買える価格、売りは売れる価格)を使う */
+  let unit = 'amount';
+  const baseOf = sym => { const q = quoteOf(sym); return sym.endsWith(q) ? sym.slice(0, -q.length) : sym; };
+  const refPrice = dir => {
+    if (orderType === 'limit') return parseFloat($('trLimit').value) || 0;
+    const lq = liveQuote(state.symbol), px = T.last[state.symbol] || 0;
+    return lq ? (dir > 0 ? lq.ask : dir < 0 ? lq.bid : (lq.ask + lq.bid) / 2) : px;
+  };
+  const notionalOf = dir => { const v = parseFloat(amt.value) || 0; return unit === 'qty' ? v * refPrice(dir || 0) : v; };
+  const setNotional = n => {
+    const q = quoteOf(state.symbol), px = refPrice(0);
+    if (unit !== 'qty') amt.value = n > 0 ? floorMoney(n, q) : '';
+    else amt.value = n > 0 && px > 0 ? +(n / px).toPrecision(6) : '';
+    renderUnit();
+  };
+  function renderUnit() {
+    const sym = state.symbol, q = quoteOf(sym), cur = $('trAmtCur'), v = parseFloat(amt.value) || 0, px = refPrice(0);
+    setTxt('trUnitName', unit === 'qty' ? '数量' : '金額');
+    setTxt('trAmtCur', unit === 'qty' ? baseOf(sym) : q);
+    cur.classList.toggle('trQuote', unit !== 'qty'); // 金額のときは、決済通貨の表示をほかと同じように自動で保つ
+    setTxt('trAmtHint', unit === 'qty' ? 'いくつ売買するか' : 'いくら分を売買するか');
+    setTxt('trUnit', unit === 'qty' ? '金額で入力' : '数量で入力');
+    setTxt('trAmtEst', v > 0 && px > 0 ? (unit === 'qty' ? `≈ ${fmtMoney(v * px, q)} ${q}` : `≈ ${fmtQty(v / px)} ${baseOf(sym)}`) : '');
+  }
+  $('trUnit').addEventListener('click', () => {
+    const n = notionalOf(0);
+    unit = unit === 'qty' ? 'amount' : 'qty';
+    setNotional(n); renderRisk();
+  });
+  amt.addEventListener('input', renderUnit);
+  setInterval(() => { if (!document.hidden && state.tradeOpen !== false) renderUnit(); }, 1000);
   document.querySelector('.tr-quick').addEventListener('click', e => {
     const pct = parseFloat(e.target.dataset.pct);
     if (!pct) return;
@@ -3129,9 +3169,9 @@ function bindTrade() {
     const pos = T.positions[sym], px = T.last[sym];
     if (pos && px > 0 && floorMoney(v, q) <= 0) {
       // 使える金額が残っていないとき(全額で持っているとき)は、保有分の何%かを入れる。決済に使える
-      amt.value = floorMoney(Math.abs(pos.qty) * px * pct, q) || '';
+      setNotional(floorMoney(Math.abs(pos.qty) * px * pct, q));
       setTxt('trMsg', `使える金額が残っていないため、保有分の ${Math.round(pct * 100)}% の金額を入れました。「${pos.qty > 0 ? '売り' : '買い'}」を押すと、その分を決済します。`, 'msg');
-    } else amt.value = floorMoney(v, q);
+    } else setNotional(floorMoney(v, q));
     renderRisk();
   });
   // 注文の種類(成行 / 指値)
@@ -3156,7 +3196,7 @@ function bindTrade() {
     const pct = stopPct(), box = $('trRisk');
     box.hidden = !isFinite(pct);
     if (!isFinite(pct)) return;
-    const q = quoteOf(state.symbol), st = acctStats(q), n = parseFloat(amt.value) || 0;
+    const q = quoteOf(state.symbol), st = acctStats(q), n = notionalOf(0);
     const loss = n * (pct + 2 * FEE); // 値幅の損に、往復の手数料を足したもの
     setTxt('trRiskText', `損切りまで ${(pct * 100).toFixed(2)}%。この金額だと、損切りで約 ${fmtMoney(loss, q)} ${q}(資金の ${(st.equity > 0 ? loss / st.equity * 100 : 0).toFixed(2)}%)を失います。`);
   }
@@ -3166,13 +3206,13 @@ function bindTrade() {
     if (!r || !isFinite(pct)) return;
     const q = quoteOf(state.symbol), st = acctStats(q);
     const v = Math.min(st.equity * r / (pct + 2 * FEE), st.avail / (1 + FEE));
-    amt.value = floorMoney(v, q);
+    setNotional(floorMoney(v, q));
     renderRisk();
   });
   const order = side => {
     const sym = state.symbol, px = T.last[sym], dir = side === 'buy' ? 1 : -1, q = quoteOf(sym);
     const tp = numOrNull('trTp'), sl = numOrNull('trSl'), note = cleanNote($('trNote').value);
-    const notional = parseFloat(amt.value) || 0;
+    const notional = notionalOf(dir);
     const had = T.positions[sym], opening = !had || Math.sign(had.qty) === dir;
     const hadDir = had ? Math.sign(had.qty) : 0; // 決済すると had の数量が変わるので、向きを先に覚えておく
     const done = () => { $('trTp').value = ''; $('trSl').value = ''; $('trNote').value = ''; renderRisk(); renderTrade(); draw(); };
@@ -3224,6 +3264,7 @@ function bindTrade() {
     T.orders = T.orders.filter(o => String(o.id) !== b.dataset.oid);
     saveTrade(); renderTrade(); draw();
   });
+  $('trHistFilter').addEventListener('change', renderTrade);
   $('trBuy').addEventListener('click', () => order('buy'));
   $('trSell').addEventListener('click', () => order('sell'));
 
@@ -3307,7 +3348,7 @@ function bindTrade() {
   });
   const onSymbol = () => {
     if ($('symbol').value === '__add') return;
-    amt.value = acct(quoteOf(state.symbol)).start / 10;
+    unit = 'amount'; amt.value = acct(quoteOf(state.symbol)).start / 10; renderUnit();
     $('trTp').value = ''; $('trSl').value = ''; setTxt('trMsg', '');
     $('trLimit').value = ''; // 前の銘柄の指値の価格を、別の銘柄に持ちこさない
     renderRisk();
@@ -3813,9 +3854,50 @@ function bindMaker() {
 }
 
 // ---------------------------------------------------------------- 合図どおりに売買した場合の成績
-const bt = { ind: null, side: 'long', exit: 'signal', hold: 10, sl: 0, tp: 0 };
+const bt = { ind: null, rule: -1, side: 'long', exit: 'signal', hold: 10, sl: 0, tp: 0 };
+/* よく知られた売買ルール。自作インジケーターと同じ「式」で書いてあるので、そのままチャートにも出せる。
+ * ▲ が買いの合図、▼ が売りの合図 */
+const RULES = [
+  { name: '移動平均の交差', desc: '短い平均線が長い平均線を上に抜けたら買い、下に抜けたら売り。流れに乗る手法の基本です。', overlay: true,
+    inputs: [{ label: '短い期間', def: 10 }, { label: '長い期間', def: 30 }],
+    lines: [{ name: '短', expr: 'ema(close, p1)', color: '#2f80ed' }, { name: '長', expr: 'ema(close, p2)', color: '#f5a623' }],
+    marks: [{ name: '上抜け', expr: 'crossover(ema(close, p1), ema(close, p2))', dir: 'up' }, { name: '下抜け', expr: 'crossunder(ema(close, p1), ema(close, p2))', dir: 'down' }] },
+  { name: '長期の平均線の上下', desc: '価格が長期の平均線を上に抜けたら買い、下に抜けたら売り。大きな流れだけを取りにいきます。', overlay: true,
+    inputs: [{ label: '期間', def: 200 }],
+    lines: [{ name: '平均', expr: 'sma(close, p1)', color: '#8e44ad' }],
+    marks: [{ name: '上抜け', expr: 'crossover(close, sma(close, p1))', dir: 'up' }, { name: '下抜け', expr: 'crossunder(close, sma(close, p1))', dir: 'down' }] },
+  { name: 'RSI の行きすぎからの戻り', desc: 'RSI が下の基準を割ったあと、上に戻ったら買い。上の基準を超えたあと、下に戻ったら売り。横ばいの相場向きです。', overlay: true,
+    inputs: [{ label: '期間', def: 14 }, { label: '下の基準', def: 30 }, { label: '上の基準', def: 70 }], lines: [],
+    marks: [{ name: '下から戻る', expr: 'crossover(rsi(close, p1), p2)', dir: 'up' }, { name: '上から戻る', expr: 'crossunder(rsi(close, p1), p3)', dir: 'down' }] },
+  { name: 'MACD とシグナルの交差', desc: 'MACD がシグナルを上に抜けたら買い、下に抜けたら売り。', overlay: true,
+    inputs: [{ label: '短期', def: 12 }, { label: '長期', def: 26 }, { label: 'シグナル', def: 9 }], lines: [],
+    marks: [{ name: '上抜け', expr: 'crossover(ema(close, p1) - ema(close, p2), ema(ema(close, p1) - ema(close, p2), p3))', dir: 'up' },
+      { name: '下抜け', expr: 'crossunder(ema(close, p1) - ema(close, p2), ema(ema(close, p1) - ema(close, p2), p3))', dir: 'down' }] },
+  { name: 'ボリンジャーバンドの逆張り', desc: '下のバンドを割ったら買い、上のバンドを超えたら売り。「行きすぎは戻る」という考え方です。強い流れが出ると負け続けます。', overlay: true,
+    inputs: [{ label: '期間', def: 20 }, { label: '幅(標準偏差の何倍)', def: 2 }],
+    lines: [{ name: '上', expr: 'sma(close, p1) + stdev(close, p1) * p2', color: '#16a085' }, { name: '下', expr: 'sma(close, p1) - stdev(close, p1) * p2', color: '#16a085' }],
+    marks: [{ name: '下を割る', expr: 'crossunder(close, sma(close, p1) - stdev(close, p1) * p2)', dir: 'up' }, { name: '上を超える', expr: 'crossover(close, sma(close, p1) + stdev(close, p1) * p2)', dir: 'down' }] },
+  { name: '高値・安値の更新(ブレイクアウト)', desc: '直近の高値を終値で超えたら買い、直近の安値を終値で割ったら売り。', overlay: true,
+    inputs: [{ label: '期間', def: 20 }],
+    lines: [{ name: '高値', expr: 'prev(highest(high, p1))', color: '#27ae60' }, { name: '安値', expr: 'prev(lowest(low, p1))', color: '#c0392b' }],
+    marks: [{ name: '高値を超える', expr: 'crossover(close, prev(highest(high, p1)))', dir: 'up' }, { name: '安値を割る', expr: 'crossunder(close, prev(lowest(low, p1)))', dir: 'down' }] },
+];
+RULES.forEach(r => { r.hist = ''; r.bands = []; });
+function openRules() {
+  bt.ind = null; bt.rule = Math.max(0, bt.rule | 0);
+  bt.side = 'long'; bt.exit = 'signal';
+  $('btOverlay').hidden = false;
+  renderBacktest();
+  $('btClose').focus();
+}
+// いま選んでいるルールの合図を、読み込んである足で計算する
+function ruleMarks() {
+  const def = RULES[bt.rule], made = GT.makeCustom(def), p = {};
+  made.params.forEach(q => { p[q.key] = q.def; });
+  return made.compute(state.bars, p).marks;
+}
 function openBacktest(ind) {
-  bt.ind = ind;
+  bt.ind = ind; bt.rule = -1;
   const marks = (ind.out && ind.out.marks) || [];
   const hasUp = marks.some(m => m.dir === 'up'), hasDown = marks.some(m => m.dir === 'down');
   bt.side = hasUp ? 'long' : 'short';
@@ -3826,14 +3908,34 @@ function openBacktest(ind) {
 }
 function renderBacktest() {
   const ind = bt.ind, body = $('btBody');
-  if (!ind || !state.indicators.includes(ind) || !ind.out || !ind.out.marks) { $('btOverlay').hidden = true; return; }
-  const marks = ind.out.marks, bars = state.bars;
+  const byRule = bt.rule >= 0 && !ind;
+  if (!byRule && (!ind || !state.indicators.includes(ind) || !ind.out || !ind.out.marks)) { $('btOverlay').hidden = true; return; }
+  if (!state.bars.length) { $('btOverlay').hidden = true; toast('チャートの読み込みが終わってから、もう一度お試しください。'); return; }
+  const marks = byRule ? ruleMarks() : ind.out.marks, bars = state.bars;
   const hasUp = marks.some(m => m.dir === 'up'), hasDown = marks.some(m => m.dir === 'down');
   const r = GT.backtest(bars, marks, { side: bt.side, exit: bt.side === 'both' ? 'signal' : bt.exit, hold: bt.hold, fee: FEE, sl: bt.sl / 100, tp: bt.tp / 100 });
   const iv = INTERVALS.find(x => x.id === state.interval);
-  $('btTitle').textContent = `「${IND_TYPES[ind.type].name}」の合図で売買していたら`;
+  $('btTitle').textContent = byRule ? '売買ルールを過去データで試す' : `「${IND_TYPES[ind.type].name}」の合図で売買していたら`;
   body.textContent = '';
   const add = (...nodes) => nodes.forEach(nd => body.appendChild(nd));
+  if (byRule) {
+    const def = RULES[bt.rule];
+    const sel = el('select', { class: 'ctl', id: 'btRule', 'aria-label': '売買ルール' }, RULES.map((r, i) => el('option', { value: String(i), text: r.name })));
+    sel.value = String(bt.rule);
+    sel.addEventListener('change', () => { bt.rule = +sel.value; bt.side = 'long'; bt.exit = 'signal'; renderBacktest(); });
+    const addBtn = el('button', { class: 'ctl btn', type: 'button', id: 'btAdd', text: 'チャートに出す' });
+    addBtn.addEventListener('click', () => {
+      // 自作インジケーターとして登録する。数値や式は、あとから自由に変えられる
+      if (state.indicators.length >= 30) { toast('インジケーターは30個までです。使っていないものを削除してから追加してください。'); return; }
+      const made = registerCustom(Object.assign({}, def, { id: '' }));
+      if (!made) { toast(`自分で作れるのは${CUSTOM_MAX}個までです。使っていないものを削除してください。`); return; }
+      addIndicator(made.id);
+      $('btOverlay').hidden = true;
+      toast(`「${def.name}」をチャートに追加しました。⚙ から数値を変えたり、式を編集したりできます。`);
+    });
+    add(el('div', { class: 'bt-rule' }, [el('label', { class: 'bt-ctl' }, [el('span', { class: 'dim', text: '売買ルール' }), sel]), addBtn]));
+    add(el('p', { class: 'small', text: `${def.desc} 設定: ${def.inputs.map(q => `${q.label} ${q.def}`).join('、')}(「チャートに出す」と、数値を変えて試せます)` }));
+  }
   const pct = (v, sign) => (isFinite(v) ? `${sign && v > 0 ? '+' : ''}${(v * 100).toFixed(Math.abs(v) >= 10 ? 0 : 2)}%` : '—');
   const select = (label, value, options, onChange) => {
     const sel = el('select', { class: 'ctl' }, options.map(([v, t]) => el('option', { value: v, text: t })));

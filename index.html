@@ -89,9 +89,10 @@
         <input id="trLimit" class="ctl" type="number" inputmode="decimal" min="0" step="any">
       </label>
       <label class="row">
-        <span class="lbl">金額 (<span class="trQuote"></span>)<small>いくら分を売買するか</small></span>
+        <span class="lbl"><span id="trUnitName">金額</span> (<span id="trAmtCur" class="trQuote"></span>)<small id="trAmtHint">いくら分を売買するか</small></span>
         <input id="trAmt" class="ctl" type="number" inputmode="decimal" min="0" step="any">
       </label>
+      <div class="tr-unit"><span id="trAmtEst" class="dim"></span><button id="trUnit" class="tr-link" type="button">数量で入力</button></div>
       <div class="tr-quick" role="group" aria-label="使える金額に対する割合">
         <button type="button" data-pct="0.1">10%</button>
         <button type="button" data-pct="0.25">25%</button>
@@ -171,7 +172,17 @@
     </section>
 
     <section class="tr-card">
-      <h3>取引履歴</h3>
+      <div class="tr-hist-head">
+        <h3>取引履歴</h3>
+        <span id="trHistCount" class="dim"></span>
+        <select id="trHistFilter" class="ctl" aria-label="取引履歴を絞り込む">
+          <option value="all">すべて</option>
+          <option value="sym">この銘柄だけ</option>
+          <option value="win">利益が出た決済</option>
+          <option value="loss">損失が出た決済</option>
+          <option value="auto">自動の約定(利確・損切り・指値)</option>
+        </select>
+      </div>
       <div id="trHist" class="tr-hist"></div>
     </section>
 
@@ -256,6 +267,8 @@
         <dd>「<span class="touch">指標</span><span class="mouse">インジケーター</span>」から選びます(57種類・名前で検索可)。☆ を押すと「よく使う」に入ります。いちばん下の「＋ 自分で作る」では、式を書いてオリジナルの線や、売買の合図(▲▼)も作れます。合図は、設定画面から「過去データで試す」「出たら知らせる」が使えます。設定や削除は、名前の横の<span class="touch">「⋯」</span><span class="mouse">アイコン</span>から。</dd>
         <dt>線を引く・画像で保存する</dt>
         <dd>「ツール」から、水平線・垂直線・トレンドライン・長方形・フィボナッチを引けます。同じメニューで、表示の切りかえ(ローソク足・平均足・ライン)と、画像の保存もできます。</dd>
+        <dt>売買ルールを過去のデータで試す</dt>
+        <dd>「ツール → 売買ルールを試す」で、移動平均の交差や RSI などのルールどおりに売買していたら、どうなっていたかを計算できます。</dd>
         <dt>デモトレード(仮想の資金で練習)</dt>
         <dd><span class="touch">画面下の「注文する」</span><span class="mouse">右上の「デモトレード」</span>から。利確・損切りの線は、チャート上でドラッグして動かせます。</dd>
         <dt>学ぶ</dt>

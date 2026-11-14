@@ -613,3 +613,21 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .tr-btns-sub .btn { flex: 1 1 0; min-width: 0; }
 
 .toast { white-space: pre-line; }
+
+/* ---- 数量での入力、取引履歴の絞り込み、売買ルールの試算 */
+.tr-unit { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 22px; margin: 2px 0 4px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.tr-link { padding: 4px 0; border: 0; background: none; color: var(--primary); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
+.tr-hist-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 6px; }
+.tr-hist-head h3 { margin: 0; }
+.tr-hist-head .dim { font-size: 11px; margin-right: auto; }
+.tr-hist-head .ctl { flex: 0 1 190px; min-width: 0; height: 30px; font-size: 12px; }
+.bt-rule { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin: 4px 0 6px; }
+.bt-rule .bt-ctl { flex: 1 1 220px; }
+.bt-rule .btn { flex: 0 0 auto; height: 34px; }
+@media (max-width: 760px) {
+  /* スマホでは、お知らせを画面の下(注文バーの上)に出す。上に出すと、時間足のボタンやメニューに重なる */
+  .toast { top: auto; bottom: calc(72px + env(safe-area-inset-bottom)); width: max-content; text-align: left; }
+  .tr-link { min-height: 36px; padding: 6px 4px; font-size: 13px; }
+  .tr-hist-head .ctl { height: 38px; font-size: 14px; flex-basis: 100%; }
+  .bt-rule .btn { height: 40px; flex: 1 1 100%; }
+}
