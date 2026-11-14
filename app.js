@@ -188,6 +188,10 @@ function load() {
   }
   if (s && SYMBOLS.some(x => x.id === s.symbol)) state.symbol = s.symbol;
   if (s && INTERVALS.some(x => x.id === s.interval)) state.interval = s.interval;
+  // 教科書などからのリンク(?symbol=BTCUSDT&interval=1d)で、開く銘柄と時間足を指定できる
+  const qs = new URLSearchParams(location.search), qSym = qs.get('symbol'), qIv = qs.get('interval');
+  if (qSym && SYMBOLS.some(x => x.id === qSym)) state.symbol = qSym;
+  if (INTERVALS.some(x => x.id === qIv)) state.interval = qIv;
   if (s && THEMES[s.theme]) state.theme = s.theme;
   else if (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) state.theme = 'dark';
   if (s && s.mainWeight > 0) state.mainWeight = s.mainWeight;

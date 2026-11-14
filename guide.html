@@ -18,7 +18,7 @@
   --fact: #6ea8ff; --common: #a3abba; --idea: #e0b040;
 }
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; scroll-padding-top: 60px; }
+html { scroll-behavior: smooth; scroll-padding-top: 60px; overflow-anchor: none; }
 body {
   margin: 0; background: var(--bg); color: var(--text);
   font: 16px/1.9 -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif;
@@ -114,14 +114,120 @@ details .formula { background: var(--bg); }
 .plan p { margin: 0 0 6px; }
 td.up, .up { color: var(--up); } td.down, .down { color: var(--down); }
 @media print { .bar { display: none; } h2 { break-after: avoid; } .card, figure, .note, .warn { break-inside: avoid; } }
+
+/* ---------- 読みやすさのための仕組み ---------- */
+html[data-fs="1"] body { font-size: 18px; }
+html[data-fs="2"] body { font-size: 20px; }
+.progress { position: fixed; top: 0; left: 0; z-index: 12; height: 3px; width: 0; background: var(--accent); }
+.bar #where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.bar button { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; padding: 0 10px; }
+.bar #fsBtn { gap: 1px; align-items: baseline; padding-top: 7px; }
+.layout { display: block; }
+.side-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.side-head button { width: 34px; height: 34px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font-size: 22px; cursor: pointer; }
+.side nav a {
+  display: block; padding: 6px 10px; border-left: 2px solid var(--line);
+  color: var(--muted); font-size: 14px; line-height: 1.5; text-decoration: none;
+}
+.side nav a:hover { color: var(--text); }
+.side nav a.on { color: var(--text); border-left-color: var(--accent); font-weight: 700; }
+.side nav .sub { display: none; }
+.side nav .grp.on .sub { display: block; }
+.side nav .sub a { padding: 4px 10px 4px 24px; font-size: 13px; }
+.legend-box { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.legend-box p { margin: 0 0 6px; }
+.scrim { position: fixed; inset: 0; z-index: 15; background: rgba(0, 0, 0, .4); }
+.scrim[hidden], .resume[hidden], .to-top[hidden] { display: none; }
+.open-chart { margin: -2px 0 6px; font-size: 14px; }
+.open-chart a { display: inline-block; padding: 3px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--text); text-decoration: none; }
+.open-chart a:hover { background: var(--panel); }
+.to-top {
+  position: fixed; right: max(14px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 8;
+  display: flex; align-items: center; justify-content: center; width: 44px; height: 44px;
+  border: 1px solid var(--line); border-radius: 50%; background: var(--bg); color: var(--text);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .2); cursor: pointer;
+}
+.resume {
+  position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 9;
+  display: flex; align-items: center; gap: 8px; max-width: calc(100vw - 80px);
+  padding: 8px 8px 8px 14px; border-radius: 10px; background: var(--text); color: var(--bg);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .3); font-size: 13px; line-height: 1.5;
+}
+.resume span { min-width: 0; }
+.resume button { flex: 0 0 auto; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; font: inherit; cursor: pointer; white-space: nowrap; }
+#resumeGo { background: var(--bg); color: var(--text); font-weight: 700; }
+#resumeNo { background: transparent; color: var(--bg); font-size: 18px; }
+.tbl-wrap { position: relative; }
+.tbl-wrap.wide::after {
+  content: "横にスクロールできます →"; display: block; padding-top: 4px;
+  color: var(--muted); font-size: 12px; text-align: right;
+}
+.tbl-wrap.wide { background: linear-gradient(to left, var(--panel), transparent 28px) no-repeat; }
+.tbl-wrap.wide.end { background: none; }
+.tbl-wrap.wide th:first-child, .tbl-wrap.wide td:first-child { position: sticky; left: 0; background: var(--bg); box-shadow: 1px 0 0 var(--line); }
+h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
+.tag { cursor: help; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (min-width: 1040px) {
+  .layout { display: grid; grid-template-columns: 250px minmax(0, 760px); gap: 48px; max-width: 1110px; margin: 0 auto; padding: 0 24px; }
+  .side { position: sticky; top: 51px; align-self: start; max-height: calc(100dvh - 51px); overflow-y: auto; padding: 24px 0 24px; }
+  .side-head { display: none; }
+  main { margin: 0; padding-left: 0; padding-right: 0; max-width: none; }
+  .toc, #tocBtn { display: none; }
+}
+@media (max-width: 1039px) {
+  .side {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 20; width: min(320px, 86vw);
+    padding: 14px 16px max(16px, env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain;
+    background: var(--bg); box-shadow: 4px 0 24px rgba(0, 0, 0, .25);
+    transform: translateX(-102%); visibility: hidden; transition: transform .2s ease, visibility .2s;
+  }
+  .side.open { transform: none; visibility: visible; }
+  .side nav a { padding: 8px 10px; font-size: 15px; }
+  .side nav .sub a { padding: 6px 10px 6px 24px; font-size: 14px; }
+}
+@media (max-width: 520px) {
+  .bar { gap: 6px; padding-left: 10px; padding-right: 10px; }
+  .bar a, .bar button { padding: 0 9px; }
+  #tocBtn span { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .side { transition: none; } }
+@media print { .progress, .side, .scrim, .resume, .to-top, .open-chart { display: none !important; } .layout { display: block; } }
 </style>
 </head>
 <body>
+<div id="progress" class="progress" aria-hidden="true"></div>
 <div class="bar">
-  <strong>トレードの教科書</strong>
-  <button id="themeBtn" type="button" aria-label="ライト/ダークを切り替える">◐</button>
+  <button id="tocBtn" type="button" aria-controls="side" aria-expanded="false">
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    <span>もくじ</span>
+  </button>
+  <strong id="where">トレードの教科書</strong>
+  <button id="fsBtn" type="button" aria-label="文字の大きさを変える" title="文字の大きさを変える">
+    <span aria-hidden="true" style="font-size:11px">あ</span><span aria-hidden="true" style="font-size:16px">あ</span>
+  </button>
+  <button id="themeBtn" type="button" aria-label="ライト/ダークを切り替える" title="ライト/ダークを切り替える">
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor"/></svg>
+  </button>
   <a class="primary" href="index.html">チャートへ</a>
 </div>
+<div id="scrim" class="scrim" hidden></div>
+
+<div class="layout">
+<aside id="side" class="side" aria-label="もくじ">
+  <div class="side-head">
+    <strong>もくじ</strong>
+    <button id="sideClose" type="button" aria-label="もくじを閉じる">×</button>
+  </div>
+  <nav id="sideNav"></nav>
+  <div class="legend-box">
+    <p><span class="tag fact">事実</span>出典で確認できる内容</p>
+    <p><span class="tag fact">実測</span>データから計算した数字</p>
+    <p><span class="tag common">常識</span>広く知られた一般知識</p>
+    <p><span class="tag idea">考え方</span>筆者の整理や推測</p>
+  </div>
+</aside>
 
 <main>
 <h1>トレードの教科書</h1>
@@ -352,6 +458,7 @@ td.up, .up { color: var(--up); } td.down, .down { color: var(--down); }
 
 <div class="card" id="paxg">
   <h3>金 — PAXG/USDT</h3>
+  <p class="open-chart"><a href="index.html?symbol=PAXGUSDT&amp;interval=1d">金 のチャートを開く<span aria-hidden="true"> →</span></a></p>
   <h4>しくみ</h4>
   <p><span class="tag fact">事実</span>PAXG(パックス・ゴールド)は、米国の Paxos 社が発行するトークンです。1 PAXG が、ロンドンの金庫に保管された金 1 トロイオンスに対応します。2019年9月に、ニューヨーク州金融サービス局(NYDFS)の承認を受けて始まりました。<sup>[1]</sup></p>
   <p><span class="tag common">常識</span>1 トロイオンスは約 31.1 グラムです。金の国際価格は、ふつうこの単位あたりの米ドルで表します。</p>
@@ -380,6 +487,7 @@ td.up, .up { color: var(--up); } td.down, .down { color: var(--down); }
 
 <div class="card" id="btc">
   <h3>ビットコイン — BTC</h3>
+  <p class="open-chart"><a href="index.html?symbol=BTCUSDT&amp;interval=1d">BTC のチャートを開く<span aria-hidden="true"> →</span></a></p>
   <h4>しくみ</h4>
   <p><span class="tag fact">事実</span>発行の上限は約2,100万枚です。新しく発行される量は、21万ブロックごと(およそ4年ごと)に半分になります。これを「半減期」と呼びます。ブロックは平均10分に1つ作られ、新規発行は2140年ごろに終わる見込みです。<sup>[2]</sup></p>
   <p><span class="tag fact">事実</span>半減期は2012年、2016年、2020年、2024年4月に起き、1ブロックあたりの新規発行は 50 → 25 → 12.5 → 6.25 → 3.125 BTC と減ってきました。次は2028年ごろの見込みです。<sup>[11]</sup></p>
@@ -403,6 +511,7 @@ td.up, .up { color: var(--up); } td.down, .down { color: var(--down); }
 
 <div class="card" id="eth">
   <h3>イーサリアム — ETH</h3>
+  <p class="open-chart"><a href="index.html?symbol=ETHUSDT&amp;interval=1d">ETH のチャートを開く<span aria-hidden="true"> →</span></a></p>
   <h4>しくみ</h4>
   <p><span class="tag common">常識</span>イーサリアムは、通貨のやり取りだけでなく、プログラム(スマートコントラクト)を動かせる土台です。ほかの多くのトークン(PAXG や PEPE も含む)が、この土台の上で発行されています。ETH は、この土台を使うときの手数料(ガス代)の支払いに使われます。</p>
   <p><span class="tag fact">事実</span>2022年9月15日の「マージ(The Merge)」という更新で、取引を承認するしくみがプルーフ・オブ・ワークからプルーフ・オブ・ステークに切り替わりました。これにより、消費電力は約99.95%減ったとされています。<sup>[3]</sup></p>
@@ -422,6 +531,7 @@ td.up, .up { color: var(--up); } td.down, .down { color: var(--down); }
 
 <div class="card" id="xrp">
   <h3>エックスアールピー — XRP</h3>
+  <p class="open-chart"><a href="index.html?symbol=XRPUSDT&amp;interval=1d">XRP のチャートを開く<span aria-hidden="true"> →</span></a></p>
   <h4>しくみ</h4>
   <p><span class="tag fact">事実</span>XRP は「XRP レジャー」という台帳で使われる通貨です。始まった時点で1,000億枚がすべて発行済みで、あとから増えることはありません。取引は3〜5秒ほどで確定します。発行分のうち約800億枚は、のちの Ripple 社に渡されました。<sup>[4]</sup></p>
   <h4>価格を動かす要因</h4>
@@ -444,6 +554,7 @@ td.up, .up { color: var(--up); } td.down, .down { color: var(--down); }
 
 <div class="card" id="sol">
   <h3>ソラナ — SOL</h3>
+  <p class="open-chart"><a href="index.html?symbol=SOLUSDT&amp;interval=1d">SOL のチャートを開く<span aria-hidden="true"> →</span></a></p>
   <h4>しくみ</h4>
   <p><span class="tag fact">事実</span>ソラナは、取引の順番を記録する「プルーフ・オブ・ヒストリー」という時計のようなしくみと、プルーフ・オブ・ステークを組み合わせています。前者が順番を、後者が承認者の選出と安全性を受け持ちます。<sup>[5]</sup></p>
   <h4>価格を動かす要因</h4>
@@ -461,6 +572,7 @@ td.up, .up { color: var(--up); } td.down, .down { color: var(--down); }
 
 <div class="card" id="doge">
   <h3>ドージコイン — DOGE</h3>
+  <p class="open-chart"><a href="index.html?symbol=DOGEUSDT&amp;interval=1d">DOGE のチャートを開く<span aria-hidden="true"> →</span></a></p>
   <h4>しくみ</h4>
   <p><span class="tag fact">事実</span>2013年12月6日に、ビリー・マーカス氏とジャクソン・パーマー氏が、ビットコインへの風刺(ジョーク)として始めた通貨です。<sup>[6]</sup></p>
   <p><span class="tag fact">事実</span>発行枚数に上限がありません。約1分ごとに 10,000 DOGE が新しく発行され、1年で約52億枚ずつ増え続けます。<sup>[15]</sup></p>
@@ -479,6 +591,7 @@ td.up, .up { color: var(--up); } td.down, .down { color: var(--down); }
 
 <div class="card" id="pepe">
   <h3>ペペ — PEPE</h3>
+  <p class="open-chart"><a href="index.html?symbol=PEPEUSDT&amp;interval=1d">PEPE のチャートを開く<span aria-hidden="true"> →</span></a></p>
   <h4>しくみ</h4>
   <p><span class="tag fact">事実</span>2023年4月に、イーサリアム上のトークン(ERC-20)として始まったミームコインです。発行上限は約420.69兆枚です。<sup>[7]</sup></p>
   <p><span class="tag common">常識</span>ミームコインは、実用的な使い道よりも、人気や話題で価格が決まります。</p>
@@ -1215,27 +1328,153 @@ td.up, .up { color: var(--up); } td.down, .down { color: var(--down); }
   <p><a href="index.html">チャートに戻る</a></p>
 </footer>
 </main>
+</div>
+
+<div id="resume" class="resume" role="status" hidden>
+  <span id="resumeText"></span>
+  <button id="resumeGo" type="button">続きから読む</button>
+  <button id="resumeNo" type="button" aria-label="閉じる">×</button>
+</div>
+<button id="toTop" class="to-top" type="button" aria-label="ページの先頭へ戻る" title="ページの先頭へ戻る" hidden>
+  <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path d="M3 10l5-5 5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</button>
 
 <script>
 (() => {
-  // チャート側で選んだライト/ダークをそのまま使う
-  const KEY = 'gold-trade-chart-v1';
-  let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(KEY)); } catch (e) { saved = null; }
-  let theme = saved && (saved.theme === 'dark' || saved.theme === 'light')
-    ? saved.theme
+  const $ = id => document.getElementById(id);
+  const CHART_KEY = 'gold-trade-chart-v1', KEY = 'gold-trade-guide-v1';
+  const read = k => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { return {}; } };
+  const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 保存できなくても読める */ } };
+  const prefs = read(KEY);
+
+  // ---- ライト/ダーク(チャート側の設定と共通)
+  const chart = read(CHART_KEY);
+  let theme = chart.theme === 'dark' || chart.theme === 'light'
+    ? chart.theme
     : (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  const apply = () => { document.documentElement.dataset.theme = theme; };
-  apply();
-  document.getElementById('themeBtn').addEventListener('click', () => {
+  const applyTheme = () => { document.documentElement.dataset.theme = theme; };
+  applyTheme();
+  $('themeBtn').addEventListener('click', () => {
     theme = theme === 'light' ? 'dark' : 'light';
-    apply();
-    try {
-      const s = JSON.parse(localStorage.getItem(KEY)) || {};
-      s.theme = theme;
-      localStorage.setItem(KEY, JSON.stringify(s));
-    } catch (e) { /* 保存できなくても表示は切り替わる */ }
+    applyTheme();
+    const s = read(CHART_KEY); s.theme = theme; write(CHART_KEY, s);
   });
+
+  // ---- 文字の大きさ(3段階)
+  let fs = [0, 1, 2].includes(prefs.fs) ? prefs.fs : 0;
+  const applyFs = () => { document.documentElement.dataset.fs = fs; };
+  applyFs();
+  $('fsBtn').addEventListener('click', () => {
+    // 読んでいる場所がずれないよう、いちばん上に見えている見出しの位置を保つ
+    const anchor = current(), before = anchor ? anchor.el.getBoundingClientRect().top : 0;
+    fs = (fs + 1) % 3; applyFs();
+    // 文字の並べ直しは少し遅れて終わるので、落ち着いてから元の位置に合わせ直す
+    const fix = () => { if (anchor) window.scrollBy({ top: anchor.el.getBoundingClientRect().top - before, behavior: 'instant' }); };
+    fix(); requestAnimationFrame(() => { fix(); requestAnimationFrame(fix); });
+    markTables();
+    prefs.fs = fs; write(KEY, prefs);
+  });
+
+  // ---- もくじ(見出しから自動で作る)
+  const nav = $('sideNav'), items = [];
+  let grp = null;
+  document.querySelectorAll('main h2[id], main h3[id], main .card[id]').forEach(el => {
+    const isChapter = el.tagName === 'H2';
+    const head = el.classList.contains('card') ? el.querySelector('h3') : el;
+    const small = head.querySelector('small');
+    const label = isChapter
+      ? `${small ? small.textContent + ' ' : ''}${[...head.childNodes].filter(n => n !== small).map(n => n.textContent).join('').trim()}`
+      : [...head.childNodes].filter(n => n.nodeName !== 'SMALL').map(n => n.textContent).join('').split(' — ')[0].trim();
+    const a = document.createElement('a');
+    a.href = '#' + el.id; a.textContent = label;
+    if (isChapter) {
+      grp = document.createElement('div'); grp.className = 'grp';
+      const sub = document.createElement('div'); sub.className = 'sub';
+      grp.appendChild(a); grp.appendChild(sub); nav.appendChild(grp);
+    } else if (grp) grp.lastChild.appendChild(a);
+    items.push({ el, a, grp, isChapter, label });
+  });
+
+  const side = $('side'), scrim = $('scrim'), tocBtn = $('tocBtn');
+  const setDrawer = on => {
+    side.classList.toggle('open', on);
+    scrim.hidden = !on;
+    tocBtn.setAttribute('aria-expanded', String(on));
+    if (on) { const cur = nav.querySelector('a.on'); if (cur) cur.scrollIntoView({ block: 'center' }); }
+  };
+  tocBtn.addEventListener('click', () => setDrawer(!side.classList.contains('open')));
+  $('sideClose').addEventListener('click', () => setDrawer(false));
+  scrim.addEventListener('click', () => setDrawer(false));
+  nav.addEventListener('click', e => { if (e.target.closest('a')) setDrawer(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') setDrawer(false); });
+
+  // ---- いま読んでいる場所の表示、進み具合、先頭へ戻る
+  function current() {
+    let cur = null;
+    for (const it of items) { if (it.el.getBoundingClientRect().top <= 90) cur = it; else break; }
+    return cur;
+  }
+  const where = $('where'), progress = $('progress'), toTop = $('toTop');
+  let lastId = null, ticking = false;
+  function onScroll() {
+    ticking = false;
+    const max = document.documentElement.scrollHeight - innerHeight;
+    progress.style.width = (max > 0 ? Math.min(100, scrollY / max * 100) : 0) + '%';
+    toTop.hidden = scrollY < innerHeight * 1.5;
+    const cur = current(), id = cur ? cur.el.id : '';
+    if (id === lastId) return;
+    lastId = id;
+    items.forEach(it => { it.a.classList.toggle('on', it === cur); });
+    const chapter = cur ? (cur.isChapter ? cur : items.find(it => it.isChapter && it.grp === cur.grp)) : null;
+    nav.querySelectorAll('.grp').forEach(gp => gp.classList.toggle('on', !!chapter && gp === chapter.grp));
+    if (chapter) chapter.a.classList.add('on');
+    where.textContent = chapter ? chapter.label : 'トレードの教科書';
+    if (cur && scrollY > innerHeight) { prefs.pos = id; prefs.posLabel = (chapter && chapter !== cur ? chapter.label + ' › ' : '') + cur.label; write(KEY, prefs); }
+  }
+  addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
+  addEventListener('resize', () => { markTables(); onScroll(); });
+  toTop.addEventListener('click', () => scrollTo({ top: 0 }));
+
+  // ---- 前回の続きから読む
+  // もくじから移動すると URL に #〜 が付く。付いたままだと、次に開いたとき「続きから」を出せないので消しておく
+  addEventListener('hashchange', () => {
+    if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+  });
+  const savedPos = prefs.pos, savedLabel = prefs.posLabel;
+  if (!location.hash && savedPos && document.getElementById(savedPos) && savedPos !== items[0].el.id) {
+    // ブラウザが自分で前の位置に戻すことがあるので、少し待ってから、まだ離れているときだけ案内する
+    setTimeout(() => {
+      const target = document.getElementById(savedPos);
+      if (Math.abs(target.getBoundingClientRect().top) < innerHeight) return;
+      const box = $('resume');
+      $('resumeText').textContent = `前回は「${savedLabel || ''}」まで読みました`;
+      box.hidden = false;
+      const hide = () => { box.hidden = true; };
+      $('resumeGo').addEventListener('click', () => { target.scrollIntoView(); hide(); });
+      $('resumeNo').addEventListener('click', hide);
+      setTimeout(hide, 12000);
+    }, 400);
+  }
+
+  // ---- 横にはみ出す表に、スクロールできることを示す
+  function markTables() {
+    document.querySelectorAll('.tbl-wrap').forEach(w => {
+      const wide = w.scrollWidth > w.clientWidth + 2;
+      w.classList.toggle('wide', wide);
+      if (wide) { w.tabIndex = 0; w.setAttribute('role', 'region'); w.setAttribute('aria-label', '横にスクロールできる表'); }
+      else w.removeAttribute('tabindex');
+    });
+  }
+  document.querySelectorAll('.tbl-wrap').forEach(w => w.addEventListener('scroll', () => {
+    w.classList.toggle('end', w.scrollLeft + w.clientWidth >= w.scrollWidth - 4);
+  }, { passive: true }));
+
+  // ---- 印(事実・実測・常識・考え方)の意味を、その場で確かめられるようにする
+  const meaning = { '事実': '出典で確認できる内容です', '実測': 'Binance の日足データから筆者が計算した数字です', '常識': '相場の世界で広く知られている一般的な知識です', '考え方': '筆者の整理や推測です。正しいとは限りません' };
+  document.querySelectorAll('.tag').forEach(t => { const m = meaning[t.textContent.trim()]; if (m) t.title = m; });
+
+  markTables();
+  onScroll();
 })();
 </script>
 </body>
