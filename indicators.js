@@ -740,6 +740,277 @@ DEFS.eom = {
   },
 };
 
+// ================================================================ さらに追加したインジケーター(2026年11月)
+// 移動平均の種類をまとめて選べるようにする
+function maOf(kind, a, n, vol) {
+  switch (kind) {
+    case 'ema': return ema(a, n);
+    case 'rma': return rma(a, n);
+    case 'wma': return wma(a, n);
+    case 'hma': return hma(a, n);
+    case 'dema': return dema(a, n);
+    case 'tema': return tema(a, n);
+    case 'kama': return kama(a, n);
+    case 'vwma': return vwma(a, vol, n);
+    default: return sma(a, n);
+  }
+}
+const MA_OPTIONS = [['sma', '単純 (SMA)'], ['ema', '指数 (EMA)'], ['rma', 'ならし (RMA)'], ['wma', '加重 (WMA)'], ['hma', 'ハル (HMA)'],
+  ['dema', '2重指数 (DEMA)'], ['tema', '3重指数 (TEMA)'], ['kama', '適応型 (KAMA)'], ['vwma', '出来高加重 (VWMA)']];
+
+// 複数の移動平均線:期間の違う線を最大8本、まとめて出す。日本でよく使われる 7・25・75・100・200 を最初から表示する
+const MAS_SLOTS = [[7, '#e91e63', true], [25, '#f5a623', true], [75, '#27ae60', true], [100, '#2f80ed', true], [200, '#8e44ad', true],
+  [5, '#00acc1', false], [20, '#8d6e63', false], [50, '#607d8b', false]];
+DEFS.mas = {
+  name: '移動平均線(複数の期間)', short: 'MA', group: 'trend', overlay: true,
+  desc: '期間の違う移動平均線を、最大8本まとめて表示する(最初は 7・25・75・100・200)',
+  params: [{ key: 'kind', label: '種類', type: 'select', def: 'sma', options: MA_OPTIONS }, P.source(),
+    P.num('width', '線の太さ', 1.4, 0.5, 5, 0.5)]
+    .concat(...MAS_SLOTS.map(([n, c, on], i) => [
+      { key: `on${i + 1}`, label: `線${i + 1} を表示`, type: 'bool', def: on },
+      { key: `len${i + 1}`, label: `線${i + 1} の期間(本)`, type: 'int', def: n, min: 1, max: 1000 },
+      P.color(`c${i + 1}`, `線${i + 1} の色`, c),
+    ])),
+  compute(bars, p) {
+    const a = col(bars, p.source), vol = bars.map(b => b.v), lines = [], used = [];
+    MAS_SLOTS.forEach((_, i) => {
+      if (!p[`on${i + 1}`]) return;
+      const n = Math.min(1000, int(p[`len${i + 1}`], 20));
+      used.push(n);
+      lines.push({ name: String(n), val: maOf(p.kind, a, n, vol), color: p[`c${i + 1}`], width: +p.width || 1.4 });
+    });
+    return { lines, label: `${String(p.kind).toUpperCase()} ${used.join('/')}` };
+  },
+};
+
+DEFS.pivot = {
+  name: 'ピボットポイント', short: 'Pivot', group: 'trend', overlay: true,
+  desc: '前の日(週・月)の高値・安値・終値から、今日の支え・壁の目安を5本引く',
+  params: [{ key: 'period', label: '何の区切りで計算するか', type: 'select', def: 'auto',
+    options: [['auto', '自動(時間足に合わせる)'], ['D', '前の日'], ['W', '前の週'], ['M', '前の月']], hint: '自動:日足より短い足は前の日、日足は前の週、それより長い足は前の月' },
+  P.color('cP', 'ピボット(P)の色', '#f5a623'), P.color('cR', '上の線(R)の色', DOWN), P.color('cS', '下の線(S)の色', UP)],
+  compute(bars, p) {
+    const n = bars.length, P0 = nans(n), R1 = nans(n), R2 = nans(n), S1 = nans(n), S2 = nans(n);
+    let per = p.period;
+    if (per === 'auto') {
+      const gap = n > 2 ? bars[n - 1].t - bars[n - 2].t : 864e5;
+      per = gap < 864e5 ? 'D' : gap < 6048e5 ? 'W' : 'M';
+    }
+    const key = t => { const d = new Date(t); return per === 'D' ? Math.floor(t / 864e5) : per === 'W' ? Math.floor((t - 4 * 864e5) / 6048e5) : d.getUTCFullYear() * 12 + d.getUTCMonth(); };
+    let cur = null, prev = null;
+    for (let i = 0; i < n; i++) {
+      const b = bars[i], k = key(b.t);
+      if (!cur || cur.k !== k) { prev = cur; cur = { k, h: b.h, l: b.l, c: b.c, start: true }; }
+      else { cur.h = Math.max(cur.h, b.h); cur.l = Math.min(cur.l, b.l); cur.c = b.c; cur.start = false; }
+      if (!prev || cur.start) continue; // 区切りの最初の足は空けて、前の区切りの線とつながらないようにする
+      const pv = (prev.h + prev.l + prev.c) / 3, r = prev.h - prev.l;
+      P0[i] = pv; R1[i] = 2 * pv - prev.l; S1[i] = 2 * pv - prev.h; R2[i] = pv + r; S2[i] = pv - r;
+    }
+    return { lines: [{ name: 'R2', val: R2, color: p.cR, width: 1 }, { name: 'R1', val: R1, color: p.cR }, { name: 'P', val: P0, color: p.cP },
+      { name: 'S1', val: S1, color: p.cS }, { name: 'S2', val: S2, color: p.cS, width: 1 }], label: { D: '日', W: '週', M: '月' }[per] };
+  },
+};
+
+DEFS.fractal = {
+  name: 'ウィリアムズ・フラクタル', short: 'Fractal', group: 'trend', overlay: true,
+  desc: '前後2本より高い山に▼、前後2本より低い谷に▲を付ける(2本あとに確定)',
+  params: [],
+  compute(bars) {
+    const n = bars.length, top = nans(n), bot = nans(n);
+    for (let i = 2; i < n - 2; i++) {
+      const h = bars[i].h, l = bars[i].l;
+      top[i] = h > bars[i - 1].h && h > bars[i - 2].h && h > bars[i + 1].h && h > bars[i + 2].h ? 1 : 0;
+      bot[i] = l < bars[i - 1].l && l < bars[i - 2].l && l < bars[i + 1].l && l < bars[i + 2].l ? 1 : 0;
+    }
+    return { lines: [], marks: [{ name: '山', dir: 'down', val: top }, { name: '谷', dir: 'up', val: bot }], label: '' };
+  },
+};
+
+DEFS.alma = {
+  name: 'ALMA(アルノー・ルグー移動平均)', short: 'ALMA', group: 'trend', overlay: true,
+  desc: '新しい足に重みを寄せた、なめらかで遅れの少ない移動平均線',
+  params: [P.len(9), P.num('offset', '重みの位置(0〜1、1に近いほど新しい足)', 0.85, 0, 1, 0.01), P.num('sigma', 'なめらかさ', 6, 0.1, 50, 0.1), P.source(), P.color('color', '線の色', '#00acc1')],
+  compute(bars, p) {
+    const n = int(p.len, 9), a = col(bars, p.source), out = nans(a.length), m = Math.floor(p.offset * (n - 1)), s = n / p.sigma, w = []; // m は切り捨て(TradingView と同じ)
+    let ws = 0;
+    for (let k = 0; k < n; k++) { const v = Math.exp(-((k - m) * (k - m)) / (2 * s * s)); w.push(v); ws += v; }
+    for (let i = n - 1; i < a.length; i++) {
+      let t = 0, ok = true;
+      for (let k = 0; k < n; k++) { const v = a[i - n + 1 + k]; if (!isFinite(v)) { ok = false; break; } t += w[k] * v; }
+      if (ok) out[i] = t / ws;
+    }
+    return { lines: [{ name: 'ALMA', val: out, color: p.color }], label: `${n} ${p.offset} ${p.sigma}` };
+  },
+};
+
+DEFS.mcginley = {
+  name: 'マクギニー・ダイナミック', short: 'McGinley', group: 'trend', overlay: true,
+  desc: '値動きが速いときは速く、遅いときはゆっくり追いかける移動平均線',
+  params: [P.len(14), P.source(), P.color('color', '線の色', '#795548')],
+  compute(bars, p) {
+    const n = int(p.len, 14), a = col(bars, p.source), out = nans(a.length);
+    let md = NaN;
+    for (let i = 0; i < a.length; i++) {
+      const x = a[i];
+      if (!isFinite(x)) continue;
+      md = isFinite(md) && md !== 0 ? md + (x - md) / (n * Math.pow(x / md, 4)) : x;
+      out[i] = md;
+    }
+    return { lines: [{ name: 'MD', val: out, color: p.color }], label: String(n) };
+  },
+};
+
+DEFS.tsi = {
+  name: 'TSI(トゥルー・ストレングス・インデックス)', short: 'TSI', group: 'momentum',
+  desc: '値動きを2回ならした勢いの指標(−100〜100)。0より上なら上向き',
+  params: [P.int('long', '1回目にならす期間', 25), P.int('short', '2回目にならす期間', 13), P.int('signal', 'シグナルの期間', 13), P.source(),
+    P.color('color', 'TSI の色', '#2f80ed'), P.color('cSig', 'シグナルの色', '#f5a623')],
+  compute(bars, p) {
+    const a = col(bars, p.source), m = [NaN], am = [NaN];
+    for (let i = 1; i < a.length; i++) { const d = a[i] - a[i - 1]; m.push(d); am.push(Math.abs(d)); }
+    const L = int(p.long, 25), S = int(p.short, 13);
+    const v = map2(ema(ema(m, L), S), ema(ema(am, L), S), (x, y) => (y ? 100 * x / y : 0)), sg = ema(v, int(p.signal, 13));
+    return { lines: [{ name: 'TSI', val: v, color: p.color }, { name: 'シグナル', val: sg, color: p.cSig }], bands: [25, 0, -25], label: `${L} ${S} ${p.signal}` };
+  },
+};
+
+DEFS.kst = {
+  name: 'KST(ノウ・シュア・シング)', short: 'KST', group: 'momentum',
+  desc: '4つの期間の変化率を重みづけして足した、長めの勢いの指標',
+  params: [P.int('signal', 'シグナルの期間', 9), P.color('color', 'KST の色', '#2f80ed'), P.color('cSig', 'シグナルの色', '#f5a623')],
+  compute(bars, p) {
+    const c = col(bars, 'close'), roc = n => c.map((v, i) => (i >= n && c[i - n] ? (v / c[i - n] - 1) * 100 : NaN));
+    const parts = [[10, 10, 1], [15, 10, 2], [20, 10, 3], [30, 15, 4]].map(([r, s, w]) => sma(roc(r), s).map(v => v * w));
+    const k = parts[0].map((v, i) => v + parts[1][i] + parts[2][i] + parts[3][i]), sg = sma(k, int(p.signal, 9));
+    return { lines: [{ name: 'KST', val: k, color: p.color }, { name: 'シグナル', val: sg, color: p.cSig }], bands: [0], label: `10/15/20/30 ${p.signal}` };
+  },
+};
+
+DEFS.crsi = {
+  name: 'コナーズRSI', short: 'CRSI', group: 'momentum',
+  desc: '短い RSI・連続して上げ下げした日数・値動きの大きさの順位を平均した、短期の行きすぎの指標(0〜100)',
+  params: [P.int('rsiLen', '価格の RSI の期間', 3), P.int('streakLen', '連続日数の RSI の期間', 2), P.int('rankLen', '順位を見る期間', 100), P.color('color', '線の色', '#c0392b')],
+  compute(bars, p) {
+    const c = col(bars, 'close'), n = c.length, streak = [0], roc = [NaN], rank = nans(n), R = int(p.rankLen, 100);
+    for (let i = 1; i < n; i++) {
+      const s = streak[i - 1];
+      streak.push(c[i] > c[i - 1] ? (s > 0 ? s + 1 : 1) : c[i] < c[i - 1] ? (s < 0 ? s - 1 : -1) : 0);
+      roc.push(c[i - 1] ? (c[i] / c[i - 1] - 1) * 100 : NaN);
+    }
+    for (let i = R + 1; i < n; i++) {
+      let below = 0;
+      for (let k = i - R; k < i; k++) if (roc[k] < roc[i]) below++;
+      rank[i] = below / R * 100;
+    }
+    const r1 = rsi(c, int(p.rsiLen, 3)), r2 = rsi(streak, int(p.streakLen, 2));
+    const v = r1.map((x, i) => (isFinite(x) && isFinite(r2[i]) && isFinite(rank[i]) ? (x + r2[i] + rank[i]) / 3 : NaN));
+    return { lines: [{ name: 'CRSI', val: v, color: p.color }], bands: [90, 10], fixed: [0, 100], label: `${p.rsiLen} ${p.streakLen} ${R}` };
+  },
+};
+
+DEFS.squeeze = {
+  name: 'スクイーズ・モメンタム', short: 'Squeeze', group: 'volatility',
+  desc: 'ボリンジャーバンドがケルトナーチャネルの内側に縮んだ「スクイーズ」(赤い点)と、勢いの棒グラフ',
+  params: [P.int('bbLen', 'ボリンジャーの期間', 20), P.num('bbMult', 'ボリンジャーの幅', 2, 0.1, 10, 0.1), P.int('kcLen', 'ケルトナーの期間', 20), P.num('kcMult', 'ケルトナーの幅', 1.5, 0.1, 10, 0.1)],
+  compute(bars, p) {
+    const c = col(bars, 'close'), bl = int(p.bbLen, 20), kl = int(p.kcLen, 20), n = c.length;
+    const mid = sma(c, bl), sd = stdev(c, bl), kmid = sma(c, kl), rng = sma(trueRange(bars), kl);
+    const hh = highest(col(bars, 'high'), kl), ll = lowest(col(bars, 'low'), kl);
+    const dev = c.map((v, i) => v - ((hh[i] + ll[i]) / 2 + kmid[i]) / 2);
+    const mom = linreg(dev, kl).val, on = nans(n), off = nans(n);
+    for (let i = 0; i < n; i++) {
+      if (!isFinite(sd[i]) || !isFinite(rng[i])) continue;
+      const sq = mid[i] - p.bbMult * sd[i] > kmid[i] - p.kcMult * rng[i] && mid[i] + p.bbMult * sd[i] < kmid[i] + p.kcMult * rng[i];
+      if (sq) on[i] = 0; else off[i] = 0;
+    }
+    return { lines: [{ name: 'スクイーズ中', val: on, color: DOWN, dots: true }, { name: 'なし', val: off, color: '#9aa0b0', dots: true }],
+      hist: mom, histName: '勢い', bands: [], label: `${bl} ${p.bbMult} ${kl} ${p.kcMult}` };
+  },
+};
+
+DEFS.ulcer = {
+  name: 'アルサー・インデックス', short: 'Ulcer', group: 'volatility',
+  desc: '直近の高値からの下げの深さと長さを測る。下落のつらさ(リスク)の目安',
+  params: [P.len(14), P.color('color', '線の色', '#c0392b')],
+  compute(bars, p) {
+    const n = int(p.len, 14), c = col(bars, 'close'), hh = highest(c, n), dd = c.map((v, i) => (hh[i] ? 100 * (v - hh[i]) / hh[i] : NaN));
+    const v = sum(dd.map(x => x * x), n).map(x => Math.sqrt(x / n));
+    return { lines: [{ name: 'Ulcer', val: v, color: p.color }], bands: [], floor: 0, label: String(n) };
+  },
+};
+
+DEFS.chvol = {
+  name: 'チャイキン・ボラティリティ', short: 'ChVol', group: 'volatility',
+  desc: '高値と安値の幅のならし値が、何本前と比べて何%広がったか',
+  params: [P.int('ema', 'ならす期間', 10), P.int('roc', '比べる本数', 10), P.color('color', '線の色', '#8e44ad')],
+  compute(bars, p) {
+    const e = ema(bars.map(b => b.h - b.l), int(p.ema, 10)), k = int(p.roc, 10);
+    return { lines: [{ name: 'ChVol', val: e.map((v, i) => (i >= k && e[i - k] ? (v / e[i - k] - 1) * 100 : NaN)), color: p.color }], bands: [0], label: `${p.ema} ${p.roc}` };
+  },
+};
+
+DEFS.ac = {
+  name: 'アクセラレーター(AC)', short: 'AC', group: 'momentum',
+  desc: 'オーサム・オシレーターの変化の速さ。勢いが加速しているか減速しているか',
+  params: [],
+  compute(bars) {
+    const m = col(bars, 'hl2'), ao = map2(sma(m, 5), sma(m, 34), (x, y) => x - y), ac = map2(ao, sma(ao, 5), (x, y) => x - y);
+    return { lines: [], hist: ac, histDir: ac.map((v, i) => (i && isFinite(ac[i - 1]) ? v - ac[i - 1] : 0)), histName: 'AC', bands: [0], label: '5 34 5' };
+  },
+};
+
+DEFS.kvo = {
+  name: 'クリンガー・オシレーター', short: 'KVO', group: 'volume',
+  desc: '上げた足・下げた足の出来高の、短期と長期の平均の差。お金の流れの向き',
+  params: [P.int('fast', '短期の期間', 34), P.int('slow', '長期の期間', 55), P.int('signal', 'シグナルの期間', 13), P.color('color', 'KVO の色', '#2f80ed'), P.color('cSig', 'シグナルの色', '#f5a623')],
+  compute(bars, p) {
+    const h3 = col(bars, 'hlc3'), sv = bars.map((b, i) => (i ? (h3[i] - h3[i - 1] >= 0 ? b.v : -b.v) : NaN));
+    const k = map2(ema(sv, int(p.fast, 34)), ema(sv, int(p.slow, 55)), (x, y) => x - y), sg = ema(k, int(p.signal, 13));
+    return { lines: [{ name: 'KVO', val: k, color: p.color }, { name: 'シグナル', val: sg, color: p.cSig }], bands: [0], label: `${p.fast} ${p.slow} ${p.signal}` };
+  },
+};
+
+DEFS.pvt = {
+  name: 'PVT(プライス・ボリューム・トレンド)', short: 'PVT', group: 'volume',
+  desc: '値動きの割合に出来高を掛けて足し続けた線。OBV より値動きの大きさを反映する',
+  params: [P.color('color', '線の色', '#16a085')],
+  compute(bars, p) {
+    let acc = 0;
+    const v = bars.map((b, i) => (i && bars[i - 1].c ? (acc += (b.c - bars[i - 1].c) / bars[i - 1].c * b.v) : (i ? acc : 0)));
+    return { lines: [{ name: 'PVT', val: v, color: p.color }], bands: [], label: '' };
+  },
+};
+
+DEFS.pvo = {
+  name: 'PVO(出来高オシレーター%)', short: 'PVO', group: 'volume',
+  desc: '出来高の短期と長期の平均の差を%で表す。出来高が増えているかどうか',
+  params: [P.int('fast', '短期の期間', 12), P.int('slow', '長期の期間', 26), P.int('signal', 'シグナルの期間', 9), P.color('color', 'PVO の色', '#2f80ed'), P.color('cSig', 'シグナルの色', '#f5a623')],
+  compute(bars, p) {
+    const v = bars.map(b => b.v), s = ema(v, int(p.slow, 26)), k = map2(ema(v, int(p.fast, 12)), s, (x, y) => (y ? (x - y) / y * 100 : NaN)), sg = ema(k, int(p.signal, 9));
+    return { lines: [{ name: 'PVO', val: k, color: p.color }, { name: 'シグナル', val: sg, color: p.cSig }], hist: map2(k, sg, (x, y) => x - y), histName: '差', bands: [0], label: `${p.fast} ${p.slow} ${p.signal}` };
+  },
+};
+
+DEFS.rvol = {
+  name: '相対出来高(RVOL)', short: 'RVOL', group: 'volume',
+  desc: 'いまの出来高が、ふだん(平均)の何倍か。2倍を超えると注目されているしるし',
+  params: [P.len(20), P.color('color', '線の色', '#e67e22')],
+  compute(bars, p) {
+    const n = int(p.len, 20), v = bars.map(b => b.v), avg = sma(v, n);
+    return { lines: [{ name: '倍', val: map2(v, avg, (x, y) => (y ? x / y : NaN)), color: p.color }], bands: [1, 2], floor: 0, label: String(n) };
+  },
+};
+
+DEFS.qstick = {
+  name: 'Qスティック', short: 'Qstick', group: 'momentum',
+  desc: '終値 − 始値 の平均。陽線が優勢ならプラス、陰線が優勢ならマイナス',
+  params: [P.len(14), P.color('color', '線の色', '#16a085')],
+  compute(bars, p) {
+    const n = int(p.len, 14);
+    return { lines: [{ name: 'Q', val: sma(bars.map(b => b.c - b.o), n), color: p.color }], bands: [0], label: String(n) };
+  },
+};
+
 // ================================================================ 自分で作るインジケーター(式の計算)
 /* 式は eval を使わず、ここで自前で読み取って計算する(安全のため、決めた部品しか使えない)。
  * 使えるもの:
@@ -1034,5 +1305,5 @@ function defaults(id) {
   return out;
 }
 
-return { DEFS, GROUPS, FUNCS, defaults, backtest, makeCustom, checkFormula, parseFormula, evalFormula, helpers: { sma, ema, rma, wma, hma, dema, tema, kama, vwma, linreg, stdev, highest, lowest, sum, atr, rsi, trueRange, src } };
+return { DEFS, GROUPS, FUNCS, defaults, backtest, makeCustom, checkFormula, parseFormula, evalFormula, MA_OPTIONS, helpers: { maOf, sma, ema, rma, wma, hma, dema, tema, kama, vwma, linreg, stdev, highest, lowest, sum, atr, rsi, trueRange, src } };
 });

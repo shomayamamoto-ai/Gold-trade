@@ -182,6 +182,7 @@ Object.keys(GT.DEFS).forEach(id => {
  * 決めた形に合うものだけを取り出し、式は indicators.js の読み取り器で確かめる(式は「計算」しかできない) */
 const customDefs = [];
 const favs = []; // メニューで ★ を付けた種類
+let defaults2Done = false; // 最初から出すインジケーターを足し終えたか(2026年11月の変更)
 const CUSTOM_MAX = 30, CUSTOM_ID = /^u_[a-z0-9]{6,12}$/;
 const plain = (v, max) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, '').trim().slice(0, max) : '');
 function cleanCustom(raw) {
@@ -327,7 +328,7 @@ function save() {
       symbol: state.symbol, interval: state.interval, theme: state.theme, mainWeight: state.mainWeight, drawings: state.drawings, chartType: state.chartType,
       tradeOpen: state.tradeOpen,
       custom: SYMBOLS.slice(BUILTIN).map(x => ({ id: x.id, label: x.label, quote: x.quote || null })),
-      customInds: customDefs, favs: favs.filter(t => IND_TYPES[t]),
+      customInds: customDefs, favs: favs.filter(t => IND_TYPES[t]), defaults2: defaults2Done,
       indicators: state.indicators.map(i => ({ type: i.type, hidden: i.hidden, p: i.p })),
     }));
   } catch (e) { /* 保存できなくても表示は続ける */ }
@@ -408,9 +409,16 @@ function load() {
   state.drawings = readDrawings(s);
   if (s && Array.isArray(s.customInds)) s.customInds.slice(0, CUSTOM_MAX).forEach(d => { if (d && CUSTOM_ID.test(d.id)) registerCustom(d); });
   if (s && Array.isArray(s.favs)) s.favs.slice(0, 60).forEach(t => { if (typeof t === 'string' && Object.prototype.hasOwnProperty.call(IND_TYPES, t) && !favs.includes(t)) favs.push(t); });
+  // 最初から出すもの:移動平均線(7・25・75・100・200)、ボリンジャーバンド、一目均衡表と、出来高の2つ
+  const DEFAULT_INDS = [{ type: 'mas' }, { type: 'bb' }, { type: 'ichimoku' }, { type: 'ccOnly' }, { type: 'enhanced' }];
   const list = s && Array.isArray(s.indicators)
     ? s.indicators.filter(i => i && IND_TYPES[i.type])
-    : [{ type: 'ma' }, { type: 'ccOnly' }, { type: 'enhanced' }];
+    : DEFAULT_INDS.slice();
+  // 以前から使っている人にも、一度だけ、新しく最初から出すようにしたもの(まだ出していないもの)を足す
+  if (s && Array.isArray(s.indicators) && !s.defaults2) {
+    ['mas', 'bb', 'ichimoku'].forEach(t => { if (!list.some(i => i.type === t)) list.unshift({ type: t }); });
+  }
+  defaults2Done = true;
   list.length = Math.min(list.length, 40); // 極端な数の読み込みで固まらないようにする
   list.forEach(i => addIndicator(i.type, i.p, i.hidden, true));
 }
@@ -1055,6 +1063,8 @@ function resetViewport() {
   // 一目均衡表のように先の足まで描くものがあれば、そのぶん右を空ける
   let ahead = 0;
   state.indicators.forEach(i => { if (shownHere(i) && i.out && i.out.lines) i.out.lines.forEach(l => { ahead = Math.max(ahead, l.offset || 0); }); });
+  // ただし、空ける幅は画面の4分の1まで(狭いスマホで、ローソク足がほとんど見えなくなるのを防ぐ。左に動かせば先の部分も見える)
+  ahead = Math.min(ahead, Math.floor(plotW() / state.barW * 0.25));
   state.end = state.bars.length + 5 + ahead;
 }
 function clampView() {
@@ -2004,6 +2014,23 @@ function fColor(key, text) {
   input.addEventListener('input', () => { p[key] = input.value; applyLive(); });
   return el('label', { class: 'row' }, [labelCell(text), input]);
 }
+// 複数の移動平均線の1本分:表示する・期間・色 を1行で
+function fSlot(i) {
+  const p = dlg.ind.p;
+  const on = el('input', { type: 'checkbox', 'aria-label': `線${i} を表示` });
+  on.checked = !!p[`on${i}`];
+  const len = el('input', { class: 'ctl', type: 'number', min: '1', max: '1000', step: '1', inputmode: 'numeric', 'aria-label': `線${i} の期間` });
+  len.value = p[`len${i}`];
+  const color = el('input', { type: 'color', 'aria-label': `線${i} の色` });
+  color.value = p[`c${i}`];
+  const sync = () => { len.disabled = color.disabled = !on.checked; };
+  on.addEventListener('change', () => { p[`on${i}`] = on.checked; sync(); applyLive(); });
+  len.addEventListener('input', () => { const v = parseInt(len.value, 10); if (v >= 1) { p[`len${i}`] = clamp(v, 1, 1000); applyLive(); } });
+  len.addEventListener('blur', () => { len.value = p[`len${i}`]; });
+  color.addEventListener('input', () => { p[`c${i}`] = color.value; applyLive(); });
+  sync();
+  return el('div', { class: 'row slot' }, [el('label', { class: 'slot-on' }, [on, el('span', { text: `線${i}` })]), el('span', { class: 'slot-len' }, [len, el('small', { text: '本' })]), color]);
+}
 function fRange(key, text, min, max, step) {
   const p = dlg.ind.p;
   const input = el('input', { type: 'range', min, max, step });
@@ -2043,8 +2070,14 @@ function renderDialog() {
         add(chk);
       }
     }
-    GT.DEFS[ind.type].params.forEach(q => {
-      if (q.type === 'color') add(fColor(q.key, q.label));
+    const ps = GT.DEFS[ind.type].params;
+    ps.forEach(q => {
+      // 「線○を表示」「期間」「色」の3つ組は、1行にまとめる(複数の移動平均線など)
+      const slot = /^on(\d+)$/.exec(q.key);
+      if (slot && q.type === 'bool') { add(fSlot(slot[1])); return; }
+      if (/^(len|c)\d+$/.test(q.key) && ps.some(x => x.key === `on${q.key.replace(/\D/g, '')}`)) return;
+      if (q.type === 'bool') add(fCheck(q.key, q.label, q.hint));
+      else if (q.type === 'color') add(fColor(q.key, q.label));
       else if (q.type === 'source') add(fSelect(q.key, q.label, SOURCES));
       else if (q.type === 'select') add(fSelect(q.key, q.label, q.options, q.hint));
       else add(fNumber(q.key, q.label, q.min, q.max, q.type === 'int' ? 1 : q.step, q.hint));
@@ -3111,9 +3144,13 @@ function renderTrade() {
   $('trBuy').disabled = $('trSell').disabled = !tradable;
   // 閉じていた間の値動きの確認が終わらず売買できないときは、その理由を出す(何も出ないと故障に見える)
   const WAIT = '開いていなかった間の値動きを確認しています。終わるまで売買できません(通信が不安定だと、時間がかかります)。';
+  const WAIT_PRICE = '最新の価格を確認しています。数秒で売買できるようになります。';
   const waiting = px > 0 && !tradable && (reconciled[sym] !== true || !clockReady);
-  if (waiting && !$('trMsg').textContent) setTxt('trMsg', WAIT, 'msg');
-  else if (!waiting && $('trMsg').textContent === WAIT) setTxt('trMsg', '');
+  // 調べるもの(ポジション・指値)がないときは、「価格を確かめている」とだけ出す(閉じていた間の確認と言うと、誤解させる)
+  const msgNow = pos || T.orders.some(o => o.sym === sym) ? WAIT : WAIT_PRICE;
+  const cur = $('trMsg').textContent;
+  if (waiting && (!cur || cur === WAIT || cur === WAIT_PRICE)) setTxt('trMsg', msgNow, 'msg');
+  else if (!waiting && (cur === WAIT || cur === WAIT_PRICE)) setTxt('trMsg', '');
   // 取引所から消えた銘柄は価格が取れないので、建値での清算だけできるようにする
   const gone = !!dead[sym] && !!pos;
   $('pClose').disabled = !tradable && !gone;
@@ -3815,7 +3852,7 @@ const TOUR_STEPS = [
   { sel: ['#chartWrap'], title: 'チャートを動かす', inside: true,
     touch: '指1本で左右にスワイプすると、過去にさかのぼれます。指2本で広げる・つまむと、拡大・縮小します。\nチャートをタップすると十字線が出て、その足の始値・高値・安値・終値が上に出ます。',
     mouse: 'ドラッグで左右に動かし、マウスのホイールで拡大・縮小します。ダブルクリックで元の表示に戻ります。\nマウスを重ねた足の始値・高値・安値・終値が、左上に出ます。' },
-  { sel: ['#indBtn'], title: 'インジケーターを足す', body: '移動平均線や RSI など、57種類の分析用の線を追加できます。名前で検索でき、☆ を押すと「よく使う」に入ります。\nいちばん下の「＋ 自分で作る」では、式を書いてオリジナルも作れます。' },
+  { sel: ['#indBtn'], title: 'インジケーターを足す', body: '移動平均線や RSI など、74種類の分析用の線を追加できます。名前で検索でき、☆ を押すと「よく使う」に入ります。\nいちばん下の「＋ 自分で作る」では、式を書いてオリジナルも作れます。' },
   { sel: ['#drawBtn'], title: 'ツール', body: '線を引く(水平線・トレンドライン・フィボナッチなど)、価格のお知らせを置く、売買ルールを過去のデータで試す、表示を切りかえる、画像で保存する、といった機能が入っています。' },
   { sel: ['#tbOpen', '#tradeBtn'], title: 'デモトレード', body: '仮想の資金 10,000 で、買い・売りの練習ができます。利確・損切りの価格を入れておくと、届いたときに自動で決済します。\n成績は「成績を分析」で振り返れます。' },
   { sel: ['#guideLink', '#drawBtn'], title: '学ぶ・調べる', body: '「教科書」には、銘柄の特徴・インジケーターの読み方・手法・資金管理をまとめています。\n操作で迷ったら、「ツール → 操作マニュアル」に、すべての機能の使い方があります。' },

@@ -707,3 +707,27 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .help a { color: inherit; }
 @media (max-width: 760px) { .tour-foot .btn { height: 42px; min-width: 76px; } .tour-link { min-height: 40px; font-size: 13px; } }
 @media (prefers-reduced-motion: reduce) { .tour-hole { transition: none; } }
+
+/* ---- 複数の移動平均線の設定(1本分を1行に) */
+.row.slot { gap: 10px; }
+.slot-on { display: inline-flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; cursor: pointer; }
+.slot-len { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.slot-len .ctl { width: 76px; }
+.slot-len small { color: var(--muted); font-size: 12px; }
+.row.slot input[type="color"] { flex: 0 0 auto; }
+.row.slot input:disabled { opacity: .4; }
+@media (max-width: 760px) { .slot-len .ctl { width: 84px; height: 36px; font-size: 16px; } .slot-on input { width: 20px; height: 20px; } }
+
+/* ---- 銘柄の一覧は日本語の名前つきで幅が広くなるので、上のバーが2段にならないよう幅を抑える */
+#symbol { max-width: 210px; text-overflow: ellipsis; }
+@media (max-width: 1200px) { #symbol { max-width: 170px; } .seg button { padding-left: 7px; padding-right: 7px; } }
+@media (max-width: 760px) { #symbol { max-width: none; } }
+
+/* ---- 凡例の値は、線が多いときに折り返す(折り返さないと、スマホでページ全体が画面より広くなり、縮小表示になる) */
+.legend .vals { display: inline-flex; flex-wrap: wrap; min-width: 0; max-width: 100%; column-gap: 0; }
+.legend .name { min-width: 0; }
+@media (max-width: 760px) {
+  /* スマホでは、チャートに重ねるインジケーター(移動平均線・BB・一目など)の値をたたんでおき、「…」を押したときだけ出す。
+     出しっぱなしにすると、ローソク足のほとんどが隠れてしまう */
+  .stack .legend:not(.main):not(.open) .vals { display: none; }
+}
