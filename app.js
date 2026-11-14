@@ -2424,16 +2424,16 @@ function execute(sym, side, notional, reason, qty, opts) {
   if (qty === undefined) qty = notional / px; else notional = qty * px;
   if (!(notional > 0) || !isFinite(notional)) return '金額を入力してください。';
   const q = quoteOf(sym), a = acct(q), dir = side === 'buy' ? 1 : -1;
-  const pos = T.positions[sym], fee = notional * FEE, now = tnow();
+  const pos = T.positions[sym], now = tnow();
+  let fee = notional * FEE;
   T.quotes[sym] = q;
   let pnl = null, feeIn = 0, pid = null;
   if (pos && Math.sign(pos.qty) !== dir) {
     // 反対向き=保有分を減らす(決済)
     const held = Math.abs(pos.qty);
-    if (qty > held * (1 + 1e-9)) {
-      return `反対向きの注文は、保有している分(${fmtMoney(held * px, q)} ${q})までです。先に決済してから、新しく注文してください。`;
-    }
-    qty = Math.min(qty, held);
+    // 保有分より多い注文は、保有分ちょうどの決済として扱う(反対向きへの乗りかえはしない)。
+    // 同じ金額で売って買い戻すと、価格の差でわずかに数量が増え、以前は決済できなかった
+    if (qty > held) { qty = held; notional = qty * px; fee = notional * FEE; }
     pnl = qty * (px - pos.avg) * Math.sign(pos.qty);
     feeIn = (pos.feeOpen || 0) * (qty / held);
     pos.feeOpen = (pos.feeOpen || 0) - feeIn;
@@ -2706,6 +2706,9 @@ function renderTrade() {
   document.querySelectorAll('.trQuote').forEach(n => { if (n.textContent !== q) n.textContent = q; });
   setTxt('trSym', curSymbol().label);
   setTxt('trPrice', fmtPrice(px));
+  // ポジションを持っているときは、どちらのボタンが「決済」になるかをボタンに書く
+  setTxt('trSellSub', pos ? (pos.qty > 0 ? '買いを決済する' : '売りを増やす') : '下がると利益');
+  setTxt('trBuySub', pos ? (pos.qty < 0 ? '売りを決済する' : '買いを増やす') : '上がると利益');
   const tradable = px > 0 && priceOk(sym) && reconciled[sym] === true && clockReady;
   $('trBuy').disabled = $('trSell').disabled = !tradable;
   // 取引所から消えた銘柄は価格が取れないので、建値での清算だけできるようにする
@@ -2945,6 +2948,7 @@ function bindTrade() {
     const tp = numOrNull('trTp'), sl = numOrNull('trSl'), note = cleanNote($('trNote').value);
     const notional = parseFloat(amt.value) || 0;
     const had = T.positions[sym], opening = !had || Math.sign(had.qty) === dir;
+    const hadDir = had ? Math.sign(had.qty) : 0; // 決済すると had の数量が変わるので、向きを先に覚えておく
     const done = () => { $('trTp').value = ''; $('trSl').value = ''; $('trNote').value = ''; renderRisk(); renderTrade(); draw(); };
     if (orderType === 'limit') {
       // 指値注文:いまは約定させず、予約として残す
@@ -2976,8 +2980,10 @@ function bindTrade() {
       saveTrade();
     }
     const h = T.history[0];
-    setTxt('trMsg', `${side === 'buy' ? '買い' : '売り'}ました:${fmtQty(h.qty)} @ ${fmtPrice(h.price)}` +
-      (h.pnl === null ? '' : `(損益 ${fmtMoney(netOf(h), q, true)} ${q})`), 'msg');
+    const closedAll = !opening && !T.positions[sym], capped = closedAll && notional > h.qty * h.price * 1.02;
+    setTxt('trMsg', (closedAll ? `${hadDir > 0 ? '買い' : '売り'}のポジションをすべて決済しました` : `${side === 'buy' ? '買い' : '売り'}ました`) + `:${fmtQty(h.qty)} @ ${fmtPrice(h.price)}` +
+      (h.pnl === null ? '' : `(損益 ${fmtMoney(netOf(h), q, true)} ${q})`) +
+      (capped ? '。保有分を超える金額は注文していません。反対向きに持つには、もう一度注文してください。' : ''), 'msg');
     done();
   };
   $('trOrderList').addEventListener('click', e => {
