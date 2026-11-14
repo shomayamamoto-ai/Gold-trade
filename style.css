@@ -478,3 +478,21 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .menu-list { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
 .menu-list .sect { position: sticky; top: 0; margin: 0; padding: 6px 10px 4px; background: var(--panel); font-weight: 700; }
 @media (max-width: 560px) { #indMenu { width: auto; max-height: 72dvh; } .menu-search { font-size: 16px; height: 38px; } }
+
+/* 注文の種類、損失額からの逆算、予約中の注文 */
+.seg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 4px 0 6px; }
+.seg2 button { padding: 5px 4px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; line-height: 1.3; }
+.seg2 button small { display: block; font-size: 10.5px; }
+.seg2 button.on { border-color: var(--primary); color: var(--text); font-weight: 700; box-shadow: inset 0 0 0 1px var(--primary); }
+.tr-risk { margin: 2px 0 8px; padding: 8px 10px; border-radius: 6px; background: var(--hover); font-size: 12px; line-height: 1.6; }
+.tr-risk[hidden], #trLimitRow[hidden], #trOrders[hidden] { display: none; }
+.tr-risk p { margin: 0 0 4px; overflow-wrap: anywhere; }
+.tr-risk small, #trOrders small { color: var(--muted); font-size: 11px; line-height: 1.5; display: block; }
+.tr-risk .tr-quick { grid-template-columns: repeat(3, 1fr); margin: 4px 0; }
+.tr-card .row .ctl.wide { width: 170px; }
+.ord { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; padding: 6px 0; border-top: 1px dashed var(--line); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ord:first-child { border-top: 0; }
+.ord .dim { grid-column: 1; overflow-wrap: anywhere; }
+.ord button { grid-row: 1 / span 2; grid-column: 2; }
+.tr-hist .h-note { grid-column: 1 / -1; color: var(--muted); overflow-wrap: anywhere; }
+@media (max-width: 760px) { .tr-card .row .ctl.wide { width: 170px; } }

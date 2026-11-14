@@ -79,6 +79,14 @@
         <span>買える価格 <b id="trAsk"></b></span>
         <span id="trSpread" class="dim"></span>
       </div>
+      <div id="trType" class="seg2" role="group" aria-label="注文の種類">
+        <button type="button" data-type="market" class="on" aria-pressed="true">成行<small>いますぐ</small></button>
+        <button type="button" data-type="limit" aria-pressed="false">指値<small>価格を指定して予約</small></button>
+      </div>
+      <label id="trLimitRow" class="row" hidden>
+        <span class="lbl">指値の価格<small>買いは今より安く、売りは今より高く</small></span>
+        <input id="trLimit" class="ctl" type="number" inputmode="decimal" min="0" step="any">
+      </label>
       <label class="row">
         <span class="lbl">金額 (<span class="trQuote"></span>)<small>いくら分を売買するか</small></span>
         <input id="trAmt" class="ctl" type="number" inputmode="decimal" min="0" step="any">
@@ -97,11 +105,30 @@
         <span class="lbl">損切りの価格<small>任意。届いたら自動で決済</small></span>
         <input id="trSl" class="ctl" type="number" inputmode="decimal" min="0" step="any" placeholder="なし">
       </label>
+      <div id="trRisk" class="tr-risk" hidden>
+        <p id="trRiskText"></p>
+        <div class="tr-quick" role="group" aria-label="損切りになったときに失う金額から、買う金額を決める">
+          <button type="button" data-risk="0.005">0.5%</button>
+          <button type="button" data-risk="0.01">1%</button>
+          <button type="button" data-risk="0.02">2%</button>
+        </div>
+        <small>↑ 損切りになったとき、資金の何%を失う金額にするか(押すと金額に入ります)</small>
+      </div>
+      <label class="row">
+        <span class="lbl">メモ<small>任意。なぜ入るのかを一言</small></span>
+        <input id="trNote" class="ctl wide" type="text" maxlength="120" autocomplete="off">
+      </label>
       <div class="tr-btns">
         <button id="trSell" class="tr-btn sell" type="button">売り <span id="trSellPx"></span><small>下がると利益</small></button>
         <button id="trBuy" class="tr-btn buy" type="button">買い <span id="trBuyPx"></span><small>上がると利益</small></button>
       </div>
       <p id="trMsg" class="msg" role="status"></p>
+    </section>
+
+    <section id="trOrders" class="tr-card" hidden>
+      <h3>予約中の指値注文</h3>
+      <div id="trOrderList"></div>
+      <small class="dim">指値注文は、このページを開いている間だけ約定します。</small>
     </section>
 
     <section id="trPos" class="tr-card" hidden>

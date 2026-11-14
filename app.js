@@ -2077,7 +2077,8 @@ function bindPointer() {
 const TRADE_KEY = 'gold-trade-paper-v1';
 const FEE = 0.001; // 売買金額に対する手数料の割合(0.1%)
 const START_CASH = { JPY: 1000000, BTC: 1, ETH: 10, BNB: 20, TRY: 300000, IDR: 150000000, BRL: 50000 };
-const freshTrade = () => ({ rev: 0, accounts: {}, positions: {}, history: [], last: {}, quotes: {}, seen: {} });
+const freshTrade = () => ({ rev: 0, accounts: {}, positions: {}, history: [], orders: [], last: {}, quotes: {}, seen: {} });
+const cleanNote = v => (typeof v === 'string' ? v.replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 120) : '');
 const SYM_RE = /^[A-Z0-9]{5,20}$/, CUR_RE = /^[A-Z0-9]{1,8}$/;
 const fin = v => typeof v === 'number' && isFinite(v);
 // 保存されていた取引データを読み込む。形のおかしい項目は捨てる(画面に埋め込む文字列もここで絞る)
@@ -2101,12 +2102,18 @@ function loadTradeState() {
       id: fin(v.id) ? v.id : opened, levelsAt: fin(v.levelsAt) ? v.levelsAt : opened, feeOpen: fin(v.feeOpen) && v.feeOpen >= 0 ? v.feeOpen : 0,
     };
   });
+  if (Array.isArray(t.orders)) {
+    t.orders.slice(0, 20).forEach(o => {
+      if (!o || !SYM_RE.test(o.sym) || !fin(o.price) || !(o.price > 0) || !fin(o.notional) || !(o.notional > 0) || !fin(o.id)) return;
+      out.orders.push({ id: o.id, sym: o.sym, side: o.side === 'sell' ? 'sell' : 'buy', price: o.price, notional: o.notional, tp: level(o.tp), sl: level(o.sl), t: fin(o.t) ? o.t : 0, note: cleanNote(o.note) });
+    });
+  }
   if (Array.isArray(t.history)) {
     t.history.slice(0, 3000).forEach(h => {
       if (!h || !SYM_RE.test(h.sym) || !fin(h.t) || !fin(h.qty) || !fin(h.price) || !fin(h.fee)) return;
       out.history.push({
         t: h.t, sym: h.sym, side: h.side === 'sell' ? 'sell' : 'buy', qty: h.qty, price: h.price, fee: h.fee,
-        pnl: fin(h.pnl) ? h.pnl : null, reason: ['tp', 'sl', 'liq'].includes(h.reason) ? h.reason : 'manual', away: !!h.away,
+        pnl: fin(h.pnl) ? h.pnl : null, reason: ['tp', 'sl', 'liq', 'limit'].includes(h.reason) ? h.reason : 'manual', away: !!h.away, note: cleanNote(h.note),
         feeIn: fin(h.feeIn) && h.feeIn >= 0 ? h.feeIn : 0, pid: fin(h.pid) ? h.pid : null,
       });
     });
@@ -2265,7 +2272,7 @@ function execute(sym, side, notional, reason, qty, opts) {
   }
   T.history.unshift({
     t: fixed && opts.t ? opts.t : now, sym, side, qty, price: px, fee, pnl, reason: reason || 'manual',
-    away: fixed && opts.away !== false, feeIn, pid,
+    away: fixed && opts.away !== false, feeIn, pid, note: cleanNote(opts && opts.note),
   });
   T.history.length = Math.min(T.history.length, 3000);
   saveTrade();
@@ -2405,6 +2412,37 @@ function checkTriggers(sym, lo, hi) {
     toast(`${labelOf(sym)}:${reason === 'tp' ? '利確' : '損切り'}の価格に届いたので決済しました(損益 ${fmtMoney(netOf(h), q, true)} ${q})`);
   }
 }
+/* 予約中の指値注文を調べる。前回調べてからの安値・高値が指値に届いていたら約定させる。
+ * 約定価格は、指値か、それより有利ないまの気配値。指値より不利な価格では約定させない。 */
+function checkOrders(sym, lo, hi) {
+  const px = T.last[sym];
+  if (!(px > 0) || !T.orders.some(o => o.sym === sym)) return;
+  lo = Math.min(isFinite(lo) ? lo : px, px); hi = Math.max(isFinite(hi) ? hi : px, px);
+  T.orders.filter(o => o.sym === sym).forEach(o => {
+    const buy = o.side === 'buy';
+    if (!(buy ? lo <= o.price : hi >= o.price)) return;
+    // 指値より不利な価格では約定させない。いまの気配値のほうが有利なら、その価格で約定させる
+    const quote = liveQuote(sym), mkt = quote ? (buy ? quote.ask : quote.bid) : px;
+    const fill = buy ? Math.min(o.price, mkt) : Math.max(o.price, mkt);
+    const had = T.positions[sym], opening = !had || Math.sign(had.qty) === (buy ? 1 : -1);
+    // 保有分を減らす注文で、残りがごくわずか(2%未満)になるなら、端数を残さず全部決済する
+    let qty;
+    if (had && !opening) { const held = Math.abs(had.qty), want = o.notional / fill; qty = want >= held * 0.98 ? held : want; }
+    const err = execute(sym, o.side, o.notional, 'limit', qty, { price: fill, away: false, note: o.note });
+    T.orders = T.orders.filter(x => x !== o);
+    if (err) { toast(`${labelOf(sym)}:指値注文を取り消しました(${err})`); saveTrade(); return; }
+    const pos = T.positions[sym];
+    if (pos && opening) {
+      // 利確・損切りは、約定した価格に対して向きが合っているものだけ付ける
+      const fill = T.history[0].price, dir = buy ? 1 : -1;
+      if (o.tp !== null && (dir > 0 ? o.tp > fill : o.tp < fill)) pos.tp = o.tp;
+      if (o.sl !== null && (dir > 0 ? o.sl < fill : o.sl > fill)) pos.sl = o.sl;
+      pos.levelsAt = tnow();
+    }
+    saveTrade();
+    toast(`${labelOf(sym)}:指値注文が約定しました(${buy ? '買い' : '売り'} ${fmtQty(T.history[0].qty)} @ ${fmtPrice(T.history[0].price)})`);
+  });
+}
 // 売り(ショート)の含み損で評価額がゼロ以下になったら、その口座のポジションを強制的に決済する
 function stopOut(q) {
   if (acctStats(q).equity > 0) return;
@@ -2434,6 +2472,7 @@ function tradeTick() {
     else {
       if (clockReady) T.seen[sym] = tnow();
       checkTriggers(sym, lo, hi);
+      if (clockReady && priceOk(sym)) checkOrders(sym, lo, hi);
       stopOut(quoteOf(sym));
     }
   } else if (!reconciled[sym] && !state.loading) reconcile(sym); // 先に、閉じていた間の値動きを確かめる
@@ -2442,7 +2481,8 @@ function tradeTick() {
 // 表示していない銘柄のポジションも、価格を取りにいって利確・損切りを判定する
 function pollPositions() {
   if (!state.live || document.hidden) return;
-  Object.keys(T.positions).filter(sym => sym !== state.symbol).forEach(sym => {
+  // ポジションか、予約中の指値注文がある銘柄を見にいく
+  [...new Set(Object.keys(T.positions).concat(T.orders.map(o => o.sym)))].filter(sym => sym !== state.symbol).forEach(sym => {
     fetchKlines(sym, '1m', 1).then(async rows => {
       const b = rows[rows.length - 1];
       T.last[sym] = b.c;
@@ -2455,6 +2495,7 @@ function pollPositions() {
         const whole = clockReady && fin(T.seen[sym]) && b.t >= T.seen[sym];
         if (clockReady) T.seen[sym] = tnow();
         checkTriggers(sym, whole ? b.l : NaN, whole ? b.h : NaN);
+        if (clockReady) checkOrders(sym, whole ? b.l : NaN, whole ? b.h : NaN);
         stopOut(quoteOf(sym));
       }
       saveTrade(); renderTrade(); draw();
@@ -2488,6 +2529,13 @@ function renderTrade() {
   if (!(px > 0)) setTxt('trMsg', state.loading ? '' : '実際の価格を取得できていないため、いまは注文できません。');
   else if ($('trMsg').textContent.startsWith('実際の価格')) setTxt('trMsg', '');
 
+  $('trOrders').hidden = !T.orders.length;
+  setHtml($('trOrderList'), T.orders.map(o => {
+    const oq = quoteOf(o.sym), extra = [o.tp !== null ? `利確 ${fmtPrice(o.tp)}` : '', o.sl !== null ? `損切り ${fmtPrice(o.sl)}` : '', o.note].filter(Boolean).join(' ・ ');
+    return `<div class="ord"><span><span class="${o.side === 'buy' ? 'up' : 'down'}">${o.side === 'buy' ? '買い' : '売り'}</span> ${esc(labelOf(o.sym))} @ ${fmtPrice(o.price)}</span>` +
+      `<button type="button" class="ctl btn small" data-oid="${esc(o.id)}">取消</button>` +
+      `<span class="dim">${fmtMoney(o.notional, oq)} ${esc(oq)} 分${extra ? ' ・ ' + esc(extra) : ''}</span></div>`;
+  }).join(''));
   $('trPos').hidden = !pos;
   if (pos) {
     const u = unrealized(sym), base = Math.abs(pos.qty) * pos.avg;
@@ -2523,11 +2571,12 @@ function renderTrade() {
   setHtml($('trHist'), T.history.length ? T.history.slice(0, 40).map(h => {
     const hq = quoteOf(h.sym), d = new Date(h.t);
     const when = `${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-    const why = h.reason === 'tp' ? '・利確' : h.reason === 'sl' ? '・損切り' : h.reason === 'liq' ? '・強制決済' : '';
+    const why = h.reason === 'tp' ? '・利確' : h.reason === 'sl' ? '・損切り' : h.reason === 'liq' ? '・強制決済' : h.reason === 'limit' ? '・指値' : '';
     const net = h.pnl === null ? null : netOf(h);
     return `<div class="h-row"><span><span class="${h.side === 'buy' ? 'up' : 'down'}">${h.side === 'buy' ? '買い' : '売り'}</span> ${esc(labelOf(h.sym))}${why}${h.away ? '・不在中' : ''}</span>` +
       `<span class="h-pnl ${net === null ? 'dim' : pnlClass(net)}">${net === null ? '新規' : fmtMoney(net, hq, true) + ' ' + esc(hq)}</span>` +
-      `<span class="dim">${fmtQty(h.qty)} @ ${fmtPrice(h.price)}</span><span class="dim h-pnl">${when}</span></div>`;
+      `<span class="dim">${fmtQty(h.qty)} @ ${fmtPrice(h.price)}</span><span class="dim h-pnl">${when}</span>` +
+      `${h.note ? `<span class="h-note">メモ:${esc(h.note)}</span>` : ''}</div>`;
   }).join('') : '<span class="dim">まだ取引がありません。</span>');
 
   const u = pos ? unrealized(sym) : 0;
@@ -2554,7 +2603,7 @@ function drawTrade(pane, i0, i1) {
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 5, y + 9 * s); ctx.lineTo(x + 5, y + 9 * s); ctx.closePath();
     ctx.fill(); ctx.stroke();
   });
-  if (pos) {
+  {
     const line = (price, color, dash, text) => {
       const y = Math.round(pane.yOf(price)) + 0.5;
       ctx.strokeStyle = color; ctx.lineWidth = 1.2; ctx.setLineDash(dash);
@@ -2567,10 +2616,13 @@ function drawTrade(pane, i0, i1) {
         tags.push([y, price, color]);
       }
     };
-    const q = quoteOf(sym), u = unrealized(sym);
-    line(pos.avg, pos.qty > 0 ? '#1f9d8f' : '#e0463f', [], `${pos.qty > 0 ? '買い' : '売り'} ${fmtMoney(u, q, true)} ${q}`);
-    if (pos.tp !== null) line(pos.tp, '#1f9d8f', [5, 4], '利確');
-    if (pos.sl !== null) line(pos.sl, '#e0463f', [5, 4], '損切り');
+    T.orders.forEach(o => { if (o.sym === sym) line(o.price, '#5b7fd6', [2, 4], o.side === 'buy' ? '買い指値' : '売り指値'); });
+    if (pos) {
+      const q = quoteOf(sym), u = unrealized(sym);
+      line(pos.avg, pos.qty > 0 ? '#1f9d8f' : '#e0463f', [], `${pos.qty > 0 ? '買い' : '売り'} ${fmtMoney(u, q, true)} ${q}`);
+      if (pos.tp !== null) line(pos.tp, '#1f9d8f', [5, 4], '利確');
+      if (pos.sl !== null) line(pos.sl, '#e0463f', [5, 4], '損切り');
+    }
   }
   ctx.lineWidth = 1;
   ctx.restore();
@@ -2599,12 +2651,68 @@ function bindTrade() {
     const q = quoteOf(state.symbol), v = acctStats(q).avail * pct / (1 + FEE);
     amt.value = q === 'JPY' ? Math.floor(v) : Math.floor(v * 100) / 100;
   });
+  // 注文の種類(成行 / 指値)
+  let orderType = 'market';
+  $('trType').addEventListener('click', e => {
+    const b = e.target.closest('button[data-type]');
+    if (!b) return;
+    orderType = b.dataset.type;
+    [...$('trType').children].forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); });
+    $('trLimitRow').hidden = orderType !== 'limit';
+    if (orderType === 'limit' && !$('trLimit').value && T.last[state.symbol] > 0) $('trLimit').value = T.last[state.symbol];
+    renderRisk();
+  });
+  /* 損切りを入れたら、「損切りになったときにいくら失うか」を見せる。
+   * 資金の何%を失う設定にするかを選ぶと、そこから買う金額を逆算する(教科書 第5章の計算)。 */
+  const entryPrice = () => (orderType === 'limit' ? parseFloat($('trLimit').value) : T.last[state.symbol]);
+  const stopPct = () => {
+    const e = entryPrice(), sl = parseFloat($('trSl').value);
+    return e > 0 && sl > 0 && sl !== e ? Math.abs(e - sl) / e : NaN;
+  };
+  function renderRisk() {
+    const pct = stopPct(), box = $('trRisk');
+    box.hidden = !isFinite(pct);
+    if (!isFinite(pct)) return;
+    const q = quoteOf(state.symbol), st = acctStats(q), n = parseFloat(amt.value) || 0;
+    const loss = n * (pct + 2 * FEE); // 値幅の損に、往復の手数料を足したもの
+    setTxt('trRiskText', `損切りまで ${(pct * 100).toFixed(2)}%。この金額だと、損切りで約 ${fmtMoney(loss, q)} ${q}(資金の ${(st.equity > 0 ? loss / st.equity * 100 : 0).toFixed(2)}%)を失います。`);
+  }
+  ['trSl', 'trAmt', 'trLimit'].forEach(id => $(id).addEventListener('input', renderRisk));
+  $('trRisk').addEventListener('click', e => {
+    const r = parseFloat(e.target.dataset.risk), pct = stopPct();
+    if (!r || !isFinite(pct)) return;
+    const q = quoteOf(state.symbol), st = acctStats(q);
+    const v = Math.min(st.equity * r / (pct + 2 * FEE), st.avail / (1 + FEE));
+    amt.value = q === 'JPY' ? Math.floor(v) : Math.floor(v * 100) / 100;
+    renderRisk();
+  });
   const order = side => {
-    const sym = state.symbol, px = T.last[sym], dir = side === 'buy' ? 1 : -1;
-    const tp = numOrNull('trTp'), sl = numOrNull('trSl');
+    const sym = state.symbol, px = T.last[sym], dir = side === 'buy' ? 1 : -1, q = quoteOf(sym);
+    const tp = numOrNull('trTp'), sl = numOrNull('trSl'), note = cleanNote($('trNote').value);
+    const notional = parseFloat(amt.value) || 0;
     const had = T.positions[sym], opening = !had || Math.sign(had.qty) === dir;
+    const done = () => { $('trTp').value = ''; $('trSl').value = ''; $('trNote').value = ''; renderRisk(); renderTrade(); draw(); };
+    if (orderType === 'limit') {
+      // 指値注文:いまは約定させず、予約として残す
+      syncIfStale();
+      const lp = parseFloat($('trLimit').value), quote = liveQuote(sym);
+      const ref = quote ? (dir > 0 ? quote.ask : quote.bid) : px;
+      let err = null;
+      if (!priceOk(sym) || reconciled[sym] !== true || !clockReady) err = '価格を最新の状態にできていないため、いまは注文できません。数秒待ってから、もう一度お試しください。';
+      else if (!(lp > 0)) err = '指値の価格を入力してください。';
+      else if (!(notional > 0)) err = '金額を入力してください。';
+      else if (dir > 0 ? lp >= ref : lp <= ref) err = dir > 0 ? '買いの指値は、いまの価格より安くしてください(いまの価格で買うなら「成行」です)。' : '売りの指値は、いまの価格より高くしてください(いまの価格で売るなら「成行」です)。';
+      else if (T.orders.length >= 20) err = '予約できる指値注文は20件までです。';
+      else if (opening) err = checkLevels(dir, lp, tp, sl);
+      if (err) { setTxt('trMsg', err, 'msg down'); return; }
+      T.orders.push({ id: tnow() + Math.random(), sym, side, price: lp, notional, tp: opening ? tp : null, sl: opening ? sl : null, t: tnow(), note });
+      saveTrade();
+      setTxt('trMsg', `${side === 'buy' ? '買い' : '売り'}の指値注文を予約しました(${fmtPrice(lp)} で ${fmtMoney(notional, q)} ${q} 分)。`, 'msg');
+      done();
+      return;
+    }
     let err = opening && px > 0 ? checkLevels(dir, px, tp, sl) : null;
-    if (!err) err = execute(sym, side, parseFloat(amt.value) || 0);
+    if (!err) err = execute(sym, side, notional, 'manual', undefined, { note });
     if (err) { setTxt('trMsg', err, 'msg down'); return; }
     const pos = T.positions[sym];
     if (pos && opening) {
@@ -2613,12 +2721,18 @@ function bindTrade() {
       pos.levelsAt = tnow();
       saveTrade();
     }
-    $('trTp').value = ''; $('trSl').value = '';
-    const h = T.history[0], q = quoteOf(sym);
+    const h = T.history[0];
     setTxt('trMsg', `${side === 'buy' ? '買い' : '売り'}ました:${fmtQty(h.qty)} @ ${fmtPrice(h.price)}` +
       (h.pnl === null ? '' : `(損益 ${fmtMoney(netOf(h), q, true)} ${q})`), 'msg');
-    renderTrade(); draw();
+    done();
   };
+  $('trOrderList').addEventListener('click', e => {
+    const b = e.target.closest('button[data-oid]');
+    if (!b) return;
+    syncIfStale();
+    T.orders = T.orders.filter(o => String(o.id) !== b.dataset.oid);
+    saveTrade(); renderTrade(); draw();
+  });
   $('trBuy').addEventListener('click', () => order('buy'));
   $('trSell').addEventListener('click', () => order('sell'));
 
@@ -2799,11 +2913,13 @@ function renderAnalysis() {
 }
 function exportCsv() {
   const cell = v => `"${String(v).replace(/"/g, '""')}"`;
-  const rows = [['日時', '銘柄', '売買', '数量', '価格', '決済通貨', '手数料', '損益(手数料込み)', '種類']];
+  const rows = [['日時', '銘柄', '売買', '数量', '価格', '決済通貨', '手数料', '損益(手数料込み)', '種類', 'メモ']];
   T.history.slice().reverse().forEach(h => {
     rows.push([fmtDate(h.t, true), labelOf(h.sym), h.side === 'buy' ? '買い' : '売り', h.qty, h.price, quoteOf(h.sym), h.fee,
       h.pnl === null ? '' : netOf(h),
-      h.pnl === null ? '新規' : h.reason === 'tp' ? '決済(利確)' : h.reason === 'sl' ? '決済(損切り)' : '決済']);
+      (h.pnl === null ? '新規' : h.reason === 'tp' ? '決済(利確)' : h.reason === 'sl' ? '決済(損切り)' : h.reason === 'liq' ? '決済(強制)' : '決済') + (h.reason === 'limit' ? '・指値' : ''),
+      // 表計算ソフトが式として実行しないよう、記号で始まるメモは文字として渡す
+      /^[=+\-@]/.test(h.note || '') ? "'" + h.note : h.note || '']);
   });
   // 先頭の BOM は、Excel で日本語が文字化けしないようにするため
   const blob = new Blob(['﻿' + rows.map(r => r.map(cell).join(',')).join('\r\n')], { type: 'text/csv' });
