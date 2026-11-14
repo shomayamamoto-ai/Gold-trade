@@ -680,6 +680,7 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
 }
 /* ---- スマホ横向き:画面が低いので、売り・買いのボタンは固定しない(固定すると、入力欄がほとんど見えなくなる) */
 @media (max-height: 480px) and (orientation: landscape) and (max-width: 950px) {
+  .trade { max-height: none; bottom: 0; } /* 横向きでは、右側に画面の高さいっぱいで出す */
   .tr-card:first-child .tr-btns { position: static; margin: 8px 0 0; padding: 0; border-top: 0; }
   .tr-body { scroll-padding-bottom: 12px; }
   .toast { top: 8px; bottom: auto; }
