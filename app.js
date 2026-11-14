@@ -595,7 +595,7 @@ const STREAMS = ['wss://data-stream.binance.vision/stream?streams=', 'wss://stre
 const mono = () => performance.now(); // 端末の時計を変えても巻き戻らない経過時間。価格の鮮度はこれで測る
 let clockOffset = 0, clockReady = false; // 取引所の時計 − 端末の時計
 const tnow = () => Date.now() + clockOffset; // 取引所の時計での現在時刻(取引の記録に使う)
-const feed = { lo: Infinity, hi: -Infinity, okAt: -1e9, lastMsg: -1e9, lastTick: 0, tick: null, timer: 0, vol: 0, cost: 0, qRaf: 0, n: 0, bid: NaN, ask: NaN, quoteAt: 0, quoteSym: '' }; // 配信の状態
+const feed = { lo: Infinity, hi: -Infinity, okAt: -1e9, lastMsg: -1e9, lastTick: 0, tick: null, timer: 0, vol: 0, cost: 0, qRaf: 0, n: 0, msgs: 0, rate: 0, bid: NaN, ask: NaN, quoteAt: 0, quoteSym: '' }; // 配信の状態
 function closeStream() {
   const s = ws;
   ws = null;
@@ -664,6 +664,18 @@ function renderQuote() {
   setTxt('trSpread', `差 ${fmtPrice(q.ask - q.bid, q.ask)}`);
   setTxt('trSellPx', fmtPrice(q.bid, q.ask)); setTxt('trBuyPx', fmtPrice(q.ask));
 }
+// 直近1秒に取引所から受け取った件数を出す(リアルタイムで届いているかが、目で分かるように)
+let rateAt = 0;
+function renderRate() {
+  const now = mono(), dt = now - rateAt;
+  if (dt < 900) return;
+  feed.rate = rateAt ? Math.round(feed.msgs / dt * 1000) : 0;
+  feed.msgs = 0; rateAt = now;
+  const on = state.live && ws && ws.readyState === 1 && now - feed.lastMsg < 5000;
+  const waiting = !ws || ws.readyState === 0 || now - feed.lastMsg < 5000; // つなぎ始めたばかり
+  setTxt('trRate', on ? `受信 ${feed.rate.toLocaleString()} 件/秒` : !state.live ? '' : waiting ? '配信につないでいます…' : '配信が止まっています(2秒ごとに取得中)');
+  $('status').title = on ? `リアルタイム配信を受信中(直近1秒で ${feed.rate} 件)` : '';
+}
 function openStream() {
   closeStream();
   if (!state.live || !window.WebSocket) return;
@@ -672,7 +684,28 @@ function openStream() {
   // 足の更新(kline)に加えて、約定(aggTrade)も受け取り、1件ごとの値動きを表示する
   // bookTicker は、いちばん良い買い注文・売り注文の価格が変わるたびに届く(気配値をすぐに反映する)
   // depth5 は 0.1 秒ごとに必ず届くので、取引がない間も「つながっている」ことが分かる
-  const name = `${sym}@kline_${curInterval().api}/${sym}@aggTrade/${sym}@bookTicker/${sym}@depth5@100ms`;
+  // ポジションや指値注文があるほかの銘柄も、約定を受け取ってすぐに損益と利確・損切りへ反映する(10銘柄まで)
+  const others = [...new Set(Object.keys(T.positions).concat(T.orders.map(o => o.sym)))].filter(x => x !== state.symbol && /^[A-Z0-9]{5,20}$/.test(x)).slice(0, 10);
+  const name = `${sym}@kline_${curInterval().api}/${sym}@aggTrade/${sym}@bookTicker/${sym}@depth5@100ms` + others.map(x => `/${x.toLowerCase()}@aggTrade`).join('');
+  const pend = {}; let pendTimer = 0;
+  const flushOthers = () => {
+    pendTimer = 0;
+    if (token !== state.loadToken) return;
+    let any = false;
+    Object.keys(pend).forEach(x => {
+      const t = pend[x];
+      delete pend[x];
+      T.last[x] = t.p; otherFresh[x] = mono(); delete dead[x];
+      if (reconciled[x] !== true || !clockReady) return; // 閉じていた間の確認は、定期的な取得のほうに任せる
+      if (fin(T.seen[x]) && tnow() - T.seen[x] > 90000) { delete reconciled[x]; return; }
+      T.seen[x] = tnow();
+      checkTriggers(x, t.lo, t.hi);
+      checkOrders(x, t.lo, t.hi);
+      stopOut(quoteOf(x));
+      any = true;
+    });
+    if (any) { renderTrade(); draw(); }
+  };
   let klineE = 0; // 最後に届いた足の更新の時刻。これより後の約定だけ、出来高に足す(二重に数えない)
   const quoteIn = (bid, ask) => {
     if (!(bid > 0) || !(ask > 0)) return;
@@ -698,6 +731,15 @@ function openStream() {
         if (!d) return;
         // 取引所の時計とのずれを覚えておく(端末の時計を変えても、記録の時刻が狂わないようにする)
         if (typeof d.E === 'number' && isFinite(d.E)) { clockOffset = d.E - Date.now(); clockReady = true; }
+        feed.msgs++;
+        if (d.e === 'aggTrade' && d.s !== streamSym) {
+          // ほかの銘柄の約定:高値・安値を覚えておき、0.25 秒ごとにまとめて反映する
+          if (!others.includes(d.s) || !(+d.p > 0)) return;
+          const t = pend[d.s] || (pend[d.s] = { p: +d.p, lo: +d.p, hi: +d.p });
+          t.p = +d.p; t.lo = Math.min(t.lo, t.p); t.hi = Math.max(t.hi, t.p);
+          if (!pendTimer) pendTimer = setTimeout(flushOthers, 250);
+          return;
+        }
         if (d.e === 'kline' && d.k) {
           const m = d.k, prev = state.raw[state.raw.length - 1];
           if (prev && +m.c !== prev.c) noteTick(+m.c > prev.c ? 1 : -1);
@@ -3572,7 +3614,7 @@ function bindMaker() {
 }
 
 // ---------------------------------------------------------------- 合図どおりに売買した場合の成績
-const bt = { ind: null, side: 'long', exit: 'signal', hold: 10 };
+const bt = { ind: null, side: 'long', exit: 'signal', hold: 10, sl: 0, tp: 0 };
 function openBacktest(ind) {
   bt.ind = ind;
   const marks = (ind.out && ind.out.marks) || [];
@@ -3588,7 +3630,7 @@ function renderBacktest() {
   if (!ind || !state.indicators.includes(ind) || !ind.out || !ind.out.marks) { $('btOverlay').hidden = true; return; }
   const marks = ind.out.marks, bars = state.bars;
   const hasUp = marks.some(m => m.dir === 'up'), hasDown = marks.some(m => m.dir === 'down');
-  const r = GT.backtest(bars, marks, { side: bt.side, exit: bt.exit, hold: bt.hold, fee: FEE });
+  const r = GT.backtest(bars, marks, { side: bt.side, exit: bt.exit, hold: bt.hold, fee: FEE, sl: bt.sl / 100, tp: bt.tp / 100 });
   const iv = INTERVALS.find(x => x.id === state.interval);
   $('btTitle').textContent = `「${IND_TYPES[ind.type].name}」の合図で売買していたら`;
   body.textContent = '';
@@ -3615,6 +3657,14 @@ function renderBacktest() {
       ctl.appendChild(el('label', { class: 'bt-ctl' }, [el('span', { class: 'dim', text: '何本後に手じまうか' }), num]));
     }
   }
+  const pctBox = (label, key, hint) => {
+    const num = el('input', { class: 'ctl', type: 'number', min: '0', max: key === 'sl' ? '99' : '1000', step: '0.1', inputmode: 'decimal', placeholder: 'なし' });
+    if (bt[key] > 0) num.value = bt[key];
+    num.addEventListener('change', () => { const v = parseFloat(num.value); bt[key] = v > 0 ? clamp(v, 0.01, key === 'sl' ? 99 : 1000) : 0; renderBacktest(); });
+    return el('label', { class: 'bt-ctl' }, [el('span', { class: 'dim', text: label }), num]);
+  };
+  ctl.appendChild(pctBox('損切り(入った価格から何%不利に動いたら)', 'sl'));
+  ctl.appendChild(pctBox('利確(何%有利に動いたら)', 'tp'));
   add(ctl);
   add(el('p', { class: 'dim small', text: `${labelOf(state.symbol)}・${iv ? iv.label : ''}足・${bars.length}本(${fmtDate(bars[0].t)} 〜 ${fmtDate(bars[bars.length - 1].t)})で計算。合図が出た足の「次の足の始値」で売買し、売買のたびに手数料 ${(FEE * 100).toFixed(1)}% を引いています。` }));
 
@@ -3628,7 +3678,7 @@ function renderBacktest() {
   add(el('div', { class: 'kpis' }, [
     kpi('合図どおりの損益', pct(r.total, true), cls(r.total), '資金を毎回すべて使った場合の、期間全体の増減'),
     kpi('何もせず持ち続けた場合', pct(r.holdRet, true), cls(r.holdRet), isFinite(diff) ? `合図どおりのほうが ${pct(Math.abs(diff))} ${diff >= 0 ? '良い' : '悪い'}` : ''),
-    kpi('勝率', r.n ? `${(r.wins / r.n * 100).toFixed(0)}%` : '—', '', `売買 ${r.n} 回(勝ち ${r.wins}・負け ${r.losses})`),
+    kpi('勝率', r.n ? `${(r.wins / r.n * 100).toFixed(0)}%` : '—', '', `売買 ${r.n} 回(勝ち ${r.wins}・負け ${r.losses})` + (bt.sl > 0 || bt.tp > 0 ? `。うち損切り ${r.nSl} 回・利確 ${r.nTp} 回` : '')),
     kpi('プロフィットファクター', isFinite(r.pf) ? r.pf.toFixed(2) : r.wins && !r.losses ? '負けなし' : '—', isFinite(r.pf) ? cls(r.pf - 1) : '', '利益の合計 ÷ 損失の合計。1 より大きければ全体でプラス'),
     kpi('最大ドローダウン', r.maxDD > 0 ? pct(-r.maxDD) : '—', r.maxDD > 0 ? 'down' : '', '資金がいちばん多かった時点からの、最大の落ち込み'),
     kpi('平均利益 / 平均損失', `${pct(r.avgWin, true)} / ${pct(r.avgLoss, true)}`, '', `ポジションを持っていた時間は全体の ${(r.exposure * 100).toFixed(0)}%`),
@@ -3642,6 +3692,7 @@ function renderBacktest() {
   if (r.n === 0) warn.push('この期間では、売買が一度も成立していません。条件がきびしすぎるか、合図の向きと「入り方」が合っていない可能性があります。');
   else if (r.n < 30) warn.push(`売買が ${r.n} 回と少ないため、結果は偶然に大きく左右されます。30回に満たない成績は、参考程度に見てください。`);
   if (r.open) warn.push(`最後の売買は、まだ手じまいしていません(いまの含み損益 ${pct(r.open.ret, true)})。損益には含み分も入れていますが、勝率には数えていません。`);
+  if (bt.sl > 0 && bt.tp > 0) warn.push('1本の足の中で損切りと利確の両方に届いた場合は、どちらが先か分からないため、損切りが先だったとして計算しています(成績を良く見せないため)。');
   warn.push('これは過去の値動きに当てはめた結果で、これからも同じようになることを示すものではありません。成績が良くなるまで式や数値を調整すると、過去にたまたま合っただけの設定になりやすくなります。別の銘柄や時間足でも試して、同じ傾向が出るかを確かめてください。');
   warn.push('実際の売買では、注文が思った価格で通らないこと(すべり)があり、成績はここより悪くなるのがふつうです。');
   add(el('ul', { class: 'bt-notes' }, warn.map(t => el('li', { text: t }))));
@@ -3650,10 +3701,10 @@ function renderBacktest() {
     add(el('h3', { text: `売買の記録(新しい順・${Math.min(50, r.trades.length)}件まで)` }));
     const rows = r.trades.slice(-50).reverse().map(t => el('tr', {}, [
       el('td', { text: t.dir > 0 ? '買い' : '売り' }), el('td', { text: fmtDate(t.t0, iv && iv.ms < 86400000) }), el('td', { text: fmtPrice(t.p0) }),
-      el('td', { text: fmtDate(t.t1, iv && iv.ms < 86400000) }), el('td', { text: fmtPrice(t.p1) }), el('td', { text: `${t.bars}本` }), el('td', { class: cls(t.ret), text: pct(t.ret, true) }),
+      el('td', { text: fmtDate(t.t1, iv && iv.ms < 86400000) }), el('td', { text: fmtPrice(t.p1) }), el('td', { text: `${t.bars}本` }), el('td', { text: t.why === 'sl' ? '損切り' : t.why === 'tp' ? '利確' : r.exitMode === 'signal' ? '合図' : '本数' }), el('td', { class: cls(t.ret), text: pct(t.ret, true) }),
     ]));
     add(el('div', { class: 'tbl-wrap' }, [el('table', { class: 'tbl' }, [
-      el('thead', {}, [el('tr', {}, ['向き', '入った日', '価格', '手じまい', '価格', '期間', '損益'].map(t => el('th', { text: t })))]), el('tbody', {}, rows)])]));
+      el('thead', {}, [el('tr', {}, ['向き', '入った日', '価格', '手じまい', '価格', '期間', '理由', '損益'].map(t => el('th', { text: t })))]), el('tbody', {}, rows)])]));
   }
   drawBtCurve(cv, r);
 }
@@ -3709,6 +3760,7 @@ setInterval(() => {
   if (document.hidden) return;
   if (!dlg.ind) draw();   // 残り時間の表示を進める
   renderQuote();          // 気配値が古くなったら、表示を消す
+  renderRate();           // 1秒間に受け取った件数
   renderTrade();          // 価格が古くなったら、注文ボタンを止める
 }, 1000);
 // 「最後に価格を確かめた時刻」を定期的に保存する(次に開いたとき、閉じていた間の値動きを調べる起点になる)

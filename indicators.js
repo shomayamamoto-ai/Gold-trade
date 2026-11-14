@@ -943,21 +943,25 @@ function makeCustom(def) {
  *   ・いちばん新しい足はまだ確定していないので、その足の合図では売買しない
  *   ・毎回、手持ちの全額で売買する(複利)。手数料は売買のたびに fee の割合を引く
  * marks: [{ dir: 'up' | 'down', val: [...] }]
- * opts: { side: 'long' | 'short' | 'both', exit: 'signal' | 'bars', hold: 本数, fee: 割合 } */
+ *   ・損切り・利確(sl / tp。入った価格からの割合)を指定すると、足の高値・安値がそこに届いた時点で手じまう。
+ *     同じ足の中で両方に届いた場合は、どちらが先か分からないので、不利なほう(損切り)が先だったとみなす。
+ *     窓を開けて飛びこえた場合は、その足の始値で手じまう
+ * opts: { side: 'long' | 'short' | 'both', exit: 'signal' | 'bars', hold: 本数, fee: 割合, sl: 割合, tp: 割合 } */
 function backtest(bars, marks, opts) {
   const n = bars.length, o = opts || {}, fee = o.fee >= 0 ? o.fee : 0.001;
   const side = ['long', 'short', 'both'].includes(o.side) ? o.side : 'long';
   const hold = Math.max(1, Math.min(1000, Math.round(o.hold) || 10));
+  const sl = o.sl > 0 && o.sl < 1 ? o.sl : 0, tp = o.tp > 0 && o.tp <= 100 ? o.tp : 0;
   const sig = dir => { const ms = marks.filter(m => m.dir === dir); return i => ms.some(m => m.val[i] > 0 || m.val[i] < 0); };
   const up = sig('up'), down = sig('down');
   const hasOpp = side === 'long' ? marks.some(m => m.dir === 'down') : side === 'short' ? marks.some(m => m.dir === 'up') : true;
   const exitMode = o.exit === 'bars' || !hasOpp ? 'bars' : 'signal';
   let eq = 1, pos = 0, entry = 0, entryI = 0, eqAtEntry = 1, inBars = 0;
   const trades = [], curve = [];
-  const closeAt = (i, px) => {
+  const closeAt = (i, px, why) => {
     const gross = pos > 0 ? px / entry : 2 - px / entry; // 売りから入った場合は、下がった分が利益
     eq = eqAtEntry * Math.max(0, gross) * (1 - fee);
-    trades.push({ dir: pos, t0: bars[entryI].t, t1: bars[i].t, p0: entry, p1: px, ret: eq / (eqAtEntry / (1 - fee)) - 1, bars: i - entryI });
+    trades.push({ dir: pos, t0: bars[entryI].t, t1: bars[i].t, p0: entry, p1: px, ret: eq / (eqAtEntry / (1 - fee)) - 1, bars: i - entryI, why: why || 'rule' });
     pos = 0;
   };
   for (let i = 0; i < n; i++) {
@@ -968,6 +972,14 @@ function backtest(bars, marks, opts) {
         const want = u && side !== 'short' ? 1 : d && side !== 'long' ? -1 : 0;
         if (want) { pos = want; entry = px; entryI = i; eq *= 1 - fee; eqAtEntry = eq; }
       }
+    }
+    if (pos && (sl || tp)) {
+      // 損切り・利確:入った足も含めて、足の中の高値・安値で届いたかを見る
+      const b = bars[i], later = i > entryI;
+      const slPx = entry * (1 - pos * sl), tpPx = entry * (1 + pos * tp);
+      const hitSl = sl && (pos > 0 ? b.l <= slPx : b.h >= slPx), hitTp = tp && (pos > 0 ? b.h >= tpPx : b.l <= tpPx);
+      if (hitSl) closeAt(i, later && (pos > 0 ? b.o < slPx : b.o > slPx) ? b.o : slPx, 'sl');
+      else if (hitTp) closeAt(i, later && (pos > 0 ? b.o > tpPx : b.o < tpPx) ? b.o : tpPx, 'tp');
     }
     if (pos) inBars++;
     const c = bars[i].c; // その足の終値で評価した資金
@@ -983,7 +995,7 @@ function backtest(bars, marks, opts) {
     trades, open, curve, exitMode, n: trades.length, wins: wins.length, losses: losses.length,
     total: (n ? curve[n - 1] : 1) - 1, holdRet, holdCurve: bars.map(b => (hold0 > 0 ? b.c / hold0 : 1)), maxDD,
     pf: sumL > 0 ? sumW / sumL : NaN, avgWin: wins.length ? sumW / wins.length : NaN, avgLoss: losses.length ? -sumL / losses.length : NaN,
-    exposure: n ? inBars / n : 0,
+    exposure: n ? inBars / n : 0, nSl: trades.filter(t => t.why === 'sl').length, nTp: trades.filter(t => t.why === 'tp').length,
   };
 }
 
