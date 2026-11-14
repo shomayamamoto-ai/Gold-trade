@@ -27,12 +27,21 @@
   applyFs();
   $('fsBtn').addEventListener('click', () => {
     // 読んでいる場所がずれないよう、いちばん上に見えている見出しの位置を保つ
-    const anchor = current(), before = anchor ? anchor.el.getBoundingClientRect().top : 0;
+    // いま画面のいちばん上に見えている段落や見出しを目印にする(遠くの見出しを目印にすると、大きくずれる)
+    const blocks = document.querySelectorAll('main h2, main h3, main h4, main p, main li, main tr, main figure');
+    let anchor = null;
+    for (const b of blocks) { const r = b.getBoundingClientRect(); if (r.bottom > 64 && r.height > 0) { anchor = b; break; } }
+    const before = anchor ? anchor.getBoundingClientRect().top : 0;
     fs = (fs + 1) % 3; applyFs();
     // 文字の並べ直しは少し遅れて終わるので、落ち着いてから元の位置に合わせ直す
-    const fix = () => { if (anchor) window.scrollBy({ top: anchor.el.getBoundingClientRect().top - before, behavior: 'instant' }); };
-    fix(); requestAnimationFrame(() => { fix(); requestAnimationFrame(fix); });
+    const fix = () => { if (anchor) window.scrollBy({ top: anchor.getBoundingClientRect().top - before, behavior: 'instant' }); };
     markTables();
+    // 表の印の付け直しなどで、少しあとにも高さが変わる。しばらくの間、何度か合わせ直す(その間に自分で動かしたら、やめる)
+    let stop = false;
+    const cancel = () => { stop = true; };
+    ['wheel', 'touchstart', 'keydown'].forEach(ev => window.addEventListener(ev, cancel, { once: true, passive: true }));
+    fix();
+    [0, 60, 150, 300, 600].forEach(ms => setTimeout(() => requestAnimationFrame(() => { if (!stop) fix(); }), ms));
     prefs.fs = fs; write(KEY, prefs);
   });
 
@@ -72,7 +81,7 @@
   // ---- いま読んでいる場所の表示、進み具合、先頭へ戻る
   function current() {
     let cur = null;
-    for (const it of items) { if (it.el.getBoundingClientRect().top <= 90) cur = it; else break; }
+    for (const it of items) { if (it.el.getBoundingClientRect().top <= 134) cur = it; else break; /* もくじから飛ぶと、見出しは上から約124pxに来る */ }
     return cur;
   }
   const where = $('where'), progress = $('progress'), toTop = $('toTop');

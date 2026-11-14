@@ -266,17 +266,67 @@ function save() {
     }));
   } catch (e) { /* 保存できなくても表示は続ける */ }
 }
+// 保存されていた線を、形を確かめながら読み取る
+function readDrawings(s) {
+  const out = {};
+  if (!s || !s.drawings || typeof s.drawings !== 'object') return out;
+  const pt = q => q && typeof q === 'object' && isFinite(q.t) && isFinite(q.price) ? { t: +q.t, price: +q.price } : null;
+  Object.keys(s.drawings).forEach(sym => {
+    if (!/^[A-Z0-9]{5,20}$/.test(sym) || !Array.isArray(s.drawings[sym])) return;
+    out[sym] = s.drawings[sym].slice(0, 200).map(d => {
+      const p1 = pt(d && d.p1), p2 = pt(d && d.p2);
+      if (d && d.type === 'h' && p1) return { type: 'h', p1 };
+      if (d && TWO_POINT.includes(d.type) && p1 && p2) return { type: d.type, p1, p2 };
+      if (d && d.type === 'v' && p1) return { type: 'v', p1 };
+      return null;
+    }).filter(Boolean);
+  });
+  return out;
+}
+function readSymbols(s) {
+  if (!s || !Array.isArray(s.custom)) return;
+  s.custom.slice(0, 100).forEach(c => {
+    const o = typeof c === 'string' ? { id: c } : c || {}; // 以前は名前だけを保存していた
+    if (typeof o.id !== 'string' || !/^[A-Z0-9]{5,20}$/.test(o.id) || SYMBOLS.some(x => x.id === o.id)) return;
+    const quote = typeof o.quote === 'string' && /^[A-Z0-9]{1,8}$/.test(o.quote) ? o.quote : null;
+    SYMBOLS.push({ id: o.id, label: quote ? `${o.id.slice(0, -quote.length)}/${quote}` : prettySymbol(o.id), base: 100, quote });
+  });
+}
+/* 別のタブが設定を保存したら、みんなで使うもの(引いた線・自作インジケーター・よく使う印・追加した銘柄)を取り込む。
+ * これをしないと、古い内容を持ったタブが次に保存したとき、別のタブで足したものを消してしまう。
+ * 見ている銘柄・時間足・表示中のインジケーターは、タブごとのものなので変えない */
+let refreshSymbols = () => {};
+function adoptShared() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) { s = null; }
+  if (!s || typeof s !== 'object') return;
+  state.drawings = readDrawings(s); state.sel = null;
+  readSymbols(s); refreshSymbols();
+  const stored = (Array.isArray(s.customInds) ? s.customInds : []).filter(d => d && CUSTOM_ID.test(d.id)).slice(0, CUSTOM_MAX);
+  const keep = new Set(stored.map(d => d.id));
+  customDefs.slice().forEach(d => {
+    if (keep.has(d.id)) return;
+    customDefs.splice(customDefs.indexOf(d), 1);
+    state.indicators = state.indicators.filter(i => i.type !== d.id);
+    delete GT.DEFS[d.id]; delete IND_TYPES[d.id];
+  });
+  stored.forEach(d => {
+    const old = customDefs.find(x => x.id === d.id), was = old ? JSON.stringify(old) : '';
+    const def = registerCustom(d);
+    if (!def || !old || JSON.stringify(def) === was) return;
+    // 式が変わったものは、表示中の分も新しい初期値で作り直す
+    state.indicators.forEach(ind => { if (ind.type === def.id) { const base = defaultParams(def.id); base.vis = ind.p.vis; ind.p = base; } });
+  });
+  favs.length = 0;
+  if (Array.isArray(s.favs)) s.favs.slice(0, 60).forEach(t => { if (typeof t === 'string' && Object.prototype.hasOwnProperty.call(IND_TYPES, t) && !favs.includes(t)) favs.push(t); });
+  if (dlg.ind && !state.indicators.includes(dlg.ind)) { dlg.ind = null; $('overlay').hidden = true; }
+  recompute(); draw();
+}
+window.addEventListener('storage', e => { if (e.key === STORE_KEY) adoptShared(); });
 function load() {
   let s = null;
   try { s = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) { s = null; }
-  if (s && Array.isArray(s.custom)) {
-    s.custom.forEach(c => {
-      const o = typeof c === 'string' ? { id: c } : c || {}; // 以前は名前だけを保存していた
-      if (typeof o.id !== 'string' || !/^[A-Z0-9]{5,20}$/.test(o.id) || SYMBOLS.some(x => x.id === o.id)) return;
-      const quote = typeof o.quote === 'string' && /^[A-Z0-9]{1,8}$/.test(o.quote) ? o.quote : null;
-      SYMBOLS.push({ id: o.id, label: quote ? `${o.id.slice(0, -quote.length)}/${quote}` : prettySymbol(o.id), base: 100, quote });
-    });
-  }
+  readSymbols(s);
   if (s && SYMBOLS.some(x => x.id === s.symbol)) state.symbol = s.symbol;
   if (s && INTERVALS.some(x => x.id === s.interval)) state.interval = s.interval;
   // 教科書などからのリンク(?symbol=BTCUSDT&interval=1d)で、開く銘柄と時間足を指定できる
@@ -288,19 +338,7 @@ function load() {
   if (s && s.mainWeight > 0) state.mainWeight = s.mainWeight;
   state.chartType = s && CHART_TYPES.some(c => c[0] === s.chartType) ? s.chartType : 'candle';
   state.tradeOpen = s && typeof s.tradeOpen === 'boolean' ? s.tradeOpen : window.innerWidth > 1000;
-  if (s && s.drawings && typeof s.drawings === 'object') {
-    const pt = q => q && typeof q === 'object' && isFinite(q.t) && isFinite(q.price) ? { t: +q.t, price: +q.price } : null;
-    Object.keys(s.drawings).forEach(sym => {
-      if (!/^[A-Z0-9]{5,20}$/.test(sym) || !Array.isArray(s.drawings[sym])) return;
-      state.drawings[sym] = s.drawings[sym].slice(0, 200).map(d => {
-        const p1 = pt(d && d.p1), p2 = pt(d && d.p2);
-        if (d && d.type === 'h' && p1) return { type: 'h', p1 };
-        if (d && TWO_POINT.includes(d.type) && p1 && p2) return { type: d.type, p1, p2 };
-        if (d && d.type === 'v' && p1) return { type: 'v', p1 };
-        return null;
-      }).filter(Boolean);
-    });
-  }
+  state.drawings = readDrawings(s);
   if (s && Array.isArray(s.customInds)) s.customInds.slice(0, CUSTOM_MAX).forEach(d => { if (d && CUSTOM_ID.test(d.id)) registerCustom(d); });
   if (s && Array.isArray(s.favs)) s.favs.slice(0, 60).forEach(t => { if (typeof t === 'string' && Object.prototype.hasOwnProperty.call(IND_TYPES, t) && !favs.includes(t)) favs.push(t); });
   const list = s && Array.isArray(s.indicators)
@@ -624,11 +662,14 @@ function applyTick() {
   const tk = feed.tick, raw = state.raw, vol = feed.vol;
   feed.tick = null; feed.vol = 0;
   if (!tk || !raw.length) return;
-  const last = raw[raw.length - 1];
+  const last = raw[raw.length - 1], ms = curInterval().ms;
   if (tk.t < last.t || (tk.p === last.c && !(vol > 0))) return;
   if (tk.p !== last.c) noteTick(tk.p > last.c ? 1 : -1);
   const t0 = mono();
-  mergeTail([{ t: last.t, o: last.o, h: Math.max(last.h, tk.p), l: Math.min(last.l, tk.p), c: tk.p, v: last.v + vol }]);
+  // 次の足の時間に入ってからの約定は、確定した足に混ぜず、新しい足として始める
+  // (足の更新の知らせより先に約定が届くことがある。混ぜると、確定した足の終値が変わってしまう)
+  if (tk.t >= last.t + ms) mergeTail([{ t: last.t + Math.floor((tk.t - last.t) / ms) * ms, o: tk.p, h: tk.p, l: tk.p, c: tk.p, v: vol }]);
+  else mergeTail([{ t: last.t, o: last.o, h: Math.max(last.h, tk.p), l: Math.min(last.l, tk.p), c: tk.p, v: last.v + vol }]);
   feed.cost = feed.cost * 0.7 + (mono() - t0) * 0.3; // 反映にかかった時間(ならした値)
   feed.n++;
 }
@@ -737,7 +778,7 @@ function openStream() {
         // 取引所の時計とのずれを覚えておく(端末の時計を変えても、記録の時刻が狂わないようにする)
         if (typeof d.E === 'number' && isFinite(d.E)) { clockOffset = d.E - Date.now(); clockReady = true; }
         feed.msgs++;
-        if (d.e === 'aggTrade' && d.s !== streamSym) {
+        if (d.e === 'aggTrade' && d.s && d.s !== streamSym) {
           // ほかの銘柄の約定:高値・安値を覚えておき、0.25 秒ごとにまとめて反映する
           if (!others.includes(d.s) || !(+d.p > 0)) return;
           const t = pend[d.s] || (pend[d.s] = { p: +d.p, lo: +d.p, hi: +d.p });
@@ -1951,6 +1992,7 @@ function renderDialog() {
 // ---------------------------------------------------------------- 上部バー
 function buildTopbar() {
   const sel = $('symbol');
+  refreshSymbols = () => { fillSymbols(); $('symbol').value = state.symbol; };
   const fillSymbols = () => {
     sel.textContent = '';
     SYMBOLS.forEach(s => sel.appendChild(el('option', { value: s.id, text: s.label })));
@@ -2570,6 +2612,10 @@ function execute(sym, side, notional, reason, qty, opts) {
   let fee = notional * FEE;
   T.quotes[sym] = q;
   let pnl = null, feeIn = 0, pid = null;
+  // 決済のための注文なのに、決済する相手がもうない(別のタブで先に決済された、など)ときは、何もしない。
+  // これがないと、決済のつもりの注文が、反対向きの新しいポジションを作ってしまう
+  if (opts && opts.closeOnly && (!pos || Math.sign(pos.qty) === dir)) return 'このポジションは、すでに決済されています。';
+  if (opts && opts.closeOnly && qty > Math.abs(pos.qty)) { qty = Math.abs(pos.qty); notional = qty * px; fee = notional * FEE; }
   if (pos && Math.sign(pos.qty) !== dir) {
     // 反対向き=保有分を減らす(決済)
     const held = Math.abs(pos.qty);
@@ -2615,9 +2661,10 @@ function execute(sym, side, notional, reason, qty, opts) {
   return null;
 }
 function closePosition(sym, reason, opts) {
+  syncIfStale(); // 別のタブでの変更を先に取り込んでから、いまのポジションを見る
   const p = T.positions[sym];
   if (!p) return 'ポジションがありません。';
-  return execute(sym, p.qty > 0 ? 'sell' : 'buy', 0, reason, Math.abs(p.qty), opts);
+  return execute(sym, p.qty > 0 ? 'sell' : 'buy', 0, reason, Math.abs(p.qty), Object.assign({}, opts, { closeOnly: true }));
 }
 /* ページを閉じていた間(スリープや通信断も含む)の値動きを取り寄せて、
  * その間に利確・損切りの価格に届いていたら、届いた時点の価格で決済する。
@@ -2731,6 +2778,7 @@ function checkLevels(dir, px, tp, sl) {
 /* いまの価格で、利確・損切りに届いたか調べる。
  * lo / hi: 前回調べてからの安値・高値。一瞬だけ届いてすぐ戻った場合も見逃さない。 */
 function checkTriggers(sym, lo, hi) {
+  syncIfStale();
   const p = T.positions[sym], px = T.last[sym];
   if (!p || !(px > 0)) return;
   lo = Math.min(isFinite(lo) ? lo : px, px); hi = Math.max(isFinite(hi) ? hi : px, px);
@@ -2781,6 +2829,7 @@ function checkOrders(sym, lo, hi) {
 }
 // 売り(ショート)の含み損で評価額がゼロ以下になったら、その口座のポジションを強制的に決済する
 function stopOut(q) {
+  syncIfStale();
   if (acctStats(q).equity > 0) return;
   const list = Object.keys(T.positions).filter(s => quoteOf(s) === q && priceOk(s) && reconciled[s] === true);
   let closed = 0;
@@ -2788,11 +2837,15 @@ function stopOut(q) {
   if (closed) toast(`${q} の口座の評価額がゼロ以下になったため、ポジションを強制的に決済しました。`);
 }
 let toastTimer = 0;
+// お知らせ。続けて出たものは、前のものを消さずに並べる(3件まで)
+let toastLines = [];
 function toast(text) {
-  const box = $('toast');
-  box.textContent = text; box.hidden = false;
+  const box = $('toast'), now = Date.now();
+  toastLines = toastLines.filter(x => now - x.t < 6000 && x.text !== text).slice(-2);
+  toastLines.push({ text, t: now });
+  box.textContent = toastLines.map(x => x.text).join('\n'); box.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { box.hidden = true; }, 6000);
+  toastTimer = setTimeout(() => { box.hidden = true; toastLines = []; }, 6000);
 }
 // 価格が更新されるたびに呼ばれる
 function tradeTick() {
@@ -2859,6 +2912,11 @@ function renderTrade() {
   setTxt('trBuySub', pos ? (pos.qty < 0 ? '売りを決済する' : '買いを増やす') : '上がると利益');
   const tradable = px > 0 && priceOk(sym) && reconciled[sym] === true && clockReady;
   $('trBuy').disabled = $('trSell').disabled = !tradable;
+  // 閉じていた間の値動きの確認が終わらず売買できないときは、その理由を出す(何も出ないと故障に見える)
+  const WAIT = '開いていなかった間の値動きを確認しています。終わるまで売買できません(通信が不安定だと、時間がかかります)。';
+  const waiting = px > 0 && !tradable && (reconciled[sym] !== true || !clockReady);
+  if (waiting && !$('trMsg').textContent) setTxt('trMsg', WAIT, 'msg');
+  else if (!waiting && $('trMsg').textContent === WAIT) setTxt('trMsg', '');
   // 取引所から消えた銘柄は価格が取れないので、建値での清算だけできるようにする
   const gone = !!dead[sym] && !!pos;
   $('pClose').disabled = !tradable && !gone;
@@ -2949,10 +3007,11 @@ function tradeLineAt(p, tol) {
   return null;
 }
 // 建値の線を引っぱったとき、上下どちらに動かしたかで、利確か損切りかを決める
+// いまの価格より有利な側に置けば利確、不利な側に置けば損切り(利益が出ているときは、建値より上の損切りも置ける)
 function entryDragKind(pos, price) {
-  const profitSide = pos.qty > 0 ? price > pos.avg : price < pos.avg;
-  const kind = profitSide ? 'tp' : 'sl';
-  return pos[kind] === null ? kind : null;
+  const px = T.last[state.symbol] > 0 ? T.last[state.symbol] : pos.avg;
+  const profitSide = pos.qty > 0 ? price > px : price < px;
+  return profitSide ? 'tp' : 'sl';
 }
 // ドラッグで動かした線を確定する。入力欄から変えるときと同じ決まりで確かめる
 function commitLine(dl) {
@@ -2974,7 +3033,10 @@ function commitLine(dl) {
     const pos = T.positions[sym];
     if (!pos) return;
     const kind = dl.kind === 'entry' ? entryDragKind(pos, price) : dl.kind;
-    if (!kind) return;
+    if (dl.kind === 'entry' && pos[kind] !== null) {
+      toast(`${kind === 'tp' ? '利確' : '損切り'}の線は、すでにあります。動かすときは、その線をつかんでください。`);
+      return;
+    }
     const tp = kind === 'tp' ? price : pos.tp, sl = kind === 'sl' ? price : pos.sl;
     const err = checkLevels(Math.sign(pos.qty), T.last[sym], tp, sl);
     if (err) { toast(err); return; }
@@ -3189,9 +3251,10 @@ function bindTrade() {
   });
   // 半分だけ決済する(残りはそのまま持ち続ける)
   $('pHalf').addEventListener('click', () => {
+    syncIfStale();
     const sym = state.symbol, q = quoteOf(sym), held = T.positions[sym];
-    if (!held) return;
-    const err = execute(sym, held.qty > 0 ? 'sell' : 'buy', 0, 'manual', Math.abs(held.qty) / 2);
+    if (!held) { renderTrade(); return; }
+    const err = execute(sym, held.qty > 0 ? 'sell' : 'buy', 0, 'manual', Math.abs(held.qty) / 2, { closeOnly: true });
     if (err) { setTxt('pMsg', err, 'msg down'); return; }
     const h = T.history[0];
     setTxt('pMsg', `半分を決済しました(損益 ${fmtMoney(netOf(h), q, true)} ${q})。残りは持ち続けています。`, 'msg');
@@ -3201,15 +3264,17 @@ function bindTrade() {
   $('pBe').addEventListener('click', () => {
     const pos = T.positions[state.symbol];
     if (!pos) return;
+    const px = T.last[state.symbol];
+    if (!(pos.qty > 0 ? px > pos.avg : px < pos.avg)) {
+      setTxt('pMsg', '損切りを建値に動かせるのは、利益が出ているときだけです(いまの価格が建値より不利な側にあります)。', 'msg down');
+      return;
+    }
     const before = $('pSl').value;
     $('pSl').value = String(+pos.avg.toPrecision(10));
     $('pSave').click();
-    // 断られたとき(まだ利益が出ていないとき)は、入力欄を元に戻して理由を伝える
+    // ほかの理由で断られたとき(利確の欄の値がおかしい、など)は、入力欄だけ元に戻す。理由は保存のときの表示のまま
     const now = T.positions[state.symbol];
-    if (now && now.sl !== parseFloat($('pSl').value)) {
-      $('pSl').value = before;
-      setTxt('pMsg', '損切りを建値に動かせるのは、利益が出ているときだけです(いまの価格が建値より不利な側にあります)。', 'msg down');
-    }
+    if (now && now.sl !== parseFloat($('pSl').value)) $('pSl').value = before;
   });
   $('trOthers').addEventListener('click', e => {
     const b = e.target.closest('button[data-sym]');

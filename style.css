@@ -611,3 +611,5 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .tr-est { display: block; font-size: 11px; font-variant-numeric: tabular-nums; }
 .tr-btns-sub { margin-bottom: 6px; }
 .tr-btns-sub .btn { flex: 1 1 0; min-width: 0; }
+
+.toast { white-space: pre-line; }

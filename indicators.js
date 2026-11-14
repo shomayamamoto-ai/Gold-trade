@@ -777,6 +777,7 @@ const FUNCS = {
   if: { args: 'xxx', desc: '条件が成り立てば2つ目、そうでなければ3つ目', eg: 'if(close > open, volume, 0)' },
 };
 class FormulaError extends Error {}
+const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k); // constructor などの、もとからある名前を部品とまちがえない
 function tokenize(text) {
   const out = [];
   let i = 0;
@@ -817,7 +818,7 @@ function parseFormula(text) {
     if (t.t === 'op' && t.v === '-') return node({ k: 'neg', a: primary() });
     if (t.t === 'id') {
       if (eat('(')) {
-        const f = FUNCS[t.v];
+        const f = own(FUNCS, t.v) ? FUNCS[t.v] : null;
         if (!f) throw new FormulaError(`「${t.v}」という関数はありません。`);
         const args = [];
         if (!eat(')')) { do args.push(compare()); while (eat(',')); if (!eat(')')) throw new FormulaError(`「${t.v}(」のかっこが閉じていません。`); }
@@ -826,7 +827,7 @@ function parseFormula(text) {
         if (args.length < min || args.length > Math.max(need, most)) throw new FormulaError(`「${t.v}」に渡す値の数が違います。例: ${f.eg}`);
         return node({ k: 'call', f: t.v, args });
       }
-      if (SERIES[t.v] || ['hl2', 'hlc3', 'ohlc4', 'p1', 'p2', 'p3'].includes(t.v)) return node({ k: 'var', v: t.v });
+      if (own(SERIES, t.v) || ['hl2', 'hlc3', 'ohlc4', 'p1', 'p2', 'p3'].includes(t.v)) return node({ k: 'var', v: t.v });
       throw new FormulaError(`「${t.v}」は使えない名前です。使えるのは close, open, high, low, volume, hl2, hlc3, ohlc4, p1〜p3 と関数です。`);
     }
     throw new FormulaError(`「${t.v}」の位置がおかしいようです。`);
@@ -869,7 +870,7 @@ function evalFormula(ast, bars, vars) {
       case 'neg': { const a = ev(nd.a); return Array.isArray(a) ? a.map(x => -x) : -a; }
       case 'bin': return each2(ev(nd.a), ev(nd.b), ops[nd.op]);
       case 'var':
-        if (SERIES[nd.v]) return bars.map(b => b[SERIES[nd.v]]);
+        if (own(SERIES, nd.v)) return bars.map(b => b[SERIES[nd.v]]);
         if (nd.v[0] === 'p') return +vars[nd.v] || 0;
         return bars.map(b => src(b, nd.v));
       default: {
