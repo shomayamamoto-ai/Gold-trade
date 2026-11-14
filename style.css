@@ -398,7 +398,7 @@ body {
   #tradeBtn { display: none; }
   .trade {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
-    max-height: 86dvh; border-left: 0; border-radius: 14px 14px 0 0;
+    max-height: 78dvh; border-left: 0; border-radius: 14px 14px 0 0;
     box-shadow: 0 -8px 30px rgba(0, 0, 0, .28);
     padding-bottom: env(safe-area-inset-bottom);
   }
@@ -498,3 +498,59 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
 @media (max-width: 760px) { .tr-card .row .ctl.wide { width: 170px; } }
 
 .tr-hint { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+
+/* ---------- 使い方の案内 ---------- */
+.help dl { margin: 0; }
+.help dt { margin-top: 12px; font-weight: 700; }
+.help dt:first-child { margin-top: 0; }
+.help dd { margin: 2px 0 0; color: var(--muted); line-height: 1.7; }
+.help .touch { display: none; }
+@media (hover: none), (max-width: 760px) { .help .touch { display: inline; } .help .mouse { display: none; } }
+
+/* ---------- スマホ:指で押しやすい大きさにそろえる(目安は 44px 前後) ---------- */
+@media (max-width: 760px) {
+  .ctl { height: 42px; }
+  .btn.icon { width: 42px; }
+  .seg button { height: 40px; min-width: 44px; }
+  .badge.live { min-width: 30px; min-height: 30px; display: inline-flex; align-items: center; justify-content: center; }
+  .x { width: 44px; height: 44px; }
+  .legend .more { width: 44px; height: 34px; margin: -6px 0; }
+  .legend .tools button { width: 44px; height: 40px; }
+  .menu button { padding: 11px 12px; }
+  .fab { width: 44px; height: 44px; }
+  .tr-card .row .ctl { height: 44px; }
+  .tr-quick button { height: 42px; font-size: 13px; }
+  .seg2 button { min-height: 48px; }
+  .tr-btns .ctl { height: 46px; }
+  .btn.small, .row .btn.small { height: 40px; padding: 0 14px; }
+  .trade-bar .btn { height: 44px; }
+  .tr-note a, .msg a { display: inline-block; padding: 8px 2px; margin: -8px 0; }
+  .dlg-foot .btn { height: 44px; }
+  .tab { padding: 12px 0; }
+  .check { min-height: 44px; }
+  .results button { min-height: 46px; }
+  .chips button { height: 36px; padding: 0 14px; }
+  .tr-head { padding: 8px 4px 6px 16px; }
+  /* 注文画面の上に、つまみの目印を出す */
+  .trade::before { content: ""; display: block; width: 40px; height: 4px; margin: 6px auto 0; border-radius: 2px; background: var(--line); }
+}
+@media (max-width: 360px) {
+  .topbar { padding-left: 8px; padding-right: 8px; }
+  .ctl.btn { padding: 0 8px; }
+  #symbol { padding: 0 4px 0 8px; }
+}
+/* ---------- スマホ横向き:注文画面を右側に出して、チャートも見えるようにする ---------- */
+@media (max-height: 480px) and (orientation: landscape) and (max-width: 950px) {
+  .trade {
+    position: fixed; left: auto; right: 0; top: 0; bottom: 0; width: min(360px, 56vw); max-height: none;
+    border-radius: 0; border-left: 1px solid var(--line); box-shadow: -8px 0 30px rgba(0, 0, 0, .28);
+    padding-bottom: 0; padding-right: env(safe-area-inset-right);
+  }
+  .trade::before { display: none; }
+  .trade-bar { padding: 3px 10px; }
+  .trade-bar .btn { height: 36px; }
+  .ctl { height: 36px; }
+  .seg button { height: 36px; }
+  #tradeBtn { display: none; }
+  .trade-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line); background: var(--panel); font-size: 12px; }
+}

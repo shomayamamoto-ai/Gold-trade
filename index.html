@@ -206,6 +206,38 @@
   </div>
 </div>
 
+<div id="helpOverlay" class="overlay" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="dlg-head">
+      <h2 id="helpTitle">使い方</h2>
+      <button id="helpClose" class="x" type="button" aria-label="閉じる">×</button>
+    </div>
+    <div class="dlg-body help">
+      <dl>
+        <dt>チャートを動かす</dt>
+        <dd><span class="touch">指1本で左右にスワイプ。指2本で広げる・つまむと、拡大・縮小。</span><span class="mouse">ドラッグで左右に移動。ホイールで拡大・縮小。ダブルクリックで元に戻る。</span></dd>
+        <dt>価格をくわしく見る</dt>
+        <dd><span class="touch">チャートをタップすると十字線が出て、その足の始値・高値・安値・終値が上に出ます。</span><span class="mouse">マウスを重ねた足の始値・高値・安値・終値が、左上に出ます。</span></dd>
+        <dt>銘柄と時間足を変える</dt>
+        <dd>左上の銘柄名から選びます。いちばん下の「すべての銘柄から探す」で、ほかの銘柄も選べます。</dd>
+        <dt>インジケーターを足す</dt>
+        <dd>「<span class="touch">指標</span><span class="mouse">インジケーター</span>」から選びます(30種類・名前で検索可)。設定や削除は、名前の横の<span class="touch">「⋯」</span><span class="mouse">アイコン</span>から。</dd>
+        <dt>線を引く・画像で保存する</dt>
+        <dd>「ツール」から、水平線・トレンドライン・画像の保存ができます。</dd>
+        <dt>デモトレード(仮想の資金で練習)</dt>
+        <dd><span class="touch">画面下の「注文する」</span><span class="mouse">右上の「デモトレード」</span>から。利確・損切りの線は、チャート上でドラッグして動かせます。</dd>
+        <dt>学ぶ</dt>
+        <dd>「<span class="touch">ツール → 教科書を読む</span><span class="mouse">教科書</span>」で、銘柄・インジケーター・手法・資金管理の解説が読めます。</dd>
+      </dl>
+      <p class="msg">この案内は「ツール → 使い方」から、いつでも開けます。</p>
+    </div>
+    <div class="dlg-foot">
+      <div class="spacer"></div>
+      <button id="helpOk" class="ctl btn primary" type="button">はじめる</button>
+    </div>
+  </div>
+</div>
+
 <div id="anOverlay" class="overlay" hidden>
   <div class="dialog wide" role="dialog" aria-modal="true" aria-labelledby="anTitle">
     <div class="dlg-head">

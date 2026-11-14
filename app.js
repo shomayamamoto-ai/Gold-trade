@@ -1440,12 +1440,14 @@ function updateLegends() {
       if (!b) { setVals(el, []); return; }
       const prev = state.bars[i - 1], col = b.c >= b.o ? UP : DOWN;
       const names = compact ? ['始', '高', '安', '終'] : ['始値', '高値', '安値', '終値'];
-      const items = [b.o, b.h, b.l, b.c].map((v, k) => [names[k], fmtPrice(v), col]);
+      // スマホでは、ふだんは終値だけにしてチャートを隠さない。タップして十字線を出したときだけ4本値を出す
+      const brief = compact && !state.hover;
+      const items = brief ? [['', fmtPrice(b.c), col]] : [b.o, b.h, b.l, b.c].map((v, k) => [names[k], fmtPrice(v), col]);
       if (prev) {
         const d = b.c - prev.c;
         items.push(['', `${d >= 0 ? '+' : ''}${fmtPrice(d, b.c)} (${d >= 0 ? '+' : ''}${(d / prev.c * 100).toFixed(2)}%)`, d >= 0 ? UP : DOWN]);
       }
-      items.push(['出来高', fmtCompact(b.v), col]);
+      if (!brief) items.push(['出来高', fmtCompact(b.v), col]);
       setVals(el, items);
       return;
     }
@@ -1890,6 +1892,7 @@ function buildTopbar() {
    ['トレンドライン', '2点を結ぶ線を引く', () => setTool('t')],
    ['線をすべて削除', 'この銘柄に引いた線を全部消す', () => { state.drawings[state.symbol] = []; state.sel = null; save(); setTool(null); }],
    ['画像として保存', 'いまのチャートを PNG 画像でダウンロード', () => { state.hover = null; render(); saveImage(); }],
+   ['使い方', '画面の動かし方と、主な機能の場所', () => openHelp()],
    ['教科書を読む', '銘柄・インジケーター・手法・資金管理の解説', () => { location.href = 'guide.html'; }],
   ].forEach(([name, hint, fn]) => {
     const b = el('button', { type: 'button', text: name });
@@ -2718,7 +2721,13 @@ function bindTrade() {
   setOpen(state.tradeOpen && window.innerWidth > 760); // スマホでは閉じた状態から始める
   btn.addEventListener('click', () => setOpen(panel.hidden));
   $('trClose').addEventListener('click', () => setOpen(false));
-  $('tbOpen').addEventListener('click', () => setOpen(true));
+  $('tbOpen').addEventListener('click', e => { e.stopPropagation(); setOpen(true); });
+  // スマホでは、注文画面の外(チャート側)をタップしたら閉じる
+  document.addEventListener('pointerdown', e => {
+    if (window.innerWidth > 760 || panel.hidden) return;
+    if (panel.contains(e.target) || e.target.closest('.overlay, .toast, #tradeBar')) return;
+    setOpen(false);
+  });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && window.innerWidth <= 760) setOpen(false); });
 
   const amt = $('trAmt');
@@ -3019,10 +3028,27 @@ function bindAnalysis() {
   window.addEventListener('resize', () => { if (!ov.hidden) renderAnalysis(); });
 }
 
+// ---------------------------------------------------------------- 使い方の案内
+const HELP_KEY = 'gold-trade-help-v1';
+function openHelp() { $('helpOverlay').hidden = false; $('helpOk').focus(); }
+function bindHelp() {
+  const ov = $('helpOverlay');
+  const close = () => { ov.hidden = true; try { localStorage.setItem(HELP_KEY, '1'); } catch (e) { /* 保存できなくても閉じる */ } };
+  $('helpOk').addEventListener('click', close);
+  $('helpClose').addEventListener('click', close);
+  ov.addEventListener('pointerdown', e => { if (e.target === ov) close(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !ov.hidden) close(); });
+  // 初めて開いたときだけ、自動で出す
+  let seen = false;
+  try { seen = !!localStorage.getItem(HELP_KEY); } catch (e) { seen = true; }
+  if (!seen) openHelp();
+}
+
 // ---------------------------------------------------------------- 起動
 load();
 buildTopbar();
 bindTrade();
+bindHelp();
 bindPointer();
 new ResizeObserver(resize).observe(wrap);
 resize();
