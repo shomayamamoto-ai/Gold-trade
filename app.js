@@ -92,11 +92,20 @@ const IND_TYPES = {
   macd: { name: 'MACD', simple: true },
 };
 const DRAW_COLOR = '#2f80ed';
-const MA_KINDS = [['sma', '単純 (SMA)'], ['ema', '指数 (EMA)'], ['rma', 'Smoothed (RMA)']];
+const MA_KINDS = [['sma', '単純 (SMA)'], ['ema', '指数 (EMA)'], ['rma', 'Smoothed (RMA)'], ['wma', '加重 (WMA)']];
+// indicators.js で定義した定番インジケーターを、種類の一覧に加える
+const GT = window.GTIndicators;
+Object.assign(IND_TYPES.ccOnly, { group: 'volume' }); Object.assign(IND_TYPES.enhanced, { group: 'volume' });
+Object.assign(IND_TYPES.ma, { group: 'trend' }); Object.assign(IND_TYPES.rsi, { group: 'momentum' }); Object.assign(IND_TYPES.macd, { group: 'momentum' });
+Object.keys(GT.DEFS).forEach(id => {
+  const d = GT.DEFS[id];
+  IND_TYPES[id] = { name: d.name, short: d.short, overlay: !!d.overlay, simple: !d.overlay, generic: true, group: d.group, desc: d.desc };
+});
 
 function defaultParams(type) {
   const vis = {};
   INTERVALS.forEach(iv => { vis[iv.id] = true; });
+  if (GT.DEFS[type]) return Object.assign(GT.defaults(type), GT.DEFS[type].overlay ? {} : { weight: 1 }, { vis });
   if (type === 'ma') return { kind: 'sma', len: 20, source: 'close', color: '#f5a623', width: 1.5, vis };
   if (type === 'rsi') return { len: 14, source: 'close', upper: 70, lower: 30, color: '#7e57c2', weight: 1, vis };
   if (type === 'macd') {
@@ -297,7 +306,7 @@ function computeCC(bars, p) {
 function computeMA(bars, p) {
   const src = bars.map(b => srcOf(b, p.source));
   const n = Math.max(1, Math.round(p.len) || 1);
-  const val = p.kind === 'ema' ? rma(src, n, 2 / (n + 1)) : p.kind === 'rma' ? rma(src, n) : sma(src, n);
+  const val = p.kind === 'ema' ? rma(src, n, 2 / (n + 1)) : p.kind === 'rma' ? rma(src, n) : p.kind === 'wma' ? GT.helpers.wma(src, n) : sma(src, n);
   return { val };
 }
 const lenOf = v => Math.max(1, Math.round(v) || 1);
@@ -329,7 +338,11 @@ function computeMACD(bars, p) {
 }
 function recompute() {
   const fns = { ma: computeMA, rsi: computeRSI, macd: computeMACD };
-  state.indicators.forEach(ind => { ind.out = (fns[ind.type] || computeCC)(state.bars, ind.p); });
+  state.indicators.forEach(ind => {
+    try {
+      ind.out = IND_TYPES[ind.type].generic ? GT.DEFS[ind.type].compute(state.bars, ind.p) : (fns[ind.type] || computeCC)(state.bars, ind.p);
+    } catch (e) { ind.out = null; } // 1つの計算が失敗しても、ほかの表示は続ける
+  });
 }
 
 // ---------------------------------------------------------------- データ
@@ -705,7 +718,10 @@ const startIdx = () => state.end - plotW() / state.barW;
 const xOf = i => (i - startIdx()) * state.barW + state.barW / 2;
 function resetViewport() {
   state.barW = W < 520 ? 6 : 8;
-  state.end = state.bars.length + 5;
+  // 一目均衡表のように先の足まで描くものがあれば、そのぶん右を空ける
+  let ahead = 0;
+  state.indicators.forEach(i => { if (shownHere(i) && i.out && i.out.lines) i.out.lines.forEach(l => { ahead = Math.max(ahead, l.offset || 0); }); });
+  state.end = state.bars.length + 5 + ahead;
 }
 function clampView() {
   const span = plotW() / state.barW;
@@ -894,20 +910,13 @@ function drawMain(pane, i0, i1, th) {
     const yo = Math.round(yOf(b.o)), yc = Math.round(yOf(b.c));
     ctx.fillRect(left, Math.min(yo, yc), body, Math.max(1, Math.abs(yc - yo)));
   }
-  // 重ねて描くインジケーター(移動平均線)
+  // 重ねて描くインジケーター(移動平均線、ボリンジャーバンド、一目均衡表など)
   visibleOverlays().forEach(ind => {
     if (ind.hidden || !ind.out) return;
-    const val = ind.out.val;
-    ctx.strokeStyle = ind.p.color; ctx.lineWidth = +ind.p.width || 1.5; ctx.lineJoin = 'round';
-    ctx.beginPath();
-    let pen = false;
-    for (let i = Math.max(0, i0 - 1); i <= Math.min(bars.length - 1, i1 + 1); i++) {
-      if (!isFinite(val[i])) { pen = false; continue; }
-      if (pen) ctx.lineTo(xOf(i), yOf(val[i])); else ctx.moveTo(xOf(i), yOf(val[i]));
-      pen = true;
-    }
-    ctx.stroke();
-    ctx.lineWidth = 1;
+    const lines = ind.out.lines || [{ val: ind.out.val, color: ind.p.color, width: +ind.p.width || 1.5 }];
+    const f = ind.out.fill;
+    if (f) fillBetween(lines[f.a], lines[f.b], f, yOf, i0, i1);
+    lines.forEach(l => strokeSeries(l, yOf, i0, i1));
   });
   // 最新の価格ライン
   const last = bars[bars.length - 1];
@@ -1025,6 +1034,52 @@ function drawIndicator(pane, i0, i1, th) {
   }
 }
 
+// 1本の系列を描く。offset は足何本ぶん右(+)・左(-)にずらすか
+function strokeSeries(l, yOf, i0, i1) {
+  const off = l.offset || 0, val = l.val, n = val.length;
+  const a = Math.max(0, i0 - 1 - off), b = Math.min(n - 1, i1 + 1 - off);
+  ctx.strokeStyle = l.color; ctx.fillStyle = l.color;
+  if (l.dots) {
+    const r = clamp(state.barW * 0.2, 1.1, 2.6);
+    for (let i = a; i <= b; i++) {
+      if (!isFinite(val[i])) continue;
+      ctx.beginPath(); ctx.arc(xOf(i + off), yOf(val[i]), r, 0, Math.PI * 2); ctx.fill();
+    }
+    return;
+  }
+  ctx.lineWidth = l.width || 1.5; ctx.lineJoin = 'round';
+  if (l.dash) ctx.setLineDash(l.dash);
+  ctx.beginPath();
+  let pen = false;
+  for (let i = a; i <= b; i++) {
+    if (!isFinite(val[i])) { pen = false; continue; }
+    if (pen) ctx.lineTo(xOf(i + off), yOf(val[i])); else ctx.moveTo(xOf(i + off), yOf(val[i]));
+    pen = true;
+  }
+  ctx.stroke();
+  ctx.setLineDash([]); ctx.lineWidth = 1;
+}
+// 2本の系列の間を塗る。color2 があれば、上下が入れ替わったところで色を変える(一目均衡表の雲)
+function fillBetween(la, lb, f, yOf, i0, i1) {
+  const off = la.offset || 0, A = la.val, B = lb.val, n = A.length;
+  const s = Math.max(0, i0 - 1 - off), e = Math.min(n - 1, i1 + 1 - off);
+  const ok = i => isFinite(A[i]) && isFinite(B[i]);
+  const colorAt = i => (f.color2 && A[i] + A[i + 1] < B[i] + B[i + 1] ? f.color2 : f.color);
+  let i = s;
+  while (i < e) {
+    if (!ok(i) || !ok(i + 1)) { i++; continue; }
+    const c = colorAt(i);
+    let j = i + 1;
+    while (j < e && ok(j + 1) && colorAt(j) === c) j++;
+    ctx.beginPath();
+    for (let k = i; k <= j; k++) ctx.lineTo(xOf(k + off), yOf(A[k]));
+    for (let k = j; k >= i; k--) ctx.lineTo(xOf(k + off), yOf(B[k]));
+    ctx.closePath();
+    ctx.fillStyle = rgba(c, f.color2 ? 0.16 : 0.08);
+    ctx.fill();
+    i = j;
+  }
+}
 function drawSimple(pane, i0, i1, th) {
   const ind = pane.ind, out = ind.out, pw = plotW(), bw = state.barW;
   if (!out) return;
@@ -1034,11 +1089,13 @@ function drawSimple(pane, i0, i1, th) {
     const all = out.lines.map(l => l.val).concat(out.hist ? [out.hist] : []);
     for (let i = i0; i <= i1; i++) all.forEach(arr => { if (isFinite(arr[i])) { lo = Math.min(lo, arr[i]); hi = Math.max(hi, arr[i]); } });
     out.bands.forEach(v => { lo = Math.min(lo, v); hi = Math.max(hi, v); });
+    if (out.floor !== undefined) lo = Math.min(out.floor, lo);
   }
   if (!isFinite(lo) || !isFinite(hi)) { lo = -1; hi = 1; }
   if (hi === lo) { hi += 1; lo -= 1; }
   const padV = out.fixed ? 0 : (hi - lo) * 0.12;
-  const min = lo - padV, max = hi + padV * 0.5 + (out.fixed ? 0 : headroom(lo - padV, hi, pane, compact ? 30 : 24));
+  const min = out.floor !== undefined && lo >= out.floor ? out.floor : lo - padV;
+  const max = hi + padV * 0.5 + (out.fixed ? 0 : headroom(min, hi, pane, compact ? 30 : 24));
   const yOf = v => pane.y + pane.h - (v - min) / (max - min) * pane.h;
   pane.yOf = yOf; pane.vOf = y => min + (pane.y + pane.h - y) / pane.h * (max - min); pane.fmt = fmtCompact;
   gridAndAxis(pane, min, max, yOf, th, fmtCompact);
@@ -1047,7 +1104,7 @@ function drawSimple(pane, i0, i1, th) {
   ctx.save();
   ctx.beginPath(); ctx.rect(0, pane.y, pw, pane.h); ctx.clip();
   if (out.bands.length === 2) {
-    ctx.fillStyle = rgba(out.lines[0].color, 0.08);
+    ctx.fillStyle = rgba(out.lines.length ? out.lines[0].color : '#888888', 0.08);
     ctx.fillRect(0, yOf(out.bands[0]), pw, yOf(out.bands[1]) - yOf(out.bands[0]));
   }
   ctx.strokeStyle = th.cross; ctx.setLineDash([2, 3]);
@@ -1059,30 +1116,23 @@ function drawSimple(pane, i0, i1, th) {
     for (let i = i0; i <= i1; i++) {
       const v = out.hist[i];
       if (!isFinite(v)) continue;
-      const growing = Math.abs(v) >= Math.abs(out.hist[i - 1]); // 勢いが増している棒は濃く
-      ctx.fillStyle = rgba(v >= 0 ? UP : DOWN, growing ? 0.85 : 0.4);
+      if (out.histDir) ctx.fillStyle = rgba(out.histDir[i] > 0 ? UP : DOWN, 0.6); // 棒ごとに向きの色が決まっているもの
+      else {
+        const growing = Math.abs(v) >= Math.abs(out.hist[i - 1]); // 勢いが増している棒は濃く
+        ctx.fillStyle = rgba(v >= 0 ? UP : DOWN, growing ? 0.85 : 0.4);
+      }
       const y = yOf(v);
       ctx.fillRect(Math.round(xOf(i) - body / 2), Math.min(y, y0), body, Math.max(1, Math.abs(y - y0)));
     }
   }
-  ctx.lineWidth = 1.5; ctx.lineJoin = 'round';
-  out.lines.forEach(l => {
-    ctx.strokeStyle = l.color;
-    ctx.beginPath();
-    let pen = false;
-    for (let i = Math.max(0, i0 - 1); i <= Math.min(state.bars.length - 1, i1 + 1); i++) {
-      if (!isFinite(l.val[i])) { pen = false; continue; }
-      if (pen) ctx.lineTo(xOf(i), yOf(l.val[i])); else ctx.moveTo(xOf(i), yOf(l.val[i]));
-      pen = true;
-    }
-    ctx.stroke();
-  });
-  ctx.lineWidth = 1;
+  out.lines.forEach(l => strokeSeries(l, yOf, i0, i1));
   ctx.restore();
-  const l0 = out.lines[0], lv = l0.val[state.bars.length - 1];
-  if (isFinite(lv)) {
-    const y = yOf(lv);
-    if (y > pane.y && y < pane.y + pane.h) axisTag(y, fmtCompact(lv), l0.color, '#ffffff', pane);
+  const last = state.bars.length - 1;
+  const tagVal = out.lines.length ? out.lines[0].val[last] : out.hist ? out.hist[last] : NaN;
+  if (isFinite(tagVal)) {
+    const y = yOf(tagVal);
+    const color = out.lines.length ? out.lines[0].color : tagVal >= 0 ? UP : DOWN;
+    if (y > pane.y && y < pane.y + pane.h) axisTag(y, fmtCompact(tagVal), color, '#ffffff', pane);
   }
 }
 
@@ -1336,6 +1386,14 @@ function updateLegends() {
         const k = 'ind' + ov.id, le = legendFor(k, ov, mainStack());
         used.add(k);
         le.classList.toggle('off', !!ov.hidden);
+        if (IND_TYPES[ov.type].generic) {
+          setText(le, '.name', IND_TYPES[ov.type].short);
+          setText(le, '.params', ov.out ? ov.out.label : '');
+          // ずらして描いている線は、十字線の位置に見えている値を出す
+          setVals(le, ov.out && i >= 0 ? ov.out.lines.filter(l => isFinite(l.val[i - (l.offset || 0)]))
+            .map(l => [ov.out.lines.length > 1 ? l.name : '', fmtPrice(l.val[i - (l.offset || 0)]), l.color]) : []);
+          return;
+        }
         setText(le, '.name', 'MA');
         setText(le, '.params', `${ov.p.kind.toUpperCase()} ${ov.p.len}`);
         setVals(le, ov.out && i >= 0 ? [['', fmtPrice(ov.out.val[i]), ov.p.color]] : []);
@@ -1343,7 +1401,7 @@ function updateLegends() {
       setText(el, '.name', `${curSymbol().label} · ${curInterval().label}`);
       const lt = feed.lastTick ? new Date(feed.lastTick) : null;
       setText(el, '.params', state.live
-        ? `Binance · ${lt ? `${pad2(lt.getHours())}:${pad2(lt.getMinutes())}:${pad2(lt.getSeconds())} に値動き` : '接続中(次の取引を待っています)'}`
+        ? `Binance · ${lt ? `${pad2(lt.getHours())}:${pad2(lt.getMinutes())}:${pad2(lt.getSeconds())} に値動き` : '取引待ち'}`
         : 'デモ');
       el.classList.add('main');
       const b = state.bars[i];
@@ -1364,7 +1422,13 @@ function updateLegends() {
     setText(el, '.name', T.name);
     if (T.simple) {
       setText(el, '.params', ind.out ? ind.out.label : '');
-      setVals(el, ind.out && i >= 0 ? ind.out.lines.map(l => [l.name === T.name ? '' : l.name, fmtCompact(l.val[i]), l.color]) : []);
+      const one = ind.out && ind.out.lines.length === 1 && !ind.out.hist;
+      const items = ind.out && i >= 0 ? ind.out.lines.map(l => [one || l.name === T.name ? '' : l.name, fmtCompact(l.val[i]), l.color]) : [];
+      if (ind.out && ind.out.hist && ind.out.histName && i >= 0) {
+        const hv = ind.out.hist[i], dir = ind.out.histDir ? ind.out.histDir[i] : hv;
+        items.unshift([ind.out.lines.length ? ind.out.histName : '', fmtCompact(hv), dir >= 0 ? UP : DOWN]);
+      }
+      setVals(el, items);
       return;
     }
     const aggLabel = (AGGS.find(a => a[0] === p.agg) || ['', ''])[1];
@@ -1487,7 +1551,15 @@ function renderDialog() {
   body.scrollTop = 0;
   const add = (...nodes) => nodes.forEach(nd => body.appendChild(nd));
 
-  if (ind.type === 'ma' && dlg.tab === 'params') {
+  if (T.generic && dlg.tab === 'params') {
+    if (T.desc) add(el('p', { class: 'msg', text: T.desc }));
+    GT.DEFS[ind.type].params.forEach(q => {
+      if (q.type === 'color') add(fColor(q.key, q.label));
+      else if (q.type === 'source') add(fSelect(q.key, q.label, SOURCES));
+      else if (q.type === 'select') add(fSelect(q.key, q.label, q.options, q.hint));
+      else add(fNumber(q.key, q.label, q.min, q.max, q.type === 'int' ? 1 : q.step, q.hint));
+    });
+  } else if (ind.type === 'ma' && dlg.tab === 'params') {
     add(
       fSelect('kind', '種類', MA_KINDS),
       fNumber('len', '期間', 1, 500, 1, '何本分の足を平均するか'),
@@ -1696,23 +1768,44 @@ function buildTopbar() {
     rsi: '買われすぎ・売られすぎの目安(0〜100)',
     macd: '2本の平均線の差で、流れの強さと向きを見る',
   };
+  let menuQuery = '';
   const fillIndMenu = () => {
     menu.textContent = '';
-    Object.entries(IND_TYPES).forEach(([type, T]) => {
-      const b = el('button', { type: 'button', text: T.name }, []);
-      b.appendChild(el('small', { text: hints[type] }));
-      b.addEventListener('click', () => { addIndicator(type); toggleMenu(false); });
-      menu.appendChild(b);
-    });
-    // この時間足で非表示にしているものは凡例が出ないので、ここから設定を開けるようにする
-    const off = state.indicators.filter(i => !shownHere(i));
-    if (off.length) menu.appendChild(el('div', { class: 'sect', text: 'この時間足では非表示のもの' }));
-    off.forEach(ind => {
-      const b = el('button', { type: 'button', text: IND_TYPES[ind.type].name }, []);
-      b.appendChild(el('small', { text: '設定を開いて「可視性」で表示に戻せます' }));
-      b.addEventListener('click', () => { toggleMenu(false); openDialog(ind); dlg.tab = 'vis'; renderDialog(); });
-      menu.appendChild(b);
-    });
+    const search = el('input', { class: 'ctl menu-search', type: 'search', placeholder: '名前で探す(例: RSI)', 'aria-label': 'インジケーターを探す' });
+    search.value = menuQuery;
+    const list = el('div', { class: 'menu-list' });
+    menu.appendChild(search); menu.appendChild(list);
+    const fillList = () => {
+      list.textContent = '';
+      const q = menuQuery.trim().toLowerCase();
+      let shown = 0;
+      GT.GROUPS.forEach(([gid, gname]) => {
+        const types = Object.entries(IND_TYPES).filter(([type, T]) => T.group === gid &&
+          (!q || `${T.name} ${T.short || ''} ${type} ${T.desc || hints[type] || ''}`.toLowerCase().includes(q)));
+        if (!types.length) return;
+        list.appendChild(el('div', { class: 'sect', text: gname }));
+        types.forEach(([type, T]) => {
+          const b = el('button', { type: 'button', text: T.name }, []);
+          b.appendChild(el('small', { text: `${T.overlay ? 'チャートに重ねる' : '下に表示'} ・ ${T.desc || hints[type]}` }));
+          b.addEventListener('click', () => { addIndicator(type); toggleMenu(false); });
+          list.appendChild(b);
+          shown++;
+        });
+      });
+      if (!shown) list.appendChild(el('div', { class: 'sect', text: '見つかりませんでした。別の言葉で探してください。' }));
+      if (q) return;
+      // この時間足で非表示にしているものは凡例が出ないので、ここから設定を開けるようにする
+      const off = state.indicators.filter(i => !shownHere(i));
+      if (off.length) list.appendChild(el('div', { class: 'sect', text: 'この時間足では非表示のもの' }));
+      off.forEach(ind => {
+        const b = el('button', { type: 'button', text: IND_TYPES[ind.type].name }, []);
+        b.appendChild(el('small', { text: '設定を開いて「可視性」で表示に戻せます' }));
+        b.addEventListener('click', () => { toggleMenu(false); openDialog(ind); dlg.tab = 'vis'; renderDialog(); });
+        list.appendChild(b);
+      });
+    };
+    search.addEventListener('input', () => { menuQuery = search.value; fillList(); });
+    fillList();
   };
   const toggleMenu = on => {
     if (on) fillIndMenu();

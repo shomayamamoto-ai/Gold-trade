@@ -470,3 +470,11 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .tr-quote b.tick-up { animation: tickUp .7s ease-out; }
 .tr-quote b.tick-down { animation: tickDown .7s ease-out; }
 .tr-btn span { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* インジケーターの一覧:検索できて、長くてもスクロールできる */
+#indMenu { display: flex; flex-direction: column; width: min(380px, calc(100vw - 20px)); max-height: min(70vh, 620px); padding: 8px; }
+#indMenu[hidden] { display: none; }
+.menu-search { width: 100%; flex: 0 0 auto; margin-bottom: 6px; }
+.menu-list { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
+.menu-list .sect { position: sticky; top: 0; margin: 0; padding: 6px 10px 4px; background: var(--panel); font-weight: 700; }
+@media (max-width: 560px) { #indMenu { width: auto; max-height: 72dvh; } .menu-search { font-size: 16px; height: 38px; } }
