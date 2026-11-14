@@ -2953,6 +2953,7 @@ function renderTrade() {
       setTxt(out, `届くと ${fmtMoney(r, q, true)} ${q}`, 'tr-est ' + pnlClass(r));
     };
     est('pTp', 'pTpEst'); est('pSl', 'pSlEst');
+    drawPosSpark(pos, q);
     $('pHalf').disabled = $('pClose').disabled || gone;
     $('pBe').disabled = !tradable;
     // 入力中の値を消さないよう、ポジションが変わったときだけ入力欄を書き換える
@@ -2995,6 +2996,7 @@ function renderTrade() {
   }).join('') : `<span class="dim">${T.history.length ? 'この条件に合う取引はありません。' : 'まだ取引がありません。'}</span>`);
 
   const u = pos ? unrealized(sym) : 0;
+  $('tbClose').hidden = !pos; $('tbClose').disabled = !tradable;
   setTxt('tbText', pos
     ? `${pos.qty > 0 ? '買い' : '売り'}を保有中 損益 ${fmtMoney(u, q, true)} ${q}`
     : `デモ資金 ${fmtMoney(st.equity, q)} ${q}`, pos ? pnlClass(u) : '');
@@ -3317,6 +3319,21 @@ function bindTrade() {
     const now = T.positions[state.symbol];
     if (now && now.sl !== parseFloat($('pSl').value)) $('pSl').value = before;
   });
+  // スマホの下のバーから、シートを開かずに決済できる。押しまちがいを防ぐため、2回押して確定する
+  let tbArmed = 0;
+  $('tbClose').addEventListener('click', () => {
+    const sym = state.symbol, q = quoteOf(sym);
+    if (!T.positions[sym]) return;
+    if (Date.now() - tbArmed > 4000) {
+      tbArmed = Date.now(); $('tbClose').textContent = 'もう一度で決済'; $('tbClose').classList.add('armed');
+      setTimeout(() => { if (Date.now() - tbArmed >= 3900) { $('tbClose').textContent = '決済'; $('tbClose').classList.remove('armed'); } }, 4000);
+      return;
+    }
+    tbArmed = 0; $('tbClose').textContent = '決済'; $('tbClose').classList.remove('armed');
+    const err = closePosition(sym, 'manual');
+    toast(err || `決済しました(損益 ${fmtMoney(netOf(T.history[0]), q, true)} ${q})`);
+    renderTrade(); draw();
+  });
   $('trOthers').addEventListener('click', e => {
     const b = e.target.closest('button[data-sym]');
     if (!b) return;
@@ -3407,7 +3424,62 @@ function tradeStats(q) {
     worst: closed.length ? Math.min(...closed) : NaN,
     pf: grossLoss > 0 ? grossWin / grossLoss : NaN,
     bySym: Object.values(bySym).sort((x, y) => y.net - x.net),
+    list: [...trades.values()], // 取引(1つのポジション)ごとの損益。決済した順
   };
+}
+/* 保有中のポジションの含み損益が、建ててからどう動いてきたか。
+ * いま見ている時間足の終値で計算する(建てたあとの足が2本に満たない間は、まだ描けない) */
+let sparkKey = '';
+function drawPosSpark(pos, q) {
+  const cv = $('pSpark'), bars = state.bars, n = bars.length;
+  let i0 = n;
+  while (i0 > 0 && bars[i0 - 1].t + curInterval().ms * curInterval().group > pos.opened) i0--; // 建てた時刻を含む足から
+  const pts = bars.slice(i0).map(b => pos.qty * (b.c - pos.avg));
+  const few = pts.length < 2;
+  $('pSparkBox').hidden = few;
+  if (few) { sparkKey = ''; return; }
+  const key = `${state.symbol}|${state.interval}|${pts.length}|${pts[pts.length - 1].toPrecision(6)}|${state.theme}|${cv.clientWidth}`;
+  if (key === sparkKey) return; // 変わっていなければ描き直さない
+  sparkKey = key;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), w = cv.clientWidth, h = cv.clientHeight;
+  if (!w) { sparkKey = ''; return; }
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const c = cv.getContext('2d'), th = THEMES[state.theme];
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+  const hi = Math.max(0, ...pts), lo = Math.min(0, ...pts), span = hi - lo || 1, pad = 6;
+  const X = i => pad + i / (pts.length - 1) * (w - pad * 2), Y = v => pad + (hi - v) / span * (h - pad * 2);
+  const last = pts[pts.length - 1], color = last >= 0 ? UP : DOWN;
+  c.strokeStyle = th.cross; c.setLineDash([3, 3]); c.lineWidth = 1;
+  c.beginPath(); c.moveTo(pad, Y(0)); c.lineTo(w - pad, Y(0)); c.stroke(); c.setLineDash([]);
+  c.beginPath(); c.moveTo(X(0), Y(0)); pts.forEach((v, i) => c.lineTo(X(i), Y(v))); c.lineTo(X(pts.length - 1), Y(0)); c.closePath();
+  c.fillStyle = rgba(color, 0.14); c.fill();
+  c.beginPath(); pts.forEach((v, i) => (i ? c.lineTo(X(i), Y(v)) : c.moveTo(X(i), Y(v))));
+  c.strokeStyle = color; c.lineWidth = 1.8; c.lineJoin = 'round'; c.stroke();
+  setTxt('pSparkNote', `建ててからの含み損益(${curInterval().label}足 ${pts.length}本)。いちばん良かったとき ${fmtMoney(Math.max(...pts), q, true)}、悪かったとき ${fmtMoney(Math.min(...pts), q, true)} ${q}`);
+}
+// 取引ごとの損益の棒グラフ。「小さく勝って大きく負けていないか」が、ひと目で分かる
+function drawPnlBars(cv, st, q) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), w = cv.clientWidth, h = cv.clientHeight;
+  if (!w) return;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const c = cv.getContext('2d'), th = THEMES[state.theme];
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+  const list = st.list.slice(-120), padL = 8, padR = 78, padT = 12, padB = 12;
+  const hi = Math.max(0, ...list.map(t => t.net)), lo = Math.min(0, ...list.map(t => t.net)), span = hi - lo || 1;
+  const Y = v => padT + (hi - v) / span * (h - padT - padB), slot = (w - padL - padR) / list.length, bw = Math.max(1, Math.min(26, slot * 0.72));
+  list.forEach((t, i) => {
+    const x = padL + slot * (i + 0.5) - bw / 2, y = Y(t.net), y0 = Y(0);
+    c.fillStyle = rgba(t.net >= 0 ? UP : DOWN, 0.85);
+    c.fillRect(x, Math.min(y, y0), bw, Math.max(1, Math.abs(y - y0)));
+  });
+  c.strokeStyle = th.cross; c.lineWidth = 1; c.beginPath(); c.moveTo(padL, Math.round(Y(0)) + 0.5); c.lineTo(w - padR, Math.round(Y(0)) + 0.5); c.stroke();
+  c.font = '11px -apple-system, "Segoe UI", "Hiragino Sans", sans-serif'; c.textBaseline = 'middle'; c.textAlign = 'left';
+  const label = (v, color) => { c.fillStyle = color; c.fillText(fmtMoney(v, q, true), w - padR + 6, clamp(Y(v), 8, h - 8)); };
+  if (hi > 0) label(hi, UP);
+  if (lo < 0) label(lo, DOWN);
+  if (Math.abs(Y(0) - Y(hi)) > 13 && Math.abs(Y(0) - Y(lo)) > 13) { c.fillStyle = th.text; c.fillText('0', w - padR + 6, Y(0)); }
 }
 function drawCurve(cv, st) {
   const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
@@ -3463,7 +3535,10 @@ function renderAnalysis() {
     kpi('最大の勝ち / 負け', `${isFinite(st.best) && st.best > 0 ? fmtMoney(st.best, q, true) : '—'} / ${isFinite(st.worst) && st.worst < 0 ? fmtMoney(st.worst, q, true) : '—'}`, '', `最長の連勝 ${st.bestRun} 回・連敗 ${st.worstRun} 回`) +
     kpi('手数料の合計', m(st.fees), '', '損益にはすでに含めています') +
     `</div><h3>資金の推移</h3><canvas id="anCurve" class="curve" role="img" aria-label="取引ごとの口座残高の推移"></canvas>` +
-    `<p class="dim small">横軸は取引の順番です。保有中のポジションの含み損益は含みません。</p><h3>銘柄ごとの成績</h3>`;
+    `<p class="dim small">横軸は取引の順番です。保有中のポジションの含み損益は含みません。</p>` +
+    (st.list.length ? `<h3>取引ごとの損益</h3><canvas id="anBars" class="curve bars" role="img" aria-label="取引ごとの損益の棒グラフ"></canvas>` +
+      `<p class="dim small">棒1本が、1つのポジション(建ててから決済し終えるまで)です。左が古く、右が新しい取引です。上向きの緑が利益、下向きの赤が損失で、手数料を引いたあとの金額です。${st.list.length > 120 ? '新しい120件を表示しています。' : ''}</p>` : '') +
+    `<h3>銘柄ごとの成績</h3>`;
   html += st.bySym.length
     ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>銘柄</th><th>決済</th><th>勝率</th><th>損益 (${qe})</th></tr></thead><tbody>` +
       st.bySym.map(s => `<tr><td>${esc(labelOf(s.sym))}</td><td>${s.n}</td><td>${s.n ? (s.wins / s.n * 100).toFixed(0) + '%' : '—'}</td><td class="${pnlClass(s.net)}">${fmtMoney(s.net, q, true)}</td></tr>`).join('') +
@@ -3472,6 +3547,7 @@ function renderAnalysis() {
   if (st.n > 0 && st.n < 30) html += `<p class="dim small">決済が ${st.n} 回と少ないため、勝率などの数字は偶然に大きく左右されます。目安として見てください。</p>`;
   body.innerHTML = html;
   drawCurve($('anCurve'), st);
+  if ($('anBars')) drawPnlBars($('anBars'), st, q);
 }
 function exportCsv() {
   const cell = v => `"${String(v).replace(/"/g, '""')}"`;

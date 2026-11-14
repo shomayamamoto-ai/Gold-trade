@@ -141,6 +141,10 @@
         <dt>平均取得価格</dt><dd id="pAvg"></dd>
         <dt>評価損益</dt><dd id="pPnl"></dd>
       </dl>
+      <div id="pSparkBox" class="tr-spark" hidden>
+        <canvas id="pSpark" role="img" aria-label="建ててからの含み損益の推移"></canvas>
+        <small id="pSparkNote" class="dim"></small>
+      </div>
       <label class="row"><span class="lbl">利確の価格<small id="pTpEst" class="tr-est"></small></span><input id="pTp" class="ctl" type="number" inputmode="decimal" min="0" step="any" placeholder="なし"></label>
       <label class="row"><span class="lbl">損切りの価格<small id="pSlEst" class="tr-est"></small></span><input id="pSl" class="ctl" type="number" inputmode="decimal" min="0" step="any" placeholder="なし"></label>
       <div class="tr-btns tr-btns-sub">
@@ -197,6 +201,7 @@
 
 <div id="tradeBar" class="trade-bar">
   <span id="tbText"></span>
+  <button id="tbClose" class="ctl btn" type="button" hidden>決済</button>
   <button id="tbOpen" class="ctl btn primary" type="button">注文する</button>
 </div>
 <div id="toast" class="toast" role="status" hidden></div>
