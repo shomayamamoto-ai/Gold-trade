@@ -454,7 +454,7 @@ function recompute() {
   const fns = { ma: computeMA, rsi: computeRSI, macd: computeMACD };
   state.indicators.forEach(ind => {
     // 表示していないもの(目のアイコンで隠した、この時間足では非表示)は計算しない。お知らせを頼まれているものは別
-    if ((ind.hidden || ind.p.vis[state.interval] === false) && !ind.p.alert && !(dlg.ind === ind)) { ind.out = null; ind.stale = true; return; }
+    if ((ind.hidden || ind.p.vis[state.interval] === false) && !ind.p.alert && !(dlg.ind === ind) && !(bt.ind === ind && !$('btOverlay').hidden)) { ind.out = null; ind.stale = true; return; }
     ind.stale = false;
     try {
       ind.out = IND_TYPES[ind.type].generic ? GT.DEFS[ind.type].compute(state.bars, ind.p) : (fns[ind.type] || computeCC)(state.bars, ind.p);
@@ -2392,6 +2392,7 @@ function bindPointer() {
         if (k >= 0) keys = [k ? 'p2' : 'p1'];
       }
       dragD = { start: p, keys, orig: JSON.parse(JSON.stringify(state.sel)) };
+      state.dragging = state.sel;
     } else {
       resizing = null;
       if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); }
@@ -2458,8 +2459,9 @@ function bindPointer() {
     if (dragD) {
       // お知らせの線を動かしたら、新しい位置で待ち直す
       const d = state.sel, last = state.bars.length ? state.bars[state.bars.length - 1].c : NaN;
-      if (d && d.type === 'a' && isFinite(last)) { d.above = d.p1.price > last; d.done = false; }
-      dragD = null; save(); draw();
+      // 動かしたときだけ、待ち直す(選んだだけ・押しただけでは、鳴り終わった線を元に戻さない)
+      if (d && d.type === 'a' && isFinite(last) && moved > 3 && d.p1.price !== dragD.orig.p1.price) { d.above = d.p1.price > last; d.done = false; }
+      dragD = null; state.dragging = null; save(); draw();
     }
     if (!special && moved <= 8 && e.type === 'pointerup' && !pts.size) {
       handleTap(pos(e), e.pointerType === 'mouse' ? 6 : 16);
@@ -2533,7 +2535,7 @@ function loadTradeState() {
   if (Array.isArray(t.orders)) {
     t.orders.slice(0, 20).forEach(o => {
       if (!o || !SYM_RE.test(o.sym) || !fin(o.price) || !(o.price > 0) || !fin(o.notional) || !(o.notional > 0) || !fin(o.id)) return;
-      out.orders.push({ id: o.id, sym: o.sym, side: o.side === 'sell' ? 'sell' : 'buy', price: o.price, notional: o.notional, tp: level(o.tp), sl: level(o.sl), t: fin(o.t) ? o.t : 0, note: cleanNote(o.note) });
+      out.orders.push({ id: o.id, sym: o.sym, side: o.side === 'sell' ? 'sell' : 'buy', price: o.price, notional: o.notional, tp: level(o.tp), sl: level(o.sl), t: fin(o.t) ? o.t : 0, note: cleanNote(o.note), reduce: o.reduce === true });
     });
   }
   if (Array.isArray(t.history)) {
@@ -2691,7 +2693,13 @@ function execute(sym, side, notional, reason, qty, opts) {
     pid = pos.id;
     a.cash += pnl - fee;
     pos.qty -= Math.sign(pos.qty) * qty;
-    if (Math.abs(pos.qty) <= held * 1e-9) delete T.positions[sym];
+    if (Math.abs(pos.qty) <= held * 1e-9) {
+      delete T.positions[sym];
+      // ポジションがなくなったら、その決済用に置いていた指値も取り消す(残しておくと、あとで反対向きの新しいポジションを作ってしまう)
+      const n0 = T.orders.length;
+      T.orders = T.orders.filter(o => !(o.sym === sym && o.reduce));
+      if (T.orders.length < n0) toast(`${labelOf(sym)}:ポジションがなくなったため、決済用の指値注文を取り消しました。`);
+    }
     else pos.levelsAt = now;
   } else {
     const st = acctStats(q);
@@ -2852,7 +2860,7 @@ function fillOrder(o, fill, awayT) {
   // 保有分を減らす注文で、残りがごくわずか(2%未満)になるなら、端数を残さず全部決済する
   let qty;
   if (had && !opening) { const held = Math.abs(had.qty), want = o.notional / fill; qty = want >= held * 0.98 ? held : want; }
-  const err = execute(sym, o.side, o.notional, 'limit', qty, away ? { price: fill, t: awayT, note: o.note } : { price: fill, away: false, note: o.note });
+  const err = execute(sym, o.side, o.notional, 'limit', qty, Object.assign(away ? { price: fill, t: awayT, note: o.note } : { price: fill, away: false, note: o.note }, o.reduce ? { closeOnly: true } : {}));
   T.orders = T.orders.filter(x => x !== o);
   if (err) { toast(`${labelOf(sym)}:指値注文を取り消しました(${err})`); saveTrade(); return; }
   const pos = T.positions[sym];
@@ -2864,6 +2872,9 @@ function fillOrder(o, fill, awayT) {
     pos.levelsAt = away ? awayT : tnow();
     if (away && !had) pos.opened = awayT; // 建てた時刻も、約定した時刻に合わせる(それより前の値動きを、利確・損切りの判定に使わない)
   }
+  // 閉じていた間の約定でポジションが一部だけ減った場合も、「条件を変えた時刻」は約定した時刻にする。
+  // いまの時刻にしてしまうと、残りの分の利確・損切りが、そのあとの値動きで判定されなくなる
+  if (pos && away) pos.levelsAt = awayT;
   saveTrade();
   toast(`${labelOf(sym)}:${away ? 'ページを開いていない間に指値の価格に届いていたため、' : ''}指値注文が約定しました(${buy ? '買い' : '売り'} ${fmtQty(T.history[0].qty)} @ ${fmtPrice(T.history[0].price)})`);
 }
@@ -2940,7 +2951,7 @@ function checkPriceAlerts(sym, lo, hi) {
   if (!list || !list.length || !isFinite(lo) || !isFinite(hi)) return;
   let fired = false;
   list.forEach(d => {
-    if (d.type !== 'a' || d.done) return;
+    if (d.type !== 'a' || d.done || d === state.dragging) return; // つかんで動かしている最中の線は鳴らさない
     if (!(d.above ? hi >= d.p1.price : lo <= d.p1.price)) return;
     d.done = true; fired = true;
     const text = `🔔 ${labelOf(sym)} が ${fmtPrice(d.p1.price)} に${d.above ? '上がって' : '下がって'}届きました`;
@@ -3036,7 +3047,7 @@ function renderTrade() {
     const oq = quoteOf(o.sym), extra = [o.tp !== null ? `利確 ${fmtPrice(o.tp)}` : '', o.sl !== null ? `損切り ${fmtPrice(o.sl)}` : '', o.note].filter(Boolean).join(' ・ ');
     return `<div class="ord"><span><span class="${o.side === 'buy' ? 'up' : 'down'}">${o.side === 'buy' ? '買い' : '売り'}</span> ${esc(labelOf(o.sym))} @ ${fmtPrice(o.price)}</span>` +
       `<button type="button" class="ctl btn small" data-oid="${esc(o.id)}">取消</button>` +
-      `<span class="dim">${fmtMoney(o.notional, oq)} ${esc(oq)} 分${extra ? ' ・ ' + esc(extra) : ''}</span></div>`;
+      `<span class="dim">${fmtMoney(o.notional, oq)} ${esc(oq)} 分${o.reduce ? ' ・ 決済用' : ''}${extra ? ' ・ ' + esc(extra) : ''}</span></div>`;
   }).join(''));
   $('trPos').hidden = !pos;
   if (pos) {
@@ -3250,7 +3261,11 @@ function bindTrade() {
   const setNotional = n => {
     const q = quoteOf(state.symbol), px = refPrice(0);
     if (unit !== 'qty') amt.value = n > 0 ? floorMoney(n, q) : '';
-    else amt.value = n > 0 && px > 0 ? +(n / px).toPrecision(6) : '';
+    else if (n > 0 && px > 0) {
+      // 6桁に切り捨てる(四捨五入で増えると、「100%」が使える金額をわずかに超えてしまう)
+      const qv = n / px, k = Math.pow(10, 5 - Math.floor(Math.log10(qv)));
+      amt.value = +(Math.floor(qv * k + 1e-9) / k).toPrecision(6);
+    } else amt.value = '';
     renderUnit();
   };
   function renderUnit() {
@@ -3337,7 +3352,8 @@ function bindTrade() {
       else if (opening && notional * (1 + FEE) > acctStats(q).avail + 1e-9) err = `使える金額が足りません(使える金額: ${fmtMoney(acctStats(q).avail, q)} ${q})。金額を減らしてください。`;
       else if (opening) err = checkLevels(dir, lp, tp, sl);
       if (err) { setTxt('trMsg', err, 'msg down'); return; }
-      T.orders.push({ id: tnow() + Math.random(), sym, side, price: lp, notional, tp: opening ? tp : null, sl: opening ? sl : null, t: tnow(), note });
+      // ポジションを減らすために置いた指値は「決済用」として覚えておく(ポジションがなくなったら、いっしょに取り消す)
+      T.orders.push({ id: tnow() + Math.random(), sym, side, price: lp, notional, tp: opening ? tp : null, sl: opening ? sl : null, t: tnow(), note, reduce: !opening });
       saveTrade();
       setTxt('trMsg', `${side === 'buy' ? '買い' : '売り'}の指値注文を予約しました(${fmtPrice(lp)} で ${fmtMoney(notional, q)} ${q} 分)。`, 'msg');
       done();
@@ -3425,16 +3441,20 @@ function bindTrade() {
     if (now && now.sl !== parseFloat($('pSl').value)) $('pSl').value = before;
   });
   // スマホの下のバーから、シートを開かずに決済できる。押しまちがいを防ぐため、2回押して確定する
-  let tbArmed = 0;
+  let tbArmed = 0, tbSym = '';
+  const tbDisarm = () => { tbArmed = 0; tbSym = ''; $('tbClose').textContent = '決済'; $('tbClose').classList.remove('armed'); };
+  $('symbol').addEventListener('change', tbDisarm);        // 銘柄を変えたら、押しかけの状態は取り消す
+  $('symbol').addEventListener('symbolpicked', tbDisarm);
   $('tbClose').addEventListener('click', () => {
-    const sym = state.symbol, q = quoteOf(sym);
+    const sym = state.symbol, q = quoteOf(sym), now = Date.now();
     if (!T.positions[sym]) return;
-    if (Date.now() - tbArmed > 4000) {
-      tbArmed = Date.now(); $('tbClose').textContent = 'もう一度で決済'; $('tbClose').classList.add('armed');
-      setTimeout(() => { if (Date.now() - tbArmed >= 3900) { $('tbClose').textContent = '決済'; $('tbClose').classList.remove('armed'); } }, 4000);
+    if (tbSym !== sym || now - tbArmed > 4000) {
+      tbArmed = now; tbSym = sym; $('tbClose').textContent = 'もう一度で決済'; $('tbClose').classList.add('armed');
+      setTimeout(() => { if (Date.now() - tbArmed >= 3900) tbDisarm(); }, 4000);
       return;
     }
-    tbArmed = 0; $('tbClose').textContent = '決済'; $('tbClose').classList.remove('armed');
+    if (now - tbArmed < 400) return; // 続けざまの2回押し(押しまちがい)では決済しない
+    tbDisarm();
     const err = closePosition(sym, 'manual');
     toast(err || `決済しました(損益 ${fmtMoney(netOf(T.history[0]), q, true)} ${q})`);
     renderTrade(); draw();
@@ -3537,13 +3557,15 @@ function tradeStats(q) {
 let sparkKey = '';
 function drawPosSpark(pos, q) {
   const cv = $('pSpark'), bars = state.bars, n = bars.length;
+  // デモ表示のとき(本物の価格ではない)と、読み込みの途中(前の銘柄・時間足の足が残っている)は出さない
+  if (!state.live || state.loading) { $('pSparkBox').hidden = true; sparkKey = ''; return; }
   let i0 = n;
   while (i0 > 0 && bars[i0 - 1].t + curInterval().ms * curInterval().group > pos.opened) i0--; // 建てた時刻を含む足から
   const pts = bars.slice(i0).map(b => pos.qty * (b.c - pos.avg));
   const few = pts.length < 2;
   $('pSparkBox').hidden = few;
   if (few) { sparkKey = ''; return; }
-  const key = `${state.symbol}|${state.interval}|${pts.length}|${pts[pts.length - 1].toPrecision(6)}|${state.theme}|${cv.clientWidth}`;
+  const key = `${state.symbol}|${state.interval}|${pos.qty}|${pts.length}|${pts[pts.length - 1].toPrecision(6)}|${state.theme}|${cv.clientWidth}`;
   if (key === sparkKey) return; // 変わっていなければ描き直さない
   sparkKey = key;
   const dpr = Math.min(window.devicePixelRatio || 1, 2), w = cv.clientWidth, h = cv.clientHeight;
@@ -3581,7 +3603,7 @@ function drawPnlBars(cv, st, q) {
   });
   c.strokeStyle = th.cross; c.lineWidth = 1; c.beginPath(); c.moveTo(padL, Math.round(Y(0)) + 0.5); c.lineTo(w - padR, Math.round(Y(0)) + 0.5); c.stroke();
   c.font = '11px -apple-system, "Segoe UI", "Hiragino Sans", sans-serif'; c.textBaseline = 'middle'; c.textAlign = 'left';
-  const label = (v, color) => { c.fillStyle = color; c.fillText(fmtMoney(v, q, true), w - padR + 6, clamp(Y(v), 8, h - 8)); };
+  const label = (v, color) => { let t = fmtMoney(v, q, true); if (c.measureText(t).width > padR - 8) t = (v > 0 ? '+' : '') + fmtCompact(v); c.fillStyle = color; c.fillText(t, w - padR + 6, clamp(Y(v), 8, h - 8)); };
   if (hi > 0) label(hi, UP);
   if (lo < 0) label(lo, DOWN);
   if (Math.abs(Y(0) - Y(hi)) > 13 && Math.abs(Y(0) - Y(lo)) > 13) { c.fillStyle = th.text; c.fillText('0', w - padR + 6, Y(0)); }
@@ -4079,11 +4101,12 @@ function ruleMarks() {
 }
 function openBacktest(ind) {
   bt.ind = ind; bt.rule = -1;
+  $('btOverlay').hidden = false;
+  if (!ind.out) recompute(); // 隠しているインジケーターは計算を省いているので、ここで計算する
   const marks = (ind.out && ind.out.marks) || [];
   const hasUp = marks.some(m => m.dir === 'up'), hasDown = marks.some(m => m.dir === 'down');
   bt.side = hasUp ? 'long' : 'short';
   bt.exit = hasUp && hasDown ? 'signal' : 'bars';
-  $('btOverlay').hidden = false;
   renderBacktest();
   $('btClose').focus();
 }
@@ -4108,7 +4131,9 @@ function renderBacktest() {
     addBtn.addEventListener('click', () => {
       // 自作インジケーターとして登録する。数値や式は、あとから自由に変えられる
       if (state.indicators.length >= 30) { toast('インジケーターは30個までです。使っていないものを削除してから追加してください。'); return; }
-      const made = registerCustom(Object.assign({}, def, { id: '' }));
+      // 同じ内容のものをすでに登録していれば、それを使う(押すたびに同じものが増えないように)
+      const same = cleanCustom(Object.assign({}, def, { id: '' })), sameText = same ? customToText(same) : '';
+      const made = customDefs.find(d => customToText(d) === sameText) || registerCustom(Object.assign({}, def, { id: '' }));
       if (!made) { toast(`自分で作れるのは${CUSTOM_MAX}個までです。使っていないものを削除してください。`); return; }
       addIndicator(made.id);
       $('btOverlay').hidden = true;

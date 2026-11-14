@@ -120,11 +120,11 @@
         <span class="lbl">メモ<small>任意。なぜ入るのかを一言</small></span>
         <input id="trNote" class="ctl wide" type="text" maxlength="120" autocomplete="off">
       </label>
-      <div class="tr-btns">
+      <div class="tr-btns tr-btns-main">
+        <p id="trMsg" class="msg" role="status"></p>
         <button id="trSell" class="tr-btn sell" type="button">売り <span id="trSellPx"></span><small id="trSellSub">下がると利益</small></button>
         <button id="trBuy" class="tr-btn buy" type="button">買い <span id="trBuyPx"></span><small id="trBuySub">上がると利益</small></button>
       </div>
-      <p id="trMsg" class="msg" role="status"></p>
     </section>
 
     <section id="trOrders" class="tr-card" hidden>

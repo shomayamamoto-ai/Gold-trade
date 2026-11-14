@@ -650,3 +650,15 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
   .trade-bar span { flex: 1 1 auto; }
   .trade-bar #tbClose { padding: 0 12px; }
 }
+
+/* ---- 注文の結果・理由は、売り・買いのボタンのすぐ上に出す(スマホでボタンを下端に固定していても、必ず見える) */
+.tr-btns-main #trMsg { grid-column: 1 / -1; margin: 0; }
+.tr-btns-main #trMsg:empty { display: none; }
+@media (max-width: 760px) {
+  /* 入力欄に移ったとき、固定したボタンの下に隠れないようにする */
+  .tr-body { scroll-padding-bottom: 150px; }
+  .tr-btns-main #trMsg { max-height: 5.2em; overflow-y: auto; }
+  /* 注文シートを開いている間のお知らせは、画面の上に出す(下に出すと、固定したボタンに重なる)。お知らせは押せなくてよい */
+  .toast { pointer-events: none; }
+  body:has(.trade:not([hidden])) .toast { bottom: auto; top: 8px; }
+}
