@@ -206,6 +206,23 @@
   </div>
 </div>
 
+<div id="mkOverlay" class="overlay" hidden>
+  <div class="dialog mk" role="dialog" aria-modal="true" aria-labelledby="mkTitle">
+    <div class="dlg-head">
+      <h2 id="mkTitle">インジケーターを作る</h2>
+      <button id="mkClose" class="x" type="button" aria-label="閉じる">×</button>
+    </div>
+    <div id="mkBody" class="dlg-body"></div>
+    <div class="dlg-foot">
+      <button id="mkDelete" class="ctl btn danger" type="button" hidden>削除</button>
+      <button id="mkShare" class="ctl btn" type="button" hidden>共有</button>
+      <div class="spacer"></div>
+      <button id="mkCancel" class="ctl btn" type="button">キャンセル</button>
+      <button id="mkSave" class="ctl btn primary" type="button">保存</button>
+    </div>
+  </div>
+</div>
+
 <div id="helpOverlay" class="overlay" hidden>
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
     <div class="dlg-head">
@@ -221,7 +238,7 @@
         <dt>銘柄と時間足を変える</dt>
         <dd>左上の銘柄名から選びます。いちばん下の「すべての銘柄から探す」で、ほかの銘柄も選べます。</dd>
         <dt>インジケーターを足す</dt>
-        <dd>「<span class="touch">指標</span><span class="mouse">インジケーター</span>」から選びます(30種類・名前で検索可)。設定や削除は、名前の横の<span class="touch">「⋯」</span><span class="mouse">アイコン</span>から。</dd>
+        <dd>「<span class="touch">指標</span><span class="mouse">インジケーター</span>」から選びます(57種類・名前で検索可)。いちばん下の「＋ 自分で作る」で、式を書いてオリジナルも作れます。設定や削除は、名前の横の<span class="touch">「⋯」</span><span class="mouse">アイコン</span>から。</dd>
         <dt>線を引く・画像で保存する</dt>
         <dd>「ツール」から、水平線・トレンドライン・画像の保存ができます。</dd>
         <dt>デモトレード(仮想の資金で練習)</dt>

@@ -554,3 +554,35 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
   #tradeBtn { display: none; }
   .trade-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line); background: var(--panel); font-size: 12px; }
 }
+
+/* ---- 自分で作るインジケーター */
+.dialog.mk { width: min(560px, 100%); }
+.mk-field { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }
+.mk-field .ctl { width: 100%; }
+.mk-row { display: flex; align-items: center; gap: 6px; margin: 8px 0 4px; }
+.mk-row .ctl { flex: 1 1 0; min-width: 0; }
+.mk-row .mk-num { flex: 0 0 88px; }
+.mk-row input[type="color"] { flex: 0 0 auto; width: 40px; height: 30px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: none; }
+.mk-p { flex: 0 0 auto; min-width: 22px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.mk-expr { display: block; width: 100%; height: auto; min-height: 52px; padding: 8px; resize: vertical; line-height: 1.5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; overflow-wrap: anywhere; }
+.mk-check { min-height: 1.5em; margin: 4px 0 8px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.mk-check.bad { color: var(--down, #c0392b); }
+.mk-check.good { color: var(--up, #1e8e5a); }
+.mk-parts { margin: 12px 0 0; border-top: 1px solid var(--border); padding-top: 8px; }
+.mk-parts summary { cursor: pointer; padding: 6px 0; font-weight: 700; font-size: 13px; }
+.mk-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mk-chip { display: inline-flex; flex-direction: column; align-items: flex-start; max-width: 100%; padding: 5px 9px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel); color: inherit; font: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; cursor: pointer; text-align: left; white-space: pre; }
+.mk-chip small { font-family: system-ui, sans-serif; color: var(--muted); font-size: 10.5px; white-space: normal; }
+.mk-chip:hover { background: var(--hover); }
+.mk-actions { display: flex; gap: 8px; margin: 8px 0; }
+.menu .mk-new { color: var(--primary); font-weight: 700; }
+.btn.danger { color: var(--down, #c0392b); }
+@media (max-width: 760px) {
+  .mk-expr { font-size: 16px; }
+  .mk-row .ctl, .mk-field .ctl { height: 40px; font-size: 16px; }
+  .mk-field textarea.ctl, textarea.mk-expr { height: auto; }
+  .mk-chip { min-height: 40px; justify-content: center; }
+  .mk-row input[type="color"] { width: 44px; height: 40px; }
+}

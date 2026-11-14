@@ -97,7 +97,8 @@ const IND_TYPES = {
   macd: { name: 'MACD', simple: true },
 };
 const DRAW_COLOR = '#2f80ed';
-const MA_KINDS = [['sma', '単純 (SMA)'], ['ema', '指数 (EMA)'], ['rma', 'Smoothed (RMA)'], ['wma', '加重 (WMA)']];
+const MA_KINDS = [['sma', '単純 (SMA)'], ['ema', '指数 (EMA)'], ['rma', 'Smoothed (RMA)'], ['wma', '加重 (WMA)'],
+  ['hma', 'ハル (HMA)'], ['dema', '2重指数 (DEMA)'], ['tema', '3重指数 (TEMA)'], ['kama', '適応型 (KAMA)'], ['vwma', '出来高加重 (VWMA)']];
 // indicators.js で定義した定番インジケーターを、種類の一覧に加える
 const GT = window.GTIndicators;
 Object.assign(IND_TYPES.ccOnly, { group: 'volume' }); Object.assign(IND_TYPES.enhanced, { group: 'volume' });
@@ -106,6 +107,70 @@ Object.keys(GT.DEFS).forEach(id => {
   const d = GT.DEFS[id];
   IND_TYPES[id] = { name: d.name, short: d.short, overlay: !!d.overlay, simple: !d.overlay, generic: true, group: d.group, desc: d.desc };
 });
+
+// ---- 自分で作ったインジケーター
+/* 保存されていたもの・ほかの人からもらったものは、そのまま信用しない。
+ * 決めた形に合うものだけを取り出し、式は indicators.js の読み取り器で確かめる(式は「計算」しかできない) */
+const customDefs = [];
+const CUSTOM_MAX = 30, CUSTOM_ID = /^u_[a-z0-9]{6,12}$/;
+const plain = (v, max) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, '').trim().slice(0, max) : '');
+function cleanCustom(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const name = plain(raw.name, 30);
+  if (!name) return null;
+  const overlay = !!raw.overlay;
+  const lines = (Array.isArray(raw.lines) ? raw.lines : []).slice(0, 4).map((l, i) => {
+    if (!l || typeof l.expr !== 'string' || GT.checkFormula(l.expr)) return null;
+    return { name: plain(l.name, 12) || `線${i + 1}`, expr: l.expr.trim(), color: /^#[0-9a-f]{6}$/i.test(l.color) ? l.color : '#2f80ed' };
+  });
+  if (lines.includes(null)) return null;
+  const hist = !overlay && typeof raw.hist === 'string' && raw.hist.trim() ? raw.hist.trim() : '';
+  if (hist && GT.checkFormula(hist)) return null;
+  if (!lines.length && !hist) return null;
+  const bands = (Array.isArray(raw.bands) ? raw.bands : []).filter(v => typeof v === 'number' && isFinite(v) && Math.abs(v) <= 1e12).slice(0, 4);
+  const inputs = (Array.isArray(raw.inputs) ? raw.inputs : []).slice(0, 3).map((q, i) => ({
+    label: plain(q && q.label, 20) || `数値 ${i + 1}`,
+    def: q && typeof q.def === 'number' && isFinite(q.def) && Math.abs(q.def) <= 1e9 ? q.def : 1,
+  }));
+  return { id: typeof raw.id === 'string' && CUSTOM_ID.test(raw.id) ? raw.id : '', name, overlay, lines, hist, bands, inputs };
+}
+function newCustomId() {
+  let id;
+  do id = 'u_' + Math.random().toString(36).slice(2, 10).padEnd(8, '0'); while (IND_TYPES[id]);
+  return id;
+}
+// 登録する(同じ id があれば置きかえる)。登録できたら定義を返す
+function registerCustom(raw) {
+  const def = cleanCustom(raw);
+  if (!def) return null;
+  if (!def.id || (IND_TYPES[def.id] && !IND_TYPES[def.id].custom)) def.id = newCustomId();
+  const at = customDefs.findIndex(d => d.id === def.id);
+  if (at < 0 && customDefs.length >= CUSTOM_MAX) return null;
+  let made;
+  try { made = GT.makeCustom(def); } catch (e) { return null; }
+  GT.DEFS[def.id] = made;
+  IND_TYPES[def.id] = { name: def.name, short: made.short, overlay: def.overlay, simple: !def.overlay, generic: true, group: 'custom', desc: describeCustom(def), custom: true };
+  if (at < 0) customDefs.push(def); else customDefs[at] = def;
+  return def;
+}
+function describeCustom(def) {
+  const text = def.lines.map(l => l.expr).concat(def.hist ? [def.hist] : []).join(' / ');
+  return text.length > 60 ? text.slice(0, 59) + '…' : text;
+}
+// 共有用の文字にする・文字から読み取る(読み取ったものも cleanCustom で確かめる)
+const SHARE_HEAD = 'GTI1:';
+function customToText(def) {
+  return SHARE_HEAD + JSON.stringify({ name: def.name, overlay: def.overlay, lines: def.lines, hist: def.hist, bands: def.bands, inputs: def.inputs });
+}
+function customFromText(text) {
+  const t = String(text || '').trim();
+  if (!t.startsWith(SHARE_HEAD) || t.length > 4000) return null;
+  let raw = null;
+  try { raw = JSON.parse(t.slice(SHARE_HEAD.length)); } catch (e) { return null; }
+  const def = cleanCustom(raw);
+  if (def) def.id = ''; // もらったものは、必ず新しいものとして登録する
+  return def;
+}
 
 function defaultParams(type) {
   const vis = {};
@@ -186,6 +251,7 @@ function save() {
       symbol: state.symbol, interval: state.interval, theme: state.theme, mainWeight: state.mainWeight, drawings: state.drawings,
       tradeOpen: state.tradeOpen,
       custom: SYMBOLS.slice(BUILTIN).map(x => ({ id: x.id, label: x.label, quote: x.quote || null })),
+      customInds: customDefs,
       indicators: state.indicators.map(i => ({ type: i.type, hidden: i.hidden, p: i.p })),
     }));
   } catch (e) { /* 保存できなくても表示は続ける */ }
@@ -223,6 +289,7 @@ function load() {
       }).filter(Boolean);
     });
   }
+  if (s && Array.isArray(s.customInds)) s.customInds.slice(0, CUSTOM_MAX).forEach(d => { if (d && CUSTOM_ID.test(d.id)) registerCustom(d); });
   const list = s && Array.isArray(s.indicators)
     ? s.indicators.filter(i => i && IND_TYPES[i.type])
     : [{ type: 'ma' }, { type: 'ccOnly' }, { type: 'enhanced' }];
@@ -298,7 +365,9 @@ function computeCC(bars, p) {
 function computeMA(bars, p) {
   const src = bars.map(b => srcOf(b, p.source));
   const n = Math.max(1, Math.round(p.len) || 1);
-  const val = p.kind === 'ema' ? rma(src, n, 2 / (n + 1)) : p.kind === 'rma' ? rma(src, n) : p.kind === 'wma' ? GT.helpers.wma(src, n) : sma(src, n);
+  const H = GT.helpers;
+  const val = p.kind === 'ema' ? rma(src, n, 2 / (n + 1)) : p.kind === 'rma' ? rma(src, n) : p.kind === 'vwma' ? H.vwma(src, bars.map(b => b.v), n)
+    : ['wma', 'hma', 'dema', 'tema', 'kama'].includes(p.kind) ? H[p.kind](src, n) : sma(src, n);
   return { val };
 }
 const lenOf = v => Math.max(1, Math.round(v) || 1);
@@ -1611,7 +1680,12 @@ function renderDialog() {
   const add = (...nodes) => nodes.forEach(nd => body.appendChild(nd));
 
   if (T.generic && dlg.tab === 'params') {
-    if (T.desc) add(el('p', { class: 'msg', text: T.desc }));
+    if (T.desc) add(el('p', { class: 'msg', text: T.custom ? `式: ${T.desc}` : T.desc }));
+    if (T.custom) {
+      const edit = el('button', { class: 'ctl btn', type: 'button', text: '式を編集する' });
+      edit.addEventListener('click', () => { const id = ind.type; closeDialog(true); openMaker(id); });
+      add(el('div', { class: 'mk-actions' }, [edit]));
+    }
     GT.DEFS[ind.type].params.forEach(q => {
       if (q.type === 'color') add(fColor(q.key, q.label));
       else if (q.type === 'source') add(fSelect(q.key, q.label, SOURCES));
@@ -1863,6 +1937,11 @@ function buildTopbar() {
       });
       if (!shown) list.appendChild(el('div', { class: 'sect', text: '見つかりませんでした。別の言葉で探してください。' }));
       if (q) return;
+      list.appendChild(el('div', { class: 'sect', text: '新しく作る' }));
+      const mkBtn = el('button', { type: 'button', class: 'mk-new', text: '＋ 自分で作る' }, []);
+      mkBtn.appendChild(el('small', { text: '式を書くだけで、オリジナルのインジケーターを作れます(見本つき)' }));
+      mkBtn.addEventListener('click', () => { toggleMenu(false); openMaker(null); });
+      list.appendChild(mkBtn);
       // この時間足で非表示にしているものは凡例が出ないので、ここから設定を開けるようにする
       const off = state.indicators.filter(i => !shownHere(i));
       if (off.length) list.appendChild(el('div', { class: 'sect', text: 'この時間足では非表示のもの' }));
@@ -1932,6 +2011,7 @@ function buildTopbar() {
   $('overlay').addEventListener('pointerdown', e => { if (e.target === $('overlay')) closeDialog(false); });
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
+    if (!$('mkOverlay').hidden) { closeMaker(); return; }
     closeDialog(false); toggleMenu(false); toggleDraw(false);
     if (!symOv.hidden) closeSym();
     if (state.tool || state.sel) { state.sel = null; setTool(null); }
@@ -3044,10 +3124,246 @@ function bindHelp() {
   if (!seen) openHelp();
 }
 
+// ---------------------------------------------------------------- 自分で作るインジケーター(作成画面)
+const MK_COLORS = ['#2f80ed', '#f5a623', '#27ae60', '#c0392b'];
+const MK_SAMPLES = [
+  ['2本の平均線の差', { name: '平均線の差', overlay: false, lines: [{ name: '差', expr: 'ema(close, p1) - ema(close, p2)', color: '#2f80ed' }], hist: '', bands: [0], inputs: [{ label: '短い期間', def: 12 }, { label: '長い期間', def: 26 }] }],
+  ['出来高が平均の何倍か', { name: '出来高の倍率', overlay: false, lines: [{ name: '倍率', expr: 'volume / sma(volume, p1)', color: '#f5a623' }], hist: '', bands: [1, 2], inputs: [{ label: '平均する期間', def: 20 }] }],
+  ['平均線からの離れ(%)', { name: '平均線からの離れ', overlay: false, lines: [{ name: '%', expr: '(close - sma(close, p1)) / sma(close, p1) * 100', color: '#27ae60' }], hist: '', bands: [0], inputs: [{ label: '期間', def: 25 }] }],
+  ['高値と安値の帯(チャートに重ねる)', { name: '高値安値の帯', overlay: true, lines: [{ name: '上', expr: 'highest(high, p1)', color: '#27ae60' }, { name: '下', expr: 'lowest(low, p1)', color: '#c0392b' }], hist: '', bands: [], inputs: [{ label: '期間', def: 20 }] }],
+  ['値幅で決める損切りの目安(チャートに重ねる)', { name: '損切りの目安', overlay: true, lines: [{ name: '目安', expr: 'highest(close, p1) - atr(p1) * p2', color: '#c0392b' }], hist: '', bands: [], inputs: [{ label: '期間', def: 22 }, { label: '値幅の何倍', def: 3 }] }],
+  ['上げた足・下げた足の出来高(棒グラフ)', { name: '上げ下げ出来高', overlay: false, lines: [], hist: 'if(close > open, volume, -volume)', bands: [0], inputs: [] }],
+];
+const blankCustom = () => ({ id: '', name: '', overlay: false, lines: [{ name: '線1', expr: '', color: MK_COLORS[0] }], hist: '', bands: [], inputs: [] });
+const mk = { def: null, editId: null, opener: null, focus: null };
+
+function openMaker(editId) {
+  const cur = editId && customDefs.find(d => d.id === editId);
+  mk.editId = cur ? cur.id : null;
+  mk.def = cur ? JSON.parse(JSON.stringify(cur)) : blankCustom();
+  mk.opener = document.activeElement;
+  mk.focus = null;
+  $('mkTitle').textContent = cur ? 'インジケーターを編集' : 'インジケーターを作る';
+  $('mkOverlay').hidden = false;
+  renderMaker();
+  $('mkName').focus();
+}
+function closeMaker() {
+  $('mkOverlay').hidden = true;
+  if (mk.opener && mk.opener.isConnected) mk.opener.focus();
+}
+// 式を確かめて、問題なければ「いまの値」を、あれば理由を出す
+function mkCheck(expr, out, optional) {
+  out.classList.remove('bad', 'good');
+  if (!expr.trim()) { out.textContent = optional ? '' : '式を入力してください。下の「使える部品」をタップすると入ります。'; return optional; }
+  const err = GT.checkFormula(expr);
+  if (err) { out.textContent = err; out.classList.add('bad'); return false; }
+  let text = '式は正しく読み取れました。';
+  try {
+    const vars = {};
+    mk.def.inputs.forEach((q, i) => { vars[`p${i + 1}`] = q.def; });
+    const vals = GT.evalFormula(GT.parseFormula(expr), state.bars, vars), last = vals[vals.length - 1];
+    if (state.bars.length) text = isFinite(last) ? `OK ・ いまの値: ${fmtCompact(last)}` : 'OK ・ いまの足では値が出ません(期間が長すぎる、0で割っている、など)';
+  } catch (e) { /* 値の見本が出せないだけなので、そのまま進める */ }
+  out.textContent = text; out.classList.add('good');
+  return true;
+}
+function mkValid() {
+  const d = mk.def;
+  const ok = d.name.trim() && d.lines.every(l => l.expr.trim() && !GT.checkFormula(l.expr)) &&
+    (!d.hist.trim() || d.overlay || !GT.checkFormula(d.hist)) && (d.lines.length || (!d.overlay && d.hist.trim()));
+  $('mkSave').disabled = !ok;
+  return !!ok;
+}
+function renderMaker() {
+  const d = mk.def, body = $('mkBody');
+  body.textContent = '';
+  const add = (...nodes) => nodes.forEach(nd => body.appendChild(nd));
+  const field = (label, hint, node) => el('label', { class: 'mk-field' }, [labelCell(label, hint), node]);
+  const exprBox = (value, onChange, optional, label) => {
+    const ta = el('textarea', { class: 'ctl mk-expr', rows: '2', spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', maxlength: '300', 'aria-label': label, placeholder: '例: sma(close, 20)' });
+    ta.value = value;
+    const out = el('p', { class: 'mk-check', 'aria-live': 'polite' });
+    const run = () => { onChange(ta.value); mkCheck(ta.value, out, optional); mkValid(); };
+    ta.addEventListener('input', run);
+    ta.addEventListener('focus', () => { mk.focus = ta; });
+    mkCheck(value, out, optional);
+    return [ta, out];
+  };
+
+  if (!mk.editId) {
+    const sel = el('select', { class: 'ctl', id: 'mkSample' }, [el('option', { value: '', text: '見本を選ぶ…' })].concat(MK_SAMPLES.map(([t], i) => el('option', { value: String(i), text: t }))));
+    sel.addEventListener('change', () => {
+      if (sel.value === '') return;
+      mk.def = JSON.parse(JSON.stringify(MK_SAMPLES[+sel.value][1])); mk.def.id = '';
+      renderMaker();
+    });
+    add(field('見本から始める', '選ぶと下の欄に入ります。そこから書きかえられます', sel));
+  }
+  const name = el('input', { class: 'ctl', id: 'mkName', type: 'text', maxlength: '30', placeholder: '例: 平均線の差' });
+  name.value = d.name;
+  name.addEventListener('input', () => { d.name = name.value; mkValid(); });
+  add(field('名前', null, name));
+
+  const place = el('select', { class: 'ctl', id: 'mkPlace' }, [el('option', { value: '0', text: 'チャートの下(別の枠)' }), el('option', { value: '1', text: 'チャートに重ねる' })]);
+  place.value = d.overlay ? '1' : '0';
+  place.addEventListener('change', () => { d.overlay = place.value === '1'; renderMaker(); });
+  add(field('表示する場所', '価格と同じくらいの大きさの値は「重ねる」、それ以外は「下」', place));
+
+  add(el('div', { class: 'sect', text: '調整できる数値(式の中で p1・p2・p3 と書くと使えます)' }));
+  d.inputs.forEach((q, i) => {
+    const lab = el('input', { class: 'ctl', type: 'text', maxlength: '20', 'aria-label': `p${i + 1} の名前` });
+    lab.value = q.label;
+    lab.addEventListener('input', () => { q.label = lab.value; });
+    const num = el('input', { class: 'ctl mk-num', type: 'number', step: 'any', inputmode: 'decimal', 'aria-label': `p${i + 1} の初期値` });
+    num.value = q.def;
+    num.addEventListener('input', () => { const v = parseFloat(num.value); if (isFinite(v)) { q.def = clamp(v, -1e9, 1e9); body.querySelectorAll('.mk-expr').forEach(t => t.dispatchEvent(new Event('input'))); } });
+    const row = [el('b', { class: 'mk-p', text: `p${i + 1}` }), lab, num];
+    if (i === d.inputs.length - 1) {
+      const rm = el('button', { class: 'x', type: 'button', 'aria-label': `p${i + 1} を削除`, text: '×' });
+      rm.addEventListener('click', () => { d.inputs.pop(); renderMaker(); });
+      row.push(rm);
+    }
+    add(el('div', { class: 'mk-row' }, row));
+  });
+  if (d.inputs.length < 3) {
+    const b = el('button', { class: 'ctl btn small', type: 'button', text: `＋ 数値を追加(p${d.inputs.length + 1})` });
+    b.addEventListener('click', () => { d.inputs.push({ label: '期間', def: 14 }); renderMaker(); });
+    add(b);
+  }
+
+  add(el('div', { class: 'sect', text: '線(4本まで)' }));
+  d.lines.forEach((l, i) => {
+    const nm = el('input', { class: 'ctl', type: 'text', maxlength: '12', 'aria-label': `線${i + 1} の名前` });
+    nm.value = l.name;
+    nm.addEventListener('input', () => { l.name = nm.value; });
+    const col = el('input', { type: 'color', 'aria-label': `線${i + 1} の色` });
+    col.value = l.color;
+    col.addEventListener('input', () => { l.color = col.value; });
+    const rm = el('button', { class: 'x', type: 'button', 'aria-label': `線${i + 1} を削除`, text: '×' });
+    rm.addEventListener('click', () => { d.lines.splice(i, 1); renderMaker(); });
+    add(el('div', { class: 'mk-row' }, [nm, col, rm]));
+    add(...exprBox(l.expr, v => { l.expr = v; }, false, `線${i + 1} の式`));
+  });
+  if (d.lines.length < 4) {
+    const b = el('button', { class: 'ctl btn small', type: 'button', text: '＋ 線を追加' });
+    b.addEventListener('click', () => { d.lines.push({ name: `線${d.lines.length + 1}`, expr: '', color: MK_COLORS[d.lines.length % 4] }); renderMaker(); });
+    add(b);
+  }
+
+  if (!d.overlay) {
+    add(el('div', { class: 'sect', text: '棒グラフ(なくてもかまいません。プラスは緑、マイナスは赤)' }));
+    add(...exprBox(d.hist, v => { d.hist = v; }, true, '棒グラフの式'));
+    const bands = el('input', { class: 'ctl', type: 'text', inputmode: 'text', placeholder: '例: 0 または 70, 30', 'aria-label': '基準線' });
+    bands.value = d.bands.join(', ');
+    bands.addEventListener('input', () => { d.bands = bands.value.split(/[,、\s]+/).map(Number).filter(v => isFinite(v) && Math.abs(v) <= 1e12).slice(0, 4); });
+    add(field('基準線', '横に引く目安の線。数をカンマで区切って4本まで', bands));
+  }
+
+  // 使える部品:タップすると、最後にさわった式の欄に入る
+  const parts = el('details', { class: 'mk-parts' }, [el('summary', { text: '使える部品(タップで式に入ります)' })]);
+  const chips = (title, items) => {
+    parts.appendChild(el('div', { class: 'sect', text: title }));
+    const wrap = el('div', { class: 'mk-chips' });
+    items.forEach(([text, hint]) => {
+      const b = el('button', { type: 'button', class: 'mk-chip', text, title: hint || '' });
+      if (hint) b.appendChild(el('small', { text: hint }));
+      b.addEventListener('click', () => {
+        const ta = mk.focus && mk.focus.isConnected ? mk.focus : body.querySelector('.mk-expr');
+        if (!ta) return;
+        const a = ta.selectionStart == null ? ta.value.length : ta.selectionStart, z = ta.selectionEnd == null ? a : ta.selectionEnd;
+        ta.value = (ta.value.slice(0, a) + text + ta.value.slice(z)).slice(0, 300);
+        ta.focus(); ta.selectionStart = ta.selectionEnd = Math.min(300, a + text.length);
+        ta.dispatchEvent(new Event('input'));
+      });
+      wrap.appendChild(b);
+    });
+    parts.appendChild(wrap);
+  };
+  chips('価格・出来高', [['close', '終値'], ['open', '始値'], ['high', '高値'], ['low', '安値'], ['volume', '出来高'], ['hl2', '高値と安値の平均'], ['hlc3', '高・安・終の平均'], ['ohlc4', '4つの平均']]);
+  chips('記号', [[' + '], [' - '], [' * ', 'かける'], [' / ', 'わる'], ['('], [')'], [' > ', '大きければ 1'], [' < ', '小さければ 1']]);
+  chips('関数', Object.keys(GT.FUNCS).map(k => [GT.FUNCS[k].eg, GT.FUNCS[k].desc]));
+  add(parts);
+
+  if (!mk.editId) {
+    const imp = el('details', { class: 'mk-parts' }, [el('summary', { text: 'ほかの人が作ったものを取り込む' })]);
+    const ta = el('textarea', { class: 'ctl mk-expr', rows: '3', spellcheck: 'false', id: 'mkImport', placeholder: 'GTI1: で始まる文字を貼り付けてください', 'aria-label': '共有された文字' });
+    const go = el('button', { class: 'ctl btn small', type: 'button', id: 'mkImportGo', text: '読み込む' });
+    const out = el('p', { class: 'mk-check' });
+    go.addEventListener('click', () => {
+      const def = customFromText(ta.value);
+      if (!def) { out.textContent = '読み取れませんでした。「GTI1:」から最後まで、欠けずに貼り付けているか確かめてください。'; out.classList.add('bad'); return; }
+      mk.def = def; renderMaker();
+      toast('読み込みました。内容を確かめてから保存してください。');
+    });
+    imp.appendChild(el('p', { class: 'msg', text: '取り込めるのは計算の式だけです。プログラムが動くことはありません。' }));
+    imp.appendChild(ta); imp.appendChild(go); imp.appendChild(out);
+    add(imp);
+  }
+  $('mkShare').hidden = $('mkDelete').hidden = !mk.editId;
+  mkValid();
+}
+function saveMaker() {
+  if (!mkValid()) return;
+  const editing = !!mk.editId;
+  if (!editing && customDefs.length >= CUSTOM_MAX) { toast(`自分で作れるのは${CUSTOM_MAX}個までです。使っていないものを削除してください。`); return; }
+  const def = registerCustom(Object.assign({}, mk.def, { id: mk.editId || '' }));
+  if (!def) { toast('保存できませんでした。式と名前を確かめてください。'); return; }
+  if (editing) {
+    // すでにチャートに出しているものは、新しい式と初期値で作り直す(表示・非表示の設定は残す)
+    state.indicators.forEach(ind => {
+      if (ind.type !== def.id) return;
+      const base = defaultParams(def.id);
+      base.vis = ind.p.vis;
+      if (ind.p.weight && !def.overlay) base.weight = ind.p.weight;
+      ind.p = base;
+    });
+    recompute(); save(); draw();
+    toast('変更を保存しました。');
+  } else if (state.indicators.length >= 30) {
+    save();
+    toast('保存しました。インジケーターが30個あるため、チャートには追加していません。');
+  } else {
+    addIndicator(def.id);
+    toast(`「${def.name}」をチャートに追加しました。`);
+  }
+  closeMaker();
+}
+function deleteCustom(id) {
+  const at = customDefs.findIndex(d => d.id === id);
+  if (at < 0) return;
+  customDefs.splice(at, 1);
+  state.indicators = state.indicators.filter(i => i.type !== id);
+  delete GT.DEFS[id]; delete IND_TYPES[id];
+  save(); draw();
+}
+function bindMaker() {
+  const ov = $('mkOverlay');
+  $('mkClose').addEventListener('click', closeMaker);
+  $('mkCancel').addEventListener('click', closeMaker);
+  $('mkSave').addEventListener('click', saveMaker);
+  let armed = 0;
+  $('mkDelete').addEventListener('click', () => {
+    // 2回押して初めて消す(押しまちがい対策)
+    if (Date.now() - armed > 4000) { armed = Date.now(); toast('もう一度「削除」を押すと、このインジケーターを消します。'); return; }
+    armed = 0;
+    deleteCustom(mk.editId); closeMaker(); toast('削除しました。');
+  });
+  $('mkShare').addEventListener('click', () => {
+    const cur = customDefs.find(d => d.id === mk.editId);
+    if (!cur) return;
+    const text = customToText(cur);
+    const done = () => toast('共有用の文字をコピーしました。相手は「自分で作る」→「取り込む」に貼り付けます。');
+    const fallback = () => { window.prompt('この文字をコピーして、相手に送ってください。', text); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  });
+}
+
 // ---------------------------------------------------------------- 起動
 load();
 buildTopbar();
 bindTrade();
+bindMaker();
 bindHelp();
 bindPointer();
 new ResizeObserver(resize).observe(wrap);
