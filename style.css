@@ -455,3 +455,18 @@ body {
 a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .tr-note a { color: inherit; }
 @media (max-width: 760px) { #guideLink { display: none; } }
+
+/* 価格が動いた瞬間に、上げは緑・下げは赤で一瞬光らせる */
+@keyframes tickUp { from { color: #1a9d8a; background: rgba(31, 157, 143, .18); } to { background: transparent; } }
+@keyframes tickDown { from { color: #e0463f; background: rgba(224, 70, 63, .18); } to { background: transparent; } }
+#trPrice { border-radius: 4px; padding: 0 4px; margin-right: -4px; }
+#trPrice.tick-up { animation: tickUp .7s ease-out; color: #1a9d8a; }
+#trPrice.tick-down { animation: tickDown .7s ease-out; color: #e0463f; }
+@media (prefers-reduced-motion: reduce) { #trPrice.tick-up, #trPrice.tick-down { animation: none; } }
+
+.tr-quote { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: -2px 0 6px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tr-quote[hidden] { display: none; }
+.tr-quote b { color: var(--text); font-weight: 600; border-radius: 3px; padding: 0 2px; }
+.tr-quote b.tick-up { animation: tickUp .7s ease-out; }
+.tr-quote b.tick-down { animation: tickDown .7s ease-out; }
+.tr-btn span { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }

@@ -437,6 +437,7 @@ async function loadData() {
   setStatus('', '読み込み中');
   setLoading(true);
   closeStream();
+  feed.lastTick = 0;
   more.busy = false; more.done = false; more.retryAt = 0;
   try {
     const raw = await fetchKlines(sym.id, iv.api, 1000);
@@ -474,29 +475,99 @@ function mergeTail(tail) {
 }
 // リアルタイム配信。つながらないときは下の poll が代わりを務める
 let ws = null;
-const STREAMS = ['wss://data-stream.binance.vision/ws/', 'wss://stream.binance.com:9443/ws/'];
+const STREAMS = ['wss://data-stream.binance.vision/stream?streams=', 'wss://stream.binance.com:9443/stream?streams='];
+const feed = { lastMsg: 0, lastTick: 0, tick: null, timer: 0, bid: NaN, ask: NaN, quoteAt: 0, quoteSym: '' }; // 配信の状態
 function closeStream() {
   const s = ws;
   ws = null;
+  clearTimeout(feed.timer); feed.timer = 0; feed.tick = null;
+  feed.bid = feed.ask = NaN; feed.quoteAt = 0;
+  renderQuote();
   if (s) { try { s.close(); } catch (e) { /* 何もしない */ } }
+}
+// 約定(1件ごとの売買)を、いちばん新しい足に反映する。件数が多いので、描き直しは 0.2 秒に1回までにする
+function applyTick() {
+  feed.timer = 0;
+  const tk = feed.tick, raw = state.raw;
+  feed.tick = null;
+  if (!tk || !raw.length) return;
+  const last = raw[raw.length - 1];
+  if (tk.t < last.t || tk.p === last.c) return;
+  noteTick(tk.p > last.c ? 1 : -1);
+  mergeTail([{ t: last.t, o: last.o, h: Math.max(last.h, tk.p), l: Math.min(last.l, tk.p), c: tk.p, v: last.v }]);
+}
+// 値が動いたことを、目で分かるようにする
+let flashTimer = 0;
+function noteTick(dir) {
+  feed.lastTick = Date.now();
+  const el = $('trPrice');
+  el.classList.remove('tick-up', 'tick-down');
+  if (dir) { void el.offsetWidth; el.classList.add(dir > 0 ? 'tick-up' : 'tick-down'); }
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => el.classList.remove('tick-up', 'tick-down'), 700);
+}
+// いま有効な気配値(売れる価格 bid と、買える価格 ask)。古いものや別の銘柄のものは使わない
+function liveQuote(sym) {
+  if (feed.quoteSym !== sym || Date.now() - feed.quoteAt > 8000 || !(feed.bid > 0) || !(feed.ask > 0)) return null;
+  return { bid: feed.bid, ask: feed.ask };
+}
+let lastQuoteText = '';
+function renderQuote() {
+  const q = liveQuote(state.symbol), box = $('trQuoteLine');
+  if (!q) { if (!box.hidden) box.hidden = true; lastQuoteText = ''; setTxt('trSellPx', ''); setTxt('trBuyPx', ''); return; }
+  const text = `${q.bid}|${q.ask}`;
+  if (text === lastQuoteText) return;
+  if (lastQuoteText) {
+    // 気配値が動いたら、動いた側を一瞬光らせる
+    const [pb, pa] = lastQuoteText.split('|').map(Number);
+    [['trBid', q.bid, pb], ['trAsk', q.ask, pa]].forEach(([id, now, was]) => {
+      if (now === was) return;
+      const n = $(id);
+      n.classList.remove('tick-up', 'tick-down'); void n.offsetWidth;
+      n.classList.add(now > was ? 'tick-up' : 'tick-down');
+    });
+  }
+  lastQuoteText = text;
+  box.hidden = false;
+  setTxt('trBid', fmtPrice(q.bid, q.ask)); setTxt('trAsk', fmtPrice(q.ask));
+  setTxt('trSpread', `差 ${fmtPrice(q.ask - q.bid, q.ask)}`);
+  setTxt('trSellPx', fmtPrice(q.bid, q.ask)); setTxt('trBuyPx', fmtPrice(q.ask));
 }
 function openStream() {
   closeStream();
   if (!state.live || !window.WebSocket) return;
   const token = state.loadToken;
-  const name = `${state.symbol.toLowerCase()}@kline_${curInterval().api}`;
+  const sym = state.symbol.toLowerCase();
+  // 足の更新(kline)に加えて、約定(aggTrade)も受け取り、1件ごとの値動きを表示する
+  // depth5 は板(買い注文・売り注文)の上位。取引がない間も、気配値の動きが分かる
+  const name = `${sym}@kline_${curInterval().api}/${sym}@aggTrade/${sym}@depth5@1000ms`;
+  const streamSym = state.symbol;
   let k = 0;
   const connect = () => {
     if (token !== state.loadToken || k >= STREAMS.length) return;
     let opened = false, s;
     try { s = new WebSocket(STREAMS[k] + name); } catch (e) { k++; connect(); return; }
     ws = s;
-    s.onopen = () => { opened = true; };
+    feed.lastMsg = Date.now();
+    s.onopen = () => { opened = true; feed.lastMsg = Date.now(); };
     s.onmessage = ev => {
       if (token !== state.loadToken) return;
+      feed.lastMsg = Date.now();
       try {
-        const m = JSON.parse(ev.data).k;
-        if (m) mergeTail([{ t: +m.t, o: +m.o, h: +m.h, l: +m.l, c: +m.c, v: +m.v }]);
+        const d = JSON.parse(ev.data).data;
+        if (!d) return;
+        if (d.e === 'kline' && d.k) {
+          const m = d.k, prev = state.raw[state.raw.length - 1];
+          if (prev && +m.c !== prev.c) noteTick(+m.c > prev.c ? 1 : -1);
+          mergeTail([{ t: +m.t, o: +m.o, h: +m.h, l: +m.l, c: +m.c, v: +m.v }]);
+        } else if (d.e === 'aggTrade') {
+          feed.tick = { t: +d.T, p: +d.p };
+          if (!feed.timer) feed.timer = setTimeout(applyTick, 200);
+        } else if (d.bids && d.asks && d.bids[0] && d.asks[0]) {
+          feed.bid = +d.bids[0][0]; feed.ask = +d.asks[0][0];
+          feed.quoteAt = Date.now(); feed.quoteSym = streamSym;
+          renderQuote();
+        }
       } catch (e) { /* 壊れたメッセージは読み飛ばす */ }
     };
     s.onclose = () => {
@@ -509,11 +580,17 @@ function openStream() {
 }
 async function poll() {
   if (!state.live || document.hidden) return;
-  if (ws && ws.readyState <= 1) return; // 配信中・接続中は任せる
+  const quiet = Date.now() - feed.lastMsg;
+  // 配信が届いている間は任せる。黙ったままなら、こちらから取りにいく
+  if (ws && ws.readyState <= 1 && quiet < 12000) return;
+  // 1分以上なにも届かなければ、つなぎ直す
+  if (ws && quiet > 60000) closeStream();
   const token = state.loadToken, iv = curInterval();
   try {
     const tail = await fetchKlines(state.symbol, iv.api, 3);
     if (token !== state.loadToken) return;
+    const prev = state.raw[state.raw.length - 1], now = tail[tail.length - 1];
+    if (prev && now && now.c !== prev.c) noteTick(now.c > prev.c ? 1 : -1);
     mergeTail(tail);
     if (!ws) openStream();
   } catch (e) { /* 次の周期でやり直す */ }
@@ -1264,7 +1341,10 @@ function updateLegends() {
         setVals(le, ov.out && i >= 0 ? [['', fmtPrice(ov.out.val[i]), ov.p.color]] : []);
       });
       setText(el, '.name', `${curSymbol().label} · ${curInterval().label}`);
-      setText(el, '.params', state.live ? 'Binance' : 'デモ');
+      const lt = feed.lastTick ? new Date(feed.lastTick) : null;
+      setText(el, '.params', state.live
+        ? `Binance · ${lt ? `${pad2(lt.getHours())}:${pad2(lt.getMinutes())}:${pad2(lt.getSeconds())} に値動き` : '接続中(次の取引を待っています)'}`
+        : 'デモ');
       el.classList.add('main');
       const b = state.bars[i];
       if (!b) { setVals(el, []); return; }
@@ -1893,7 +1973,9 @@ const pnlClass = v => (v > 0 ? 'up' : v < 0 ? 'down' : '');
 /* 注文を約定させる。成功なら null、できないときは理由の文を返す。
  * qty を渡すと、その数量ちょうどで約定する(決済用)。 */
 function execute(sym, side, notional, reason, qty) {
-  const px = T.last[sym];
+  // 気配値が取れているときは、買いは売り注文の価格(ask)、売りは買い注文の価格(bid)で約定させる
+  const quote = liveQuote(sym);
+  const px = quote ? (side === 'buy' ? quote.ask : quote.bid) : T.last[sym];
   if (!(px > 0)) return '価格を取得できていません。';
   if (qty === undefined) qty = notional / px; else notional = qty * px;
   if (!(notional > 0)) return '金額を入力してください。';
@@ -2333,7 +2415,7 @@ bindPointer();
 new ResizeObserver(resize).observe(wrap);
 resize();
 loadData();
-setInterval(poll, 15000);
+setInterval(poll, 5000);
 setInterval(pollPositions, 15000);
 setInterval(() => { if (!document.hidden && !dlg.ind) draw(); }, 1000); // 残り時間の表示を進める
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
