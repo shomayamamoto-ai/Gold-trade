@@ -3,7 +3,9 @@
   // 公開ページが他のサイトの中に埋め込まれて、操作を誘導されるのを防ぐ
   if (window.top !== window.self && /\.github\.io$/.test(location.hostname)) { document.documentElement.hidden = true; return; }
   const $ = id => document.getElementById(id);
-  const CHART_KEY = 'gold-trade-chart-v1', KEY = 'gold-trade-guide-v1';
+  // 教科書と操作マニュアルで同じ仕組みを使う。読んでいた場所は、ページごとに別々に覚える
+  const CHART_KEY = 'gold-trade-chart-v1', KEY = document.documentElement.dataset.key === 'manual' ? 'gold-trade-manual-v1' : 'gold-trade-guide-v1';
+  const PAGE_TITLE = document.documentElement.dataset.title || 'トレードの教科書';
   const read = k => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { return {}; } };
   const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 保存できなくても読める */ } };
   const prefs = read(KEY);
@@ -98,7 +100,7 @@
     const chapter = cur ? (cur.isChapter ? cur : items.find(it => it.isChapter && it.grp === cur.grp)) : null;
     nav.querySelectorAll('.grp').forEach(gp => gp.classList.toggle('on', !!chapter && gp === chapter.grp));
     if (chapter) chapter.a.classList.add('on');
-    where.textContent = chapter ? chapter.label : 'トレードの教科書';
+    where.textContent = chapter ? chapter.label : PAGE_TITLE;
     if (cur && scrollY > innerHeight) { prefs.pos = id; prefs.posLabel = (chapter && chapter !== cur ? chapter.label + ' › ' : '') + cur.label; write(KEY, prefs); }
   }
   addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });

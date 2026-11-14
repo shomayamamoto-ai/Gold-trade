@@ -28,13 +28,22 @@ function prettySymbol(id) {
 }
 // api: 取引所に問い合わせる足 / group: 何本まとめて1本にするか
 const INTERVALS = [
+  { id: '1m', label: '1分', api: '1m', ms: 6e4, group: 1 },
+  { id: '5m', label: '5分', api: '5m', ms: 3e5, group: 1 },
   { id: '15m', label: '15分', api: '15m', ms: 9e5, group: 1 },
+  { id: '30m', label: '30分', api: '30m', ms: 18e5, group: 1 },
   { id: '1h', label: '1時間', api: '1h', ms: 36e5, group: 1 },
   { id: '4h', label: '4時間', api: '4h', ms: 144e5, group: 1 },
   { id: '1d', label: '日', api: '1d', ms: 864e5, group: 1 },
-  { id: '2d', label: '2日', api: '1d', ms: 864e5, group: 2 },
   { id: '1w', label: '週', api: '1w', ms: 6048e5, group: 1 },
+  // 月足は、月によって長さが違う。ms は目安(平均の長さ)で、足の区切りは barEnd で暦どおりに求める
+  { id: '1M', label: '月', api: '1M', ms: 26298e5, group: 1, month: true },
 ];
+// ある足が終わる時刻(=次の足が始まる時刻)。月足は、翌月の1日(協定世界時)
+function barEnd(t, iv) {
+  if (iv.month) { const d = new Date(t); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1); }
+  return t + iv.ms * iv.group;
+}
 const HOSTS = ['https://data-api.binance.vision', 'https://api.binance.com'];
 const STORE_KEY = 'gold-trade-chart-v1';
 const UP = '#26a69a';
@@ -683,13 +692,18 @@ function applyTick() {
   const tk = feed.tick, raw = state.raw, vol = feed.vol;
   feed.tick = null; feed.vol = 0;
   if (!tk || !raw.length) return;
-  const last = raw[raw.length - 1], ms = curInterval().ms;
+  const last = raw[raw.length - 1], iv = curInterval();
   if (tk.t < last.t || (tk.p === last.c && !(vol > 0))) return;
   if (tk.p !== last.c) noteTick(tk.p > last.c ? 1 : -1);
   const t0 = mono();
   // 次の足の時間に入ってからの約定は、確定した足に混ぜず、新しい足として始める
   // (足の更新の知らせより先に約定が届くことがある。混ぜると、確定した足の終値が変わってしまう)
-  if (tk.t >= last.t + ms) mergeTail([{ t: last.t + Math.floor((tk.t - last.t) / ms) * ms, o: tk.p, h: tk.p, l: tk.p, c: tk.p, v: vol }]);
+  if (tk.t >= barEnd(last.t, { ms: iv.ms, group: 1, month: iv.month })) {
+    let nt = last.t;
+    if (iv.month) { while (barEnd(nt, iv) <= tk.t) nt = barEnd(nt, iv); }
+    else nt = last.t + Math.floor((tk.t - last.t) / iv.ms) * iv.ms;
+    mergeTail([{ t: nt, o: tk.p, h: tk.p, l: tk.p, c: tk.p, v: vol }]);
+  }
   else mergeTail([{ t: last.t, o: last.o, h: Math.max(last.h, tk.p), l: Math.min(last.l, tk.p), c: tk.p, v: last.v + vol }], true);
   feed.cost = feed.cost * 0.7 + (mono() - t0) * 0.3; // 反映にかかった時間(ならした値)
   feed.n++;
@@ -1072,7 +1086,7 @@ function render() {
     const intraday = curInterval().ms < 864e5;
     // 分足・時間足は、きりのよい時刻(毎時0分、0時など)に目盛りを置く
     const need = step * barSpan();
-    const period = [9e5, 18e5, 36e5, 72e5, 144e5, 216e5, 432e5, 864e5, 1728e5, 6048e5].find(v => v >= need) || 6048e5;
+    const period = [3e5, 6e5, 9e5, 18e5, 36e5, 72e5, 144e5, 216e5, 432e5, 864e5, 1728e5, 6048e5].find(v => v >= need) || 6048e5;
     let prev = null;
     for (let i = intraday ? i0 : Math.ceil(i0 / step) * step; i <= i1; i += intraday ? 1 : step) {
       const d = new Date(bars[i].t);
@@ -1231,7 +1245,7 @@ function drawMain(pane, i0, i1, th) {
   if (ly > pane.y && ly < pane.y + pane.h) {
     // 価格の下に、この足が確定するまでの残り時間を出す
     const iv = curInterval();
-    const left = last.t + iv.ms * iv.group - Date.now();
+    const left = barEnd(last.t, iv) - Date.now();
     const y = clamp(ly, pane.y + 9, pane.y + pane.h - (left > 0 ? 27 : 9));
     axisTag(y, fmtPrice(last.c), col, '#ffffff', pane);
     if (left > 0) axisTag(y + 18, fmtRemain(left), col, '#ffffff', pane);
@@ -2185,6 +2199,8 @@ function buildTopbar() {
       save(); loadData();
     });
     seg.appendChild(b);
+    // スマホでは時間足の列が横にスクロールする。選んでいるものが見える位置に来るようにする
+    if (iv.id === state.interval) setTimeout(() => { if (b.scrollIntoView) b.scrollIntoView({ block: 'nearest', inline: 'center' }); }, 0);
   });
 
   const menu = $('indMenu'), btn = $('indBtn');
@@ -2292,7 +2308,9 @@ function buildTopbar() {
    }],
    ['線をすべて削除', 'この銘柄に引いた線を全部消す', () => { state.drawings[state.symbol] = []; state.sel = null; save(); setTool(null); }],
    ['画像として保存', 'いまのチャートを PNG 画像でダウンロード', () => { state.hover = null; render(); saveImage(); }],
-   ['使い方', '画面の動かし方と、主な機能の場所', () => openHelp()],
+   ['使い方の案内', '画面の主な場所を、順番に案内します(1分ほど)', () => startTour()],
+   ['使い方(一覧)', '画面の動かし方と、主な機能の場所', () => openHelp()],
+   ['操作マニュアル', 'すべての機能の使い方を、目的別にまとめたページ', () => { location.href = 'manual.html'; }],
    ['教科書を読む', '銘柄・インジケーター・手法・資金管理の解説', () => { location.href = 'guide.html'; }],
   ].forEach(([name, hint, fn]) => {
     const b = el('button', { type: 'button', text: name });
@@ -3560,7 +3578,7 @@ function drawPosSpark(pos, q) {
   // デモ表示のとき(本物の価格ではない)と、読み込みの途中(前の銘柄・時間足の足が残っている)は出さない
   if (!state.live || state.loading) { $('pSparkBox').hidden = true; sparkKey = ''; return; }
   let i0 = n;
-  while (i0 > 0 && bars[i0 - 1].t + curInterval().ms * curInterval().group > pos.opened) i0--; // 建てた時刻を含む足から
+  while (i0 > 0 && barEnd(bars[i0 - 1].t, curInterval()) > pos.opened) i0--; // 建てた時刻を含む足から
   const pts = bars.slice(i0).map(b => pos.qty * (b.c - pos.avg));
   const few = pts.length < 2;
   $('pSparkBox').hidden = few;
@@ -3716,10 +3734,108 @@ function bindHelp() {
   $('helpClose').addEventListener('click', close);
   ov.addEventListener('pointerdown', e => { if (e.target === ov) close(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !ov.hidden) close(); });
-  // 初めて開いたときだけ、自動で出す
+  $('helpTour').addEventListener('click', () => { ov.hidden = true; startTour(); });
+  // 初めて開いたときだけ、ポップアップ式の案内を自動で始める
   let seen = false;
   try { seen = !!localStorage.getItem(HELP_KEY); } catch (e) { seen = true; }
-  if (!seen) openHelp();
+  if (!seen) startTour();
+}
+
+// ---------------------------------------------------------------- ポップアップ式の案内(初回に自動で出る)
+/* 画面の部品を1つずつ明るく囲み、その横に説明の吹き出しを出す。
+ * sel は、囲む部品の候補(先に見つかった、画面に出ているものを使う)。なければ画面の中央に出す */
+const TOUR_STEPS = [
+  { title: 'ようこそ', body: 'このサイトは、暗号資産や金のチャートを見ながら、仮想の資金で売買の練習ができる場所です。実際のお金は動きません。\nこれから1分ほどで、画面の主な場所を案内します。' },
+  { sel: ['#symbol'], title: '銘柄を選ぶ', body: 'ここで、表示する銘柄を変えます。いちばん下の「すべての銘柄から探す」を選ぶと、取引所にあるすべての銘柄から選べます。' },
+  { sel: ['#intervals'], title: '時間足を選ぶ', body: 'ローソク足1本が表す時間の長さです。1分・5分・15分・30分・1時間・4時間・日・週・月から選べます。',
+    touch: 'スマホでは、この列を左右にスワイプすると、隠れている時間足が出てきます。' },
+  { sel: ['#chartWrap'], title: 'チャートを動かす', inside: true,
+    touch: '指1本で左右にスワイプすると、過去にさかのぼれます。指2本で広げる・つまむと、拡大・縮小します。\nチャートをタップすると十字線が出て、その足の始値・高値・安値・終値が上に出ます。',
+    mouse: 'ドラッグで左右に動かし、マウスのホイールで拡大・縮小します。ダブルクリックで元の表示に戻ります。\nマウスを重ねた足の始値・高値・安値・終値が、左上に出ます。' },
+  { sel: ['#indBtn'], title: 'インジケーターを足す', body: '移動平均線や RSI など、57種類の分析用の線を追加できます。名前で検索でき、☆ を押すと「よく使う」に入ります。\nいちばん下の「＋ 自分で作る」では、式を書いてオリジナルも作れます。' },
+  { sel: ['#drawBtn'], title: 'ツール', body: '線を引く(水平線・トレンドライン・フィボナッチなど)、価格のお知らせを置く、売買ルールを過去のデータで試す、表示を切りかえる、画像で保存する、といった機能が入っています。' },
+  { sel: ['#tbOpen', '#tradeBtn'], title: 'デモトレード', body: '仮想の資金 10,000 で、買い・売りの練習ができます。利確・損切りの価格を入れておくと、届いたときに自動で決済します。\n成績は「成績を分析」で振り返れます。' },
+  { sel: ['#guideLink', '#drawBtn'], title: '学ぶ・調べる', body: '「教科書」には、銘柄の特徴・インジケーターの読み方・手法・資金管理をまとめています。\n操作で迷ったら、「ツール → 操作マニュアル」に、すべての機能の使い方があります。' },
+  { title: '準備ができました', body: 'まずは銘柄と時間足を変えてみて、チャートを動かしてみてください。\nこの案内は、「ツール → 使い方の案内」から、いつでも見直せます。' },
+];
+const tour = { i: 0, on: false, opener: null };
+function tourTarget(step) {
+  for (const s of step.sel || []) {
+    const e = document.querySelector(s);
+    if (!e) continue;
+    const r = e.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight) return e;
+  }
+  return null;
+}
+function renderTour() {
+  if (!tour.on) return;
+  const step = TOUR_STEPS[tour.i], touchUi = window.matchMedia && matchMedia('(hover: none), (max-width: 760px)').matches;
+  const pop = $('tourPop'), hole = $('tourHole'), target = tourTarget(step);
+  $('tourTitle').textContent = step.title;
+  $('tourBody').textContent = [step.body, touchUi ? step.touch : step.mouse].filter(Boolean).join('\n');
+  $('tourCount').textContent = `${tour.i + 1} / ${TOUR_STEPS.length}`;
+  $('tourPrev').hidden = tour.i === 0;
+  $('tourSkip').hidden = tour.i === TOUR_STEPS.length - 1;
+  $('tourNext').textContent = tour.i === TOUR_STEPS.length - 1 ? 'はじめる' : '次へ';
+  const vw = window.innerWidth, vh = window.innerHeight, gap = 12;
+  pop.style.width = `${Math.min(360, vw - 24)}px`;
+  pop.style.left = '0px'; pop.style.top = '0px';
+  const ph = pop.offsetHeight, pw = pop.offsetWidth;
+  if (!target) {
+    hole.hidden = true;
+    $('tour').classList.add('plain');
+    pop.style.left = `${Math.round((vw - pw) / 2)}px`; pop.style.top = `${Math.round(Math.max(12, (vh - ph) / 2))}px`;
+    return;
+  }
+  $('tour').classList.remove('plain');
+  const r = target.getBoundingClientRect(), pad = 6;
+  const hx = Math.max(4, r.left - pad), hy = Math.max(4, r.top - pad), hw = Math.min(vw - 4, r.right + pad) - hx, hh = Math.min(vh - 4, r.bottom + pad) - hy;
+  hole.hidden = false;
+  hole.style.left = `${hx}px`; hole.style.top = `${hy}px`; hole.style.width = `${hw}px`; hole.style.height = `${hh}px`;
+  // 吹き出しは、部品の下 → 上 → 中(大きな部品のとき)の順で、収まる場所に置く
+  let top;
+  if (step.inside || (hy + hh + gap + ph > vh - 8 && hy - gap - ph < 8)) top = clamp(hy + (hh - ph) / 2, 8, Math.max(8, vh - ph - 8));
+  else if (hy + hh + gap + ph <= vh - 8) top = hy + hh + gap;
+  else top = hy - gap - ph;
+  pop.style.top = `${Math.round(top)}px`;
+  pop.style.left = `${Math.round(clamp(hx + hw / 2 - pw / 2, 12, Math.max(12, vw - pw - 12)))}px`;
+}
+function startTour() {
+  // 開いているメニューや画面は閉じてから始める
+  document.querySelectorAll('.overlay').forEach(o => { o.hidden = true; });
+  document.querySelectorAll('.menu').forEach(m => { m.hidden = true; });
+  tour.i = 0; tour.on = true; tour.opener = document.activeElement;
+  $('tour').hidden = false;
+  renderTour();
+  $('tourNext').focus();
+}
+function endTour() {
+  if (!tour.on) return;
+  tour.on = false;
+  $('tour').hidden = true;
+  try { localStorage.setItem(HELP_KEY, '1'); } catch (e) { /* 保存できなくても閉じる */ }
+  if (tour.opener && tour.opener.isConnected && tour.opener.focus) tour.opener.focus();
+}
+function bindTour() {
+  $('tourNext').addEventListener('click', () => { if (tour.i >= TOUR_STEPS.length - 1) endTour(); else { tour.i++; renderTour(); $('tourNext').focus(); } });
+  $('tourPrev').addEventListener('click', () => { if (tour.i > 0) { tour.i--; renderTour(); } });
+  $('tourSkip').addEventListener('click', endTour);
+  window.addEventListener('resize', renderTour);
+  // 案内の間は、キー操作を案内だけに向ける(Esc で終了、左右の矢印で前後)
+  document.addEventListener('keydown', e => {
+    if (!tour.on) return;
+    if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); endTour(); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); $('tourNext').click(); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); $('tourPrev').click(); }
+    else if (e.key === 'Tab') {
+      // フォーカスを吹き出しの中にとどめる
+      const btns = [...$('tourPop').querySelectorAll('button')].filter(x => !x.hidden);
+      const at = btns.indexOf(document.activeElement);
+      e.preventDefault();
+      btns[(at + (e.shiftKey ? -1 : 1) + btns.length) % btns.length].focus();
+    }
+  }, true);
 }
 
 // ---------------------------------------------------------------- 自分で作るインジケーター(作成画面)
@@ -4280,6 +4396,7 @@ load();
 buildTopbar();
 bindTrade();
 bindMaker();
+bindTour();
 bindBacktest();
 bindHelp();
 bindPointer();

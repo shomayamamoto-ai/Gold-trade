@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="ja" data-key="manual" data-title="操作マニュアル">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%23c8961e%27/%3E%3Cpath d=%27M6 22l6-7 5 4 9-11%27 fill=%27none%27 stroke=%27%23fff%27 stroke-width=%273%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
+<title>操作マニュアル | Gold Trade Chart</title>
+<meta name="description" content="Gold Trade Chart の操作マニュアル。チャートの見方、インジケーター、線の引き方、デモトレード、成績の振り返り、困ったときの対処をまとめています">
+<style>
+:root {
+  --bg: #ffffff; --panel: #f7f8fa; --text: #1b1f2a; --muted: #636a79;
+  --line: #e1e5ec; --accent: #9a6f00; --up: #12806f; --down: #c73a34;
+  --fact: #1f6feb; --common: #5b6472; --idea: #9a6f00;
+}
+:root[data-theme="dark"] {
+  --bg: #12151c; --panel: #1b1f29; --text: #d9dde6; --muted: #949bab;
+  --line: #2a2f3b; --accent: #e0b040; --up: #3cc4ae; --down: #ff6f66;
+  --fact: #6ea8ff; --common: #a3abba; --idea: #e0b040;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 60px; overflow-anchor: none; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.9 -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif;
+  line-break: strict; overflow-wrap: anywhere; word-break: auto-phrase;
+  -webkit-text-size-adjust: 100%;
+}
+.bar {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px max(14px, env(safe-area-inset-right)) 8px max(14px, env(safe-area-inset-left));
+  background: var(--bg); border-bottom: 1px solid var(--line);
+}
+.bar strong { flex: 1; min-width: 0; font-size: 14px; }
+.bar a, .bar button {
+  flex: 0 0 auto; height: 34px; padding: 0 12px; display: inline-flex; align-items: center;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--bg);
+  color: var(--text); font: inherit; font-size: 13px; text-decoration: none; cursor: pointer;
+}
+.bar button { font-size: 17px; padding: 0 10px; }
+.bar a.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+main { max-width: 760px; margin: 0 auto; padding: 8px 18px 80px; }
+h1 { margin: 28px 0 6px; font-size: clamp(26px, 6vw, 34px); line-height: 1.35; text-wrap: balance; }
+.lead { margin: 0 0 20px; color: var(--muted); }
+h2 {
+  margin: 56px 0 12px; padding-top: 18px; border-top: 2px solid var(--text);
+  font-size: 23px; line-height: 1.45; text-wrap: balance;
+}
+h2 small { display: block; color: var(--accent); font-size: 13px; font-weight: 700; letter-spacing: .08em; }
+h3 { margin: 34px 0 8px; font-size: 18px; line-height: 1.5; }
+h4 { margin: 20px 0 4px; font-size: 15px; color: var(--muted); }
+p { margin: 0 0 14px; text-wrap: pretty; }
+ul, ol { margin: 0 0 14px; padding-left: 1.4em; }
+li { margin-bottom: 6px; }
+a { color: var(--fact); }
+strong { font-weight: 700; }
+.toc { padding: 14px 18px; background: var(--panel); border-radius: 10px; }
+.toc ol { margin: 0; }
+.toc a { color: var(--text); }
+.tag {
+  display: inline-block; margin-right: 6px; padding: 0 7px; border-radius: 4px;
+  border: 1px solid currentColor; font-size: 11.5px; font-weight: 700; line-height: 1.6; white-space: nowrap; vertical-align: 1px;
+}
+.fact { color: var(--fact); } .common { color: var(--common); } .idea { color: var(--idea); }
+.note, .warn {
+  margin: 0 0 16px; padding: 12px 16px; border-radius: 8px;
+  background: var(--panel); border-left: 4px solid var(--muted);
+}
+.warn { border-left-color: var(--down); }
+.note p:last-child, .warn p:last-child { margin-bottom: 0; }
+.card { margin: 0 0 16px; padding: 4px 18px 6px; border: 1px solid var(--line); border-radius: 10px; }
+.card h3 { margin-top: 14px; }
+.tbl-wrap { overflow-x: auto; margin: 0 0 16px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.6; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--muted); font-weight: 400; font-size: 12.5px; }
+@media (max-width: 520px) { th, td { padding: 8px 6px; } table { font-size: 13.5px; } }
+td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+figure { margin: 0 0 16px; }
+figure svg { display: block; width: 100%; height: auto; max-width: 560px; margin: 0 auto; }
+figcaption { margin-top: 6px; color: var(--muted); font-size: 13px; text-align: center; }
+.steps { counter-reset: s; list-style: none; padding: 0; }
+.steps li { position: relative; padding-left: 2.2em; }
+.steps li::before {
+  counter-increment: s; content: counter(s);
+  position: absolute; left: 0; top: .3em; width: 1.5em; height: 1.5em; border-radius: 50%;
+  background: var(--text); color: var(--bg); font-size: 13px; font-weight: 700; line-height: 1.5em; text-align: center;
+}
+dl { margin: 0 0 14px; }
+dt { margin-top: 12px; font-weight: 700; }
+dd { margin: 0; }
+.src { font-size: 14px; }
+.src li { margin-bottom: 8px; }
+footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+@media (max-width: 520px) { figure svg text { font-size: 15px; } body { font-size: 15.5px; } main { padding: 4px 16px 64px; } h2 { font-size: 21px; } }
+.kp { margin: 0 0 18px; padding: 12px 16px; border: 1px solid var(--accent); border-radius: 8px; }
+.kp > strong { display: block; margin-bottom: 4px; color: var(--accent); font-size: 13px; letter-spacing: .06em; }
+.kp ul { margin: 0; }
+details { margin: 0 0 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+summary { padding: 9px 14px; cursor: pointer; font-weight: 700; font-size: 14.5px; }
+details > div { padding: 0 14px 6px; }
+.formula {
+  margin: 0 0 12px; padding: 8px 12px; border-radius: 6px; background: var(--panel);
+  font-variant-numeric: tabular-nums; font-size: 14.5px; overflow-x: auto; white-space: nowrap;
+}
+details .formula { background: var(--bg); }
+.toc ol ol { margin: 2px 0 6px; font-size: 13.5px; list-style: none; padding-left: 0; }
+.toc ol ol li { display: inline; margin-right: 10px; }
+.toc ol ol a { color: var(--muted); }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin: 0 0 16px; }
+.two > div { padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; }
+.two h4 { margin-top: 0; }
+.plan { margin: 0 0 16px; padding: 12px 16px; border: 1px dashed var(--muted); border-radius: 8px; font-size: 14.5px; }
+.plan p { margin: 0 0 6px; }
+td.up, .up { color: var(--up); } td.down, .down { color: var(--down); }
+@media print { .bar { display: none; } h2 { break-after: avoid; } .card, figure, .note, .warn { break-inside: avoid; } }
+
+/* ---------- 読みやすさのための仕組み ---------- */
+html[data-fs="1"] body { font-size: 18px; }
+html[data-fs="2"] body { font-size: 20px; }
+.progress { position: fixed; top: 0; left: 0; z-index: 12; height: 3px; width: 0; background: var(--accent); }
+.bar #where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.bar button { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; padding: 0 10px; }
+.bar #fsBtn { gap: 1px; align-items: baseline; padding-top: 7px; }
+.layout { display: block; }
+.side-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.side-head button { width: 34px; height: 34px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font-size: 22px; cursor: pointer; }
+.side nav a {
+  display: block; padding: 6px 10px; border-left: 2px solid var(--line);
+  color: var(--muted); font-size: 14px; line-height: 1.5; text-decoration: none;
+}
+.side nav a:hover { color: var(--text); }
+.side nav a.on { color: var(--text); border-left-color: var(--accent); font-weight: 700; }
+.side nav .sub { display: none; }
+.side nav .grp.on .sub { display: block; }
+.side nav .sub a { padding: 4px 10px 4px 24px; font-size: 13px; }
+.legend-box { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.legend-box p { margin: 0 0 6px; }
+.scrim { position: fixed; inset: 0; z-index: 15; background: rgba(0, 0, 0, .4); }
+.scrim[hidden], .resume[hidden], .to-top[hidden] { display: none; }
+.open-chart { margin: -2px 0 6px; font-size: 14px; }
+.open-chart a { display: inline-block; padding: 3px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--text); text-decoration: none; }
+.open-chart a:hover { background: var(--panel); }
+.to-top {
+  position: fixed; right: max(14px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 8;
+  display: flex; align-items: center; justify-content: center; width: 44px; height: 44px;
+  border: 1px solid var(--line); border-radius: 50%; background: var(--bg); color: var(--text);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .2); cursor: pointer;
+}
+.resume {
+  position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 9;
+  display: flex; align-items: center; gap: 8px; max-width: calc(100vw - 80px);
+  padding: 8px 8px 8px 14px; border-radius: 10px; background: var(--text); color: var(--bg);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .3); font-size: 13px; line-height: 1.5;
+}
+.resume span { min-width: 0; }
+.resume button { flex: 0 0 auto; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; font: inherit; cursor: pointer; white-space: nowrap; }
+#resumeGo { background: var(--bg); color: var(--text); font-weight: 700; }
+#resumeNo { background: transparent; color: var(--bg); font-size: 18px; }
+.tbl-wrap { position: relative; }
+.tbl-wrap.wide::after {
+  content: "横にスクロールできます →"; display: block; padding-top: 4px;
+  color: var(--muted); font-size: 12px; text-align: right;
+}
+.tbl-wrap.wide { background: linear-gradient(to left, var(--panel), transparent 28px) no-repeat; }
+.tbl-wrap.wide.end { background: none; }
+.tbl-wrap.wide th:first-child, .tbl-wrap.wide td:first-child { position: sticky; left: 0; background: var(--bg); box-shadow: 1px 0 0 var(--line); }
+h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
+.tag { cursor: help; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (min-width: 1040px) {
+  .layout { display: grid; grid-template-columns: 250px minmax(0, 760px); gap: 48px; max-width: 1110px; margin: 0 auto; padding: 0 24px; }
+  .side { position: sticky; top: 51px; align-self: start; max-height: calc(100dvh - 51px); overflow-y: auto; padding: 24px 0 24px; }
+  .side-head { display: none; }
+  main { margin: 0; padding-left: 0; padding-right: 0; max-width: none; }
+  .toc, #tocBtn { display: none; }
+}
+@media (max-width: 1039px) {
+  .side {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 20; width: min(320px, 86vw);
+    padding: 14px 16px max(16px, env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain;
+    background: var(--bg); box-shadow: 4px 0 24px rgba(0, 0, 0, .25);
+    transform: translateX(-102%); visibility: hidden; transition: transform .2s ease, visibility .2s;
+  }
+  .side.open { transform: none; visibility: visible; }
+  .side nav a { padding: 8px 10px; font-size: 15px; }
+  .side nav .sub a { padding: 6px 10px 6px 24px; font-size: 14px; }
+}
+@media (max-width: 520px) {
+  .bar { gap: 6px; padding-left: 10px; padding-right: 10px; }
+  .bar a, .bar button { padding: 0 9px; }
+  #tocBtn span { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .side { transition: none; } }
+@media print { .progress, .side, .scrim, .resume, .to-top, .open-chart { display: none !important; } .layout { display: block; } }
+</style>
+</head>
+<body>
+<div id="progress" class="progress" aria-hidden="true"></div>
+<div class="bar">
+  <button id="tocBtn" type="button" aria-controls="side" aria-expanded="false">
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    <span>もくじ</span>
+  </button>
+  <strong id="where">操作マニュアル</strong>
+  <button id="fsBtn" type="button" aria-label="文字の大きさを変える" title="文字の大きさを変える">
+    <span aria-hidden="true" style="font-size:11px">あ</span><span aria-hidden="true" style="font-size:16px">あ</span>
+  </button>
+  <button id="themeBtn" type="button" aria-label="ライト/ダークを切り替える" title="ライト/ダークを切り替える">
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor"/></svg>
+  </button>
+  <a class="primary" href="index.html">チャートへ</a>
+</div>
+<div id="scrim" class="scrim" hidden></div>
+
+<div class="layout">
+<aside id="side" class="side" aria-label="もくじ">
+  <div class="side-head">
+    <strong>もくじ</strong>
+    <button id="sideClose" type="button" aria-label="もくじを閉じる">×</button>
+  </div>
+  <nav id="sideNav"></nav>
+  <div class="legend-box">
+    <p><a href="guide.html">トレードの教科書を読む</a></p>
+    <p><a href="index.html">チャートに戻る</a></p>
+  </div>
+</aside>
+
+<main>
+<h1>操作マニュアル</h1>
+<p class="lead">Gold Trade Chart の使い方を、「やりたいこと」ごとにまとめました。上から順に読む必要はありません。左(スマホでは「もくじ」)から、知りたい項目を選んでください。</p>
+
+<div class="note">
+  <p><strong>このサイトでできること。</strong>暗号資産や金のチャートを見る、インジケーターや線で分析する、仮想の資金で売買の練習(デモトレード)をする、の3つです。実際のお金は動きません。登録やログインもありません。</p>
+</div>
+<p>相場の考え方や手法そのものは、<a href="guide.html">トレードの教科書</a>にまとめています。このマニュアルは、画面の操作だけを説明します。</p>
+
+<!-- ============================================================ 1 -->
+<h2 id="start"><small>1</small>はじめに — 画面の見方</h2>
+
+<h3 id="layout">画面の構成</h3>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>場所</th><th>名前</th><th>できること</th></tr></thead>
+  <tbody>
+    <tr><td>いちばん上の左</td><td>銘柄の選択</td><td>表示する銘柄を変える</td></tr>
+    <tr><td>その右(スマホでは2段目)</td><td>時間足</td><td>ローソク足1本の長さを変える(1分〜月)</td></tr>
+    <tr><td>上の中ほど</td><td>インジケーター(スマホでは「指標」)</td><td>分析用の線を追加する</td></tr>
+    <tr><td>その右</td><td>ツール</td><td>線を引く、お知らせを置く、売買ルールを試す、ほか</td></tr>
+    <tr><td>上の右</td><td>状態の表示(ライブ/デモ)</td><td>本物の価格を受け取れているかを示す</td></tr>
+    <tr><td>上の右(パソコン)</td><td>教科書・デモトレード・月のマーク</td><td>教科書を開く、注文画面を開閉する、明るい表示と暗い表示を切りかえる</td></tr>
+    <tr><td>中央</td><td>チャート</td><td>ローソク足と出来高。下にインジケーターの枠が並ぶ</td></tr>
+    <tr><td>チャートの左上</td><td>凡例</td><td>銘柄名、4本値、各インジケーターの値。設定や削除もここから</td></tr>
+    <tr><td>右側(スマホでは下から出る画面)</td><td>デモトレード</td><td>注文、ポジション、口座、取引履歴</td></tr>
+    <tr><td>いちばん下(スマホ)</td><td>下のバー</td><td>資金や損益の表示、「注文する」「決済」のボタン</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="live">「ライブ」と「デモ」の表示</h3>
+<ul>
+  <li><strong>ライブ</strong>:取引所(Binance)から本物の価格を受け取っています。</li>
+  <li><strong>デモ</strong>:取引所につながらず、見本の値動きを表示しています。このときは売買できません。通信が戻ると、自動で本物の価格に切りかわります。</li>
+</ul>
+<p>デモトレードの欄の価格の下には、「受信 ○○ 件/秒」と出ます。これは、直近1秒に取引所から受け取った件数です。</p>
+
+<h3 id="tour">最初の案内をもう一度見る</h3>
+<p>初めて開いたときに出る案内は、「ツール → 使い方の案内」から、いつでも見直せます。主な機能の一覧は「ツール → 使い方(一覧)」です。</p>
+
+<!-- ============================================================ 2 -->
+<h2 id="chart"><small>2</small>チャートを見る</h2>
+
+<h3 id="symbol">銘柄を変える</h3>
+<ol class="steps">
+  <li>左上の銘柄名を押します。</li>
+  <li>一覧から選びます。</li>
+  <li>一覧にない銘柄は、いちばん下の「すべての銘柄から探す」を選び、名前(例:ETH)を入力して選びます。決済通貨(USDT、円など)で絞り込むこともできます。</li>
+</ol>
+<p>一度選んだ銘柄は、次からは一覧に出ます。</p>
+
+<h3 id="interval">時間足を変える</h3>
+<p>1分・5分・15分・30分・1時間・4時間・日・週・月から選びます。スマホでは、時間足の列を左右にスワイプすると、隠れているものが出てきます。</p>
+<p>価格の目盛りの横には、いまの足が確定するまでの残り時間が出ます。</p>
+
+<h3 id="move">チャートを動かす・拡大する</h3>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>やりたいこと</th><th>パソコン</th><th>スマホ</th></tr></thead>
+  <tbody>
+    <tr><td>左右に動かす(過去を見る)</td><td>ドラッグ</td><td>指1本でスワイプ</td></tr>
+    <tr><td>拡大・縮小</td><td>マウスのホイール</td><td>指2本で広げる・つまむ</td></tr>
+    <tr><td>元の表示に戻す</td><td>ダブルクリック</td><td>右下に出る矢印のボタン(最新の足へ移動)</td></tr>
+    <tr><td>ある足の値をくわしく見る</td><td>マウスを重ねる</td><td>その足をタップ(十字線が出る)</td></tr>
+    <tr><td>枠の高さを変える</td><td colspan="2">枠と枠の境目を、上下にドラッグ</td></tr>
+  </tbody>
+</table></div>
+<p>左へ動かし続けると、古いデータを自動で読み足します。</p>
+
+<h3 id="type">ローソク足・平均足・ラインを切りかえる</h3>
+<p>「ツール → 表示を切りかえ」を押すたびに、ローソク足 → 平均足 → ライン(終値を結んだ線)の順に変わります。</p>
+<div class="warn"><p>平均足は、値動きをならして流れを見やすくした足です。実際の始値・高値・安値・終値とは違います。売買の価格には、いつも実際の価格を使います。</p></div>
+
+<h3 id="theme">明るい表示・暗い表示</h3>
+<p>右上の月(または太陽)のマークを押します。</p>
+
+<h3 id="image">チャートを画像で保存する</h3>
+<p>「ツール → 画像として保存」で、いまのチャートを PNG 画像として保存します。</p>
+
+<!-- ============================================================ 3 -->
+<h2 id="ind"><small>3</small>インジケーターを使う</h2>
+
+<h3 id="ind-add">追加する</h3>
+<ol class="steps">
+  <li>「インジケーター」(スマホでは「指標」)を押します。</li>
+  <li>名前で探すか、一覧から選びます。「トレンド」「オシレーター」「ボラティリティ」「出来高」に分かれています。</li>
+  <li>押すと、チャートに追加されます。価格に重ねるものはローソク足の上に、それ以外は下の枠に出ます。</li>
+</ol>
+<p>同時に出せるのは30個までです。よく使うものは、名前の右の ☆ を押すと「よく使う」に入り、一覧のいちばん上に並びます。</p>
+
+<h3 id="ind-set">設定を変える・隠す・消す</h3>
+<p>チャート左上の凡例で、インジケーターの名前にマウスを重ねる(スマホでは「⋯」を押す)と、3つのボタンが出ます。</p>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>ボタン</th><th>できること</th></tr></thead>
+  <tbody>
+    <tr><td>目のマーク</td><td>一時的に隠す・もう一度出す</td></tr>
+    <tr><td>歯車のマーク</td><td>設定を開く(期間、色、太さなど)</td></tr>
+    <tr><td>ごみ箱のマーク</td><td>削除する</td></tr>
+  </tbody>
+</table></div>
+<p>設定の画面には、3つのタブがあります。</p>
+<ul>
+  <li><strong>パラメーター</strong>:期間や計算の方法。</li>
+  <li><strong>スタイル</strong>:色や線の太さ(あるものだけ)。</li>
+  <li><strong>可視性</strong>:どの時間足で表示するか。たとえば「日足でだけ出す」といった設定ができます。</li>
+</ul>
+<p>「デフォルトに戻す」で初期の設定に戻り、「キャンセル」で開く前の状態に戻ります。</p>
+<p>それぞれのインジケーターの意味と読み方は、<a href="guide.html#indicators">教科書の第3章</a>にあります。</p>
+
+<!-- ============================================================ 4 -->
+<h2 id="draw"><small>4</small>線を引く・価格のお知らせ</h2>
+
+<h3 id="draw-add">線を引く</h3>
+<p>「ツール」から種類を選び、チャートをタップ(クリック)して置きます。</p>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>種類</th><th>置き方</th><th>使いどころ</th></tr></thead>
+  <tbody>
+    <tr><td>水平線</td><td>価格を1回タップ</td><td>何度も止められた価格(支え・抵抗)に引く</td></tr>
+    <tr><td>垂直線</td><td>日時を1回タップ</td><td>発表やイベントの時刻に印を付ける</td></tr>
+    <tr><td>トレンドライン</td><td>始点と終点を2回タップ</td><td>安値どうし・高値どうしを結ぶ</td></tr>
+    <tr><td>長方形</td><td>向かい合う2つの角を2回タップ</td><td>横ばいの範囲を囲む</td></tr>
+    <tr><td>フィボナッチ</td><td>動きの始まりと終わりを2回タップ</td><td>上げ(下げ)のあとの、戻りの目安を見る</td></tr>
+  </tbody>
+</table></div>
+<p>置くとき、近くに始値・高値・安値・終値があれば、そこにぴったり合います。途中でやめるときは、下に出る「中止」を押します。</p>
+
+<h3 id="draw-edit">線を動かす・消す</h3>
+<ol class="steps">
+  <li>線をタップ(クリック)して選びます。選ぶと太くなります。</li>
+  <li>ドラッグで動かします。トレンドライン・長方形・フィボナッチは、端の点をつかむと形を変えられます。</li>
+  <li>消すときは、下に出る「削除」を押します(パソコンでは Delete キーでも消せます)。</li>
+</ol>
+<p>「ツール → 線をすべて削除」で、その銘柄の線を全部消します。線は銘柄ごとに覚えていて、1銘柄につき200本までです。</p>
+
+<h3 id="alert">価格のお知らせ</h3>
+<ol class="steps">
+  <li>「ツール → 価格のお知らせ」を選びます。</li>
+  <li>知らせてほしい価格をタップします。オレンジの点線が置かれます。</li>
+  <li>いまの価格より上に置くと「上がって届いたとき」、下に置くと「下がって届いたとき」に、画面に表示します。</li>
+</ol>
+<ul>
+  <li>注文はしません。お知らせだけです。</li>
+  <li>1本の線が鳴るのは1回です。鳴ったあとは灰色になります。線を動かすと、新しい位置で待ち直します。</li>
+  <li><strong>その銘柄を表示している間だけ</strong>働きます。別の銘柄を見ている間や、ページを閉じている間は知らせません。</li>
+</ul>
+
+<!-- ============================================================ 5 -->
+<h2 id="trade"><small>5</small>デモトレード(売買の練習)</h2>
+<p>仮想の資金で売買を練習する機能です。最初の資金は、USDT 建てなら 10,000 です(円建ての銘柄では別の口座になります)。</p>
+
+<h3 id="trade-open">注文画面を開く</h3>
+<ul>
+  <li>パソコン:右上の「デモトレード」を押します。もう一度押すと閉じます。</li>
+  <li>スマホ:画面の下の「注文する」を押します。下から注文画面が出ます。閉じるときは、右上の × か、画面の外をタップします。</li>
+</ul>
+
+<h3 id="trade-market">すぐに買う・売る(成行)</h3>
+<ol class="steps">
+  <li>「成行」が選ばれていることを確かめます。</li>
+  <li>金額を入れます。「10%」「25%」「50%」「100%」を押すと、使える金額に対する割合で入ります。</li>
+  <li>必要なら、利確の価格と損切りの価格を入れます(あとからでも入れられます)。</li>
+  <li>「買い」か「売り」を押します。</li>
+</ol>
+<ul>
+  <li><strong>買い</strong>は、値上がりすると利益になります。<strong>売り</strong>(売りから入る)は、値下がりすると利益になります。</li>
+  <li>買いは「買える価格」、売りは「売れる価格」で約定します。この2つの差が、売買のたびにかかる見えないコストです。</li>
+  <li>手数料は、売買金額の 0.1% です。</li>
+</ul>
+
+<h3 id="trade-qty">数量で注文する</h3>
+<p>金額の欄の下の「数量で入力」を押すと、「0.01 BTC」のように数量で注文できます。換算した金額が横に出ます。「金額で入力」で元に戻ります。</p>
+
+<h3 id="trade-limit">価格を指定して予約する(指値)</h3>
+<ol class="steps">
+  <li>「指値」を選びます。</li>
+  <li>価格を入れます。買いはいまの価格より安く、売りはいまの価格より高くします。</li>
+  <li>金額(または数量)を入れ、「買い」か「売り」を押します。</li>
+</ol>
+<ul>
+  <li>予約した注文は「予約中の指値注文」に並びます。「取消」で取り消せます。全部で20件までです。</li>
+  <li>価格が指値に届くと約定します。<strong>ページを閉じている間に届いた場合も、次に開いたときに約定します。</strong></li>
+  <li>チャートに出る指値の線は、上下にドラッグして価格を変えられます。</li>
+  <li>ポジションを減らすために置いた指値は「決済用」と表示されます。ポジションがなくなると、自動で取り消されます。</li>
+</ul>
+
+<h3 id="trade-tpsl">利確と損切り</h3>
+<p>利確は「ここまで上がったら(下がったら)利益を確定する」価格、損切りは「ここまで逆に動いたら、損を確定してやめる」価格です。届くと、自動で決済します。</p>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>やりたいこと</th><th>操作</th></tr></thead>
+  <tbody>
+    <tr><td>注文と同時に入れる</td><td>注文の欄の「利確の価格」「損切りの価格」に入れてから、買い・売りを押す</td></tr>
+    <tr><td>あとから入れる・変える</td><td>「保有中のポジション」の欄に入れて、「利確・損切りを保存」を押す</td></tr>
+    <tr><td>チャートの上で動かす</td><td>利確・損切りの線を、上下にドラッグする。まだ置いていないときは、建値(買った価格)の線を引っぱると新しく置ける</td></tr>
+    <tr><td>やめる</td><td>欄を空にして「利確・損切りを保存」を押す</td></tr>
+  </tbody>
+</table></div>
+<p>入れた価格の下に「届くと +○○」と出ます。届いたときの損益の目安で、手数料も引いた額です。</p>
+<p><strong>ページを閉じている間に届いた場合</strong>も、次に開いたときにまとめて判定し、届いた時点の価格で決済します。長く閉じていて、同じ足の中で利確と損切りの両方に届いていたときは、損切りが先だったとして扱います。</p>
+
+<h3 id="trade-risk">損切りから、買う金額を決める</h3>
+<p>注文の欄に損切りの価格を入れると、「損切りになったときに、資金の何%を失うか」が表示され、「0.5%」「1%」「2%」のボタンが出ます。押すと、その割合になる金額が自動で入ります。考え方は、<a href="guide.html#money">教科書の第5章</a>にあります。</p>
+
+<h3 id="trade-pos">ポジションを管理する</h3>
+<p>ポジションを持つと、「保有中のポジション」の欄が出ます。</p>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>項目・ボタン</th><th>内容</th></tr></thead>
+  <tbody>
+    <tr><td>方向・数量・平均取得価格・評価損益</td><td>いまのポジションの状態。評価損益は、いま決済した場合の損益の目安</td></tr>
+    <tr><td>小さなグラフ</td><td>建ててからの含み損益の動き。建てたあとの足が2本以上になると出る</td></tr>
+    <tr><td>損切りを建値へ</td><td>損切りを、買った(売った)ときの価格に動かす。利益が出ているときだけ使える</td></tr>
+    <tr><td>半分を決済</td><td>半分だけ確定し、残りを持ち続ける</td></tr>
+    <tr><td>決済する</td><td>全部を決済する</td></tr>
+  </tbody>
+</table></div>
+<ul>
+  <li>持っている向きと反対のボタン(買いを持っているときの「売り」)を押すと、その分だけ決済します。持っている分より多い金額を入れた場合は、全部の決済になります(反対向きには持ちません)。</li>
+  <li>スマホでは、下のバーの「決済」を2回タップしても、全部を決済できます(1回目で「もう一度で決済」に変わります)。</li>
+  <li>別の銘柄にもポジションがあるときは、「ほかの銘柄のポジション」に並びます。押すと、その銘柄に切りかわります。</li>
+</ul>
+
+<h3 id="trade-rule">デモトレードのきまり</h3>
+<ul>
+  <li><strong>レバレッジはありません。</strong>使える金額は「評価額 − 保有分の時価」です。含み益を元手に買い増すことはできません。</li>
+  <li>口座の評価額がゼロ以下になると、ポジションは強制的に決済されます。</li>
+  <li>価格を最新にできていないとき(通信が切れているときなど)は、売買のボタンが押せなくなります。理由は、ボタンの上に表示されます。</li>
+  <li>実際の取引では、注文が思った価格で通らないことがあります。デモの結果は、実際より良く出やすい点に注意してください。</li>
+</ul>
+
+<h3 id="trade-reset">口座を最初の状態に戻す</h3>
+<p>「口座をリセット」を2回押します。資金、ポジション、取引履歴がすべて消え、最初の資金に戻ります。取り消せません。</p>
+
+<!-- ============================================================ 6 -->
+<h2 id="review"><small>6</small>成績を振り返る</h2>
+
+<h3 id="review-open">成績を分析する</h3>
+<p>デモトレードの欄の「成績を分析」を押します。</p>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>項目</th><th>意味</th></tr></thead>
+  <tbody>
+    <tr><td>確定した損益</td><td>決済が済んだ取引の損益の合計(手数料を引いたあと)</td></tr>
+    <tr><td>勝率</td><td>利益で終わった取引の割合。1つのポジションを、分けて決済しても1回と数える</td></tr>
+    <tr><td>プロフィットファクター</td><td>利益の合計 ÷ 損失の合計。1 より大きければ全体でプラス</td></tr>
+    <tr><td>最大ドローダウン</td><td>資金がいちばん多かった時点からの、最大の落ち込み</td></tr>
+    <tr><td>資金の推移</td><td>取引ごとの残高のグラフ</td></tr>
+    <tr><td>取引ごとの損益</td><td>1回ごとの損益の棒グラフ。緑が利益、赤が損失</td></tr>
+    <tr><td>銘柄ごとの成績</td><td>銘柄別の回数・勝率・損益</td></tr>
+  </tbody>
+</table></div>
+<p>数字の読み方と直し方は、<a href="guide.html#practice">教科書の第7章</a>にあります。</p>
+
+<h3 id="review-hist">取引履歴を絞り込む</h3>
+<p>「取引履歴」の右の選択欄で、すべて/この銘柄だけ/利益が出た決済/損失が出た決済/自動の約定(利確・損切り・指値)から選べます。</p>
+
+<h3 id="review-csv">履歴をファイルに保存する</h3>
+<p>「成績を分析」の画面の「履歴を CSV で保存」を押すと、表計算ソフトで開けるファイルを保存します。</p>
+
+<!-- ============================================================ 7 -->
+<h2 id="build"><small>7</small>自分で作る・過去のデータで試す</h2>
+
+<h3 id="build-rule">売買ルールを試す(式を書かない方法)</h3>
+<ol class="steps">
+  <li>「ツール → 売買ルールを試す」を選びます。</li>
+  <li>ルールを選びます(移動平均の交差、長期の平均線の上下、RSI、MACD、ボリンジャーバンド、高値・安値の更新)。</li>
+  <li>いま開いている銘柄・時間足で、そのルールどおりに売買していた場合の成績が出ます。</li>
+  <li>「入り方」「手じまい」「損切り」「利確」を変えると、その場で計算し直します。</li>
+  <li>「チャートに出す」を押すと、合図(▲▼)がローソク足に表示されます。</li>
+</ol>
+
+<h3 id="build-make">インジケーターを自分で作る</h3>
+<ol class="steps">
+  <li>「インジケーター」のいちばん下の「＋ 自分で作る」を選びます。</li>
+  <li>「見本から始める」で見本を選ぶと、欄に式が入ります。</li>
+  <li>名前、表示する場所(チャートの下か、重ねるか)を決めます。</li>
+  <li>式を書きかえます。間違えると、その場で理由が出ます。正しければ、いまの値と見本のグラフが出ます。</li>
+  <li>「使える部品」を開くと、価格や関数のボタンが並びます。押すと、式に入ります。</li>
+  <li>「保存」を押すと、チャートに追加されます。</li>
+</ol>
+<p>式の書き方と、合図・試算の読み方は、<a href="guide.html#build">教科書の第8章</a>にあります。</p>
+
+<h3 id="build-test">自作の合図を過去のデータで試す・知らせる</h3>
+<p>合図(▲▼)を付けたインジケーターは、設定(歯車のマーク)に2つの機能が出ます。</p>
+<ul>
+  <li><strong>過去データで試す</strong>:合図どおりに売買していた場合の成績を計算します。</li>
+  <li><strong>合図が出たら知らせる</strong>:足が確定して合図が出たときに、画面に表示します。ページを開いている間だけ働きます。</li>
+</ul>
+
+<h3 id="build-share">作ったものを編集する・共有する・消す</h3>
+<ul>
+  <li><strong>編集</strong>:インジケーターの一覧で、名前の右の鉛筆のマークを押します。設定の画面の「式を編集する」からも開けます。</li>
+  <li><strong>共有</strong>:編集の画面の「共有」を押すと、文字としてコピーされます。受け取った人は、「＋ 自分で作る → ほかの人が作ったものを取り込む」に貼り付けます。</li>
+  <li><strong>削除</strong>:編集の画面の「削除」を2回押します。</li>
+</ul>
+<p>自分で作れるのは30個までです。</p>
+
+<!-- ============================================================ 8 -->
+<h2 id="faq"><small>8</small>困ったとき</h2>
+
+<h3 id="faq-still">価格が動かない</h3>
+<ul>
+  <li>取引の少ない銘柄(金の PAXG など)や、取引の少ない時間帯は、数秒〜数十秒動かないことがあります。故障ではありません。BTC/USDT に切りかえて、動くかどうかを確かめてください。</li>
+  <li>デモトレードの欄に「配信が止まっています」と出ているときは、通信が切れています。2秒ごとに取り直していて、戻ると自動でつなぎ直します。</li>
+</ul>
+
+<h3 id="faq-demo">「デモ」と表示される</h3>
+<p>取引所につながっていません。通信の状態を確かめてください。会社や学校のネットワークでは、取引所への接続が止められていることがあります。つながると、自動で「ライブ」に戻ります。</p>
+
+<h3 id="faq-button">買い・売りのボタンが押せない</h3>
+<ul>
+  <li>ボタンの上に理由が出ています。「開いていなかった間の値動きを確認しています」と出ているときは、数秒待ってください。</li>
+  <li>「デモ」の表示のときは、売買できません。</li>
+</ul>
+
+<h3 id="faq-reject">注文が断られる</h3>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>表示</th><th>理由と対処</th></tr></thead>
+  <tbody>
+    <tr><td>使える金額が足りません</td><td>金額を減らします。すでにポジションを持っていると、その分は使える金額から引かれます</td></tr>
+    <tr><td>買いの利確は、いまの価格より高くしてください</td><td>利確・損切りの向きが逆です。買いは「利確が上、損切りが下」、売りは「利確が下、損切りが上」です</td></tr>
+    <tr><td>買いの指値は、いまの価格より安くしてください</td><td>いまの価格ですぐに買うなら、「成行」を選びます</td></tr>
+    <tr><td>損切りを建値に動かせるのは、利益が出ているときだけです</td><td>いまの価格が、買った価格より不利な側にあります</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="faq-lost">設定や取引の記録が消えた</h3>
+<p>設定や取引の記録は、<strong>そのブラウザの中だけ</strong>に保存しています。次の場合は、引きつがれません。</p>
+<ul>
+  <li>別の端末や、別のブラウザで開いた。</li>
+  <li>プライベートブラウズ(シークレットモード)で開いた。</li>
+  <li>ブラウザの履歴やサイトのデータを消した。</li>
+</ul>
+<p>自作のインジケーターは、「共有」の文字を控えておくと、別の端末でも取り込めます。取引履歴は、CSV で保存できます。</p>
+
+<h3 id="faq-tabs">複数のタブで開いている</h3>
+<p>同じブラウザで複数のタブを開いても、取引の内容・引いた線・自作のインジケーターは、タブの間で同じになります。見ている銘柄や時間足は、タブごとに別々です。</p>
+
+<h3 id="faq-phone">スマホで操作しにくい</h3>
+<ul>
+  <li>時間足の列は、左右にスワイプできます。</li>
+  <li>凡例の「⋯」を押すと、設定・非表示・削除のボタンが出ます。</li>
+  <li>注文画面では、売り・買いのボタンがいつも下にあります。結果や理由は、ボタンのすぐ上に出ます。</li>
+  <li>横向きにすると、注文画面が右側に出ます。</li>
+</ul>
+
+<!-- ============================================================ 9 -->
+<h2 id="data"><small>9</small>データの保存と安全</h2>
+<ul>
+  <li>このサイトには、登録もログインもありません。名前やメールアドレスを入力する場所もありません。</li>
+  <li>設定・引いた線・自作のインジケーター・デモトレードの記録は、あなたのブラウザの中に保存します。外部には送りません。</li>
+  <li>通信する相手は、価格を受け取るための取引所(Binance)の公開データだけです。</li>
+  <li>デモトレードは、仮想の資金による練習です。実際の注文は出ません。</li>
+</ul>
+<p>すべてを最初の状態に戻したいときは、ブラウザの設定から、このサイトのデータを消してください。デモトレードだけを戻すなら、「口座をリセット」を使います。</p>
+
+<footer>
+  <p>このマニュアルは、画面の操作を説明するものです。投資の助言ではありません。売買の判断と結果の責任は、ご自身にあります。</p>
+  <p><a href="index.html">チャートに戻る</a> ・ <a href="guide.html">トレードの教科書</a></p>
+</footer>
+</main>
+</div>
+
+<div id="resume" class="resume" role="status" hidden>
+  <span id="resumeText"></span>
+  <button id="resumeGo" type="button">続きから読む</button>
+  <button id="resumeNo" type="button" aria-label="閉じる">×</button>
+</div>
+<button id="toTop" class="to-top" type="button" aria-label="ページの先頭へ戻る" title="ページの先頭へ戻る" hidden>
+  <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path d="M3 10l5-5 5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</button>
+
+<script src="guide.js"></script>
+</body>
+</html>

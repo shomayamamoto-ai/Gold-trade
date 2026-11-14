@@ -206,6 +206,23 @@
 </div>
 <div id="toast" class="toast" role="status" hidden></div>
 
+<div id="tour" class="tour" hidden>
+  <div id="tourHole" class="tour-hole" hidden></div>
+  <div id="tourPop" class="tour-pop" role="dialog" aria-modal="true" aria-labelledby="tourTitle" aria-describedby="tourBody">
+    <div class="tour-head">
+      <h2 id="tourTitle"></h2>
+      <span id="tourCount" class="dim"></span>
+    </div>
+    <p id="tourBody"></p>
+    <div class="tour-foot">
+      <button id="tourSkip" class="tour-link" type="button">案内を終わる</button>
+      <div class="spacer"></div>
+      <button id="tourPrev" class="ctl btn" type="button">戻る</button>
+      <button id="tourNext" class="ctl btn primary" type="button">次へ</button>
+    </div>
+  </div>
+</div>
+
 <div id="overlay" class="overlay" hidden>
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
     <div class="dlg-head">
@@ -279,11 +296,12 @@
         <dt>学ぶ</dt>
         <dd>「<span class="touch">ツール → 教科書を読む</span><span class="mouse">教科書</span>」で、銘柄・インジケーター・手法・資金管理の解説が読めます。</dd>
       </dl>
-      <p class="msg">この案内は「ツール → 使い方」から、いつでも開けます。</p>
+      <p class="msg">この一覧は「ツール → 使い方(一覧)」から、いつでも開けます。もっとくわしい説明は、<a href="manual.html">操作マニュアル</a>にあります。</p>
     </div>
     <div class="dlg-foot">
+      <button id="helpTour" class="ctl btn" type="button">案内をもう一度見る</button>
       <div class="spacer"></div>
-      <button id="helpOk" class="ctl btn primary" type="button">はじめる</button>
+      <button id="helpOk" class="ctl btn primary" type="button">閉じる</button>
     </div>
   </div>
 </div>
