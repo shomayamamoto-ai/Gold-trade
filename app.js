@@ -205,10 +205,22 @@ function load() {
   else if (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) state.theme = 'dark';
   if (s && s.mainWeight > 0) state.mainWeight = s.mainWeight;
   state.tradeOpen = s && typeof s.tradeOpen === 'boolean' ? s.tradeOpen : window.innerWidth > 1000;
-  if (s && s.drawings && typeof s.drawings === 'object') state.drawings = s.drawings;
+  if (s && s.drawings && typeof s.drawings === 'object') {
+    const pt = q => q && typeof q === 'object' && isFinite(q.t) && isFinite(q.price) ? { t: +q.t, price: +q.price } : null;
+    Object.keys(s.drawings).forEach(sym => {
+      if (!/^[A-Z0-9]{5,20}$/.test(sym) || !Array.isArray(s.drawings[sym])) return;
+      state.drawings[sym] = s.drawings[sym].slice(0, 200).map(d => {
+        const p1 = pt(d && d.p1), p2 = pt(d && d.p2);
+        if (d && d.type === 'h' && p1) return { type: 'h', p1 };
+        if (d && d.type === 't' && p1 && p2) return { type: 't', p1, p2 };
+        return null;
+      }).filter(Boolean);
+    });
+  }
   const list = s && Array.isArray(s.indicators)
     ? s.indicators.filter(i => i && IND_TYPES[i.type])
     : [{ type: 'ma' }, { type: 'ccOnly' }, { type: 'enhanced' }];
+  list.length = Math.min(list.length, 40); // 極端な数の読み込みで固まらないようにする
   list.forEach(i => addIndicator(i.type, i.p, i.hidden, true));
 }
 
@@ -363,13 +375,13 @@ function groupBars(raw, group, ms) {
   }
   return out;
 }
-async function fetchKlines(symbol, api, limit, endTime) {
+async function fetchKlines(symbol, api, limit, endTime, startTime) {
   let lastErr;
   for (const host of HOSTS) {
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), 8000);
     try {
-      const res = await fetch(`${host}/api/v3/klines?symbol=${symbol}&interval=${api}&limit=${limit}${endTime ? '&endTime=' + endTime : ''}`, { signal: ac.signal });
+      const res = await fetch(`${host}/api/v3/klines?symbol=${symbol}&interval=${api}&limit=${limit}${endTime ? '&endTime=' + endTime : ''}${startTime ? '&startTime=' + startTime : ''}`, { signal: ac.signal });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const rows = await res.json();
       if (!Array.isArray(rows) || !rows.length) throw new Error('empty');
@@ -456,6 +468,7 @@ async function loadData() {
     const raw = await fetchKlines(sym.id, iv.api, 1000);
     if (token !== state.loadToken) return;
     state.live = true;
+    feed.okAt = Date.now();
     setStatus('live', 'ライブ');
     $('banner').hidden = true;
     setLoading(false);
@@ -489,7 +502,7 @@ function mergeTail(tail) {
 // リアルタイム配信。つながらないときは下の poll が代わりを務める
 let ws = null;
 const STREAMS = ['wss://data-stream.binance.vision/stream?streams=', 'wss://stream.binance.com:9443/stream?streams='];
-const feed = { lastMsg: 0, lastTick: 0, tick: null, timer: 0, bid: NaN, ask: NaN, quoteAt: 0, quoteSym: '' }; // 配信の状態
+const feed = { okAt: 0, lastMsg: 0, lastTick: 0, tick: null, timer: 0, bid: NaN, ask: NaN, quoteAt: 0, quoteSym: '' }; // 配信の状態
 function closeStream() {
   const s = ws;
   ws = null;
@@ -565,7 +578,7 @@ function openStream() {
     s.onopen = () => { opened = true; feed.lastMsg = Date.now(); };
     s.onmessage = ev => {
       if (token !== state.loadToken) return;
-      feed.lastMsg = Date.now();
+      feed.lastMsg = feed.okAt = Date.now();
       try {
         const d = JSON.parse(ev.data).data;
         if (!d) return;
@@ -602,6 +615,7 @@ async function poll() {
   try {
     const tail = await fetchKlines(state.symbol, iv.api, 3);
     if (token !== state.loadToken) return;
+    feed.okAt = Date.now();
     const prev = state.raw[state.raw.length - 1], now = tail[tail.length - 1];
     if (prev && now && now.c !== prev.c) noteTick(now.c > prev.c ? 1 : -1);
     mergeTail(tail);
@@ -1368,7 +1382,7 @@ function setText(el, sel, text) {
 }
 function setVals(el, items) {
   const html = items.map(([label, value, color]) =>
-    `<span>${label ? `<span class="dim">${label}</span> ` : ''}<span style="color:${color || 'inherit'}">${value}</span></span>`).join('');
+    `<span>${label ? `<span class="dim">${esc(label)}</span> ` : ''}<span style="color:${COLOR_RE.test(color) ? color : 'inherit'}">${esc(value)}</span></span>`).join('');
   const t = el.querySelector('.vals');
   if (t.innerHTML !== html) t.innerHTML = html;
 }
@@ -1447,10 +1461,25 @@ function updateLegends() {
 }
 
 // ---------------------------------------------------------------- インジケーター管理
+// 保存されていた設定を、そのまま信用しない。初期値と同じ種類・形の値だけを受け入れる
+const COLOR_RE = /^#[0-9a-f]{6}$/i, WORD_RE = /^[A-Za-z0-9_-]{1,24}$/;
+function cleanParams(base, p) {
+  const out = Object.assign({}, base);
+  if (!p || typeof p !== 'object') return out;
+  Object.keys(base).forEach(k => {
+    const d = base[k], v = p[k];
+    if (k === 'vis') return;
+    if (typeof d === 'number') { if (typeof v === 'number' && isFinite(v)) out[k] = v; }
+    else if (typeof d === 'boolean') { if (typeof v === 'boolean') out[k] = v; }
+    else if (typeof d === 'string') { if (typeof v === 'string' && (COLOR_RE.test(d) ? COLOR_RE : WORD_RE).test(v)) out[k] = v; }
+  });
+  return out;
+}
 function addIndicator(type, p, hidden, silent) {
   const base = defaultParams(type);
-  const merged = Object.assign({}, base, p || {});
-  merged.vis = Object.assign({}, base.vis, (p && p.vis) || {});
+  const merged = cleanParams(base, p);
+  merged.vis = Object.assign({}, base.vis);
+  if (p && p.vis && typeof p.vis === 'object') INTERVALS.forEach(iv => { if (typeof p.vis[iv.id] === 'boolean') merged.vis[iv.id] = p.vis[iv.id]; });
   const ind = { id: nextId++, type, hidden: !!hidden, p: merged, out: null };
   state.indicators.push(ind);
   if (!silent) { recompute(); save(); draw(); }
@@ -2011,12 +2040,43 @@ function bindPointer() {
 const TRADE_KEY = 'gold-trade-paper-v1';
 const FEE = 0.001; // 売買金額に対する手数料の割合(0.1%)
 const START_CASH = { JPY: 1000000, BTC: 1, ETH: 10, BNB: 20, TRY: 300000, IDR: 150000000, BRL: 50000 };
-const freshTrade = () => ({ accounts: {}, positions: {}, history: [], last: {}, quotes: {} });
-let T = freshTrade();
-try {
-  const t = JSON.parse(localStorage.getItem(TRADE_KEY));
-  if (t && t.accounts && t.positions && Array.isArray(t.history)) T = Object.assign(freshTrade(), t);
-} catch (e) { /* 壊れていたら新しい口座で始める */ }
+const freshTrade = () => ({ accounts: {}, positions: {}, history: [], last: {}, quotes: {}, seen: {} });
+const SYM_RE = /^[A-Z0-9]{5,20}$/, CUR_RE = /^[A-Z0-9]{1,8}$/;
+const fin = v => typeof v === 'number' && isFinite(v);
+// 保存されていた取引データを読み込む。形のおかしい項目は捨てる(画面に埋め込む文字列もここで絞る)
+function loadTradeState() {
+  const out = freshTrade();
+  let t = null;
+  try { t = JSON.parse(localStorage.getItem(TRADE_KEY)); } catch (e) { t = null; }
+  if (!t || typeof t !== 'object') return out;
+  const each = (obj, fn) => { if (obj && typeof obj === 'object') Object.keys(obj).forEach(k => fn(k, obj[k])); };
+  each(t.accounts, (q, v) => { if (CUR_RE.test(q) && v && fin(v.cash) && fin(v.start) && v.start > 0) out.accounts[q] = { cash: v.cash, start: v.start }; });
+  each(t.quotes, (s, q) => { if (SYM_RE.test(s) && typeof q === 'string' && CUR_RE.test(q)) out.quotes[s] = q; });
+  each(t.last, (s, v) => { if (SYM_RE.test(s) && fin(v) && v > 0) out.last[s] = v; });
+  each(t.seen, (s, v) => { if (SYM_RE.test(s) && fin(v)) out.seen[s] = v; });
+  const level = v => (fin(v) && v > 0 ? v : null);
+  each(t.positions, (s, v) => {
+    if (!SYM_RE.test(s) || !v || !fin(v.qty) || v.qty === 0 || !fin(v.avg) || !(v.avg > 0)) return;
+    out.positions[s] = { qty: v.qty, avg: v.avg, tp: level(v.tp), sl: level(v.sl), opened: fin(v.opened) ? v.opened : Date.now() };
+  });
+  if (Array.isArray(t.history)) {
+    t.history.slice(0, 3000).forEach(h => {
+      if (!h || !SYM_RE.test(h.sym) || !fin(h.t) || !fin(h.qty) || !fin(h.price) || !fin(h.fee)) return;
+      out.history.push({
+        t: h.t, sym: h.sym, side: h.side === 'sell' ? 'sell' : 'buy', qty: h.qty, price: h.price, fee: h.fee,
+        pnl: fin(h.pnl) ? h.pnl : null, reason: ['tp', 'sl'].includes(h.reason) ? h.reason : 'manual', away: !!h.away,
+      });
+    });
+  }
+  return out;
+}
+let T = loadTradeState();
+// 別のタブで取引したら、こちらのタブも同じ内容に合わせる(古い内容で上書きして、決済済みのポジションが復活するのを防ぐ)
+window.addEventListener('storage', e => {
+  if (e.key !== TRADE_KEY) return;
+  T = loadTradeState();
+  renderTrade(); draw();
+});
 function saveTrade() {
   try { localStorage.setItem(TRADE_KEY, JSON.stringify(T)); } catch (e) { /* 保存できなくても続ける */ }
 }
@@ -2065,10 +2125,19 @@ const pnlClass = v => (v > 0 ? 'up' : v < 0 ? 'down' : '');
 
 /* 注文を約定させる。成功なら null、できないときは理由の文を返す。
  * qty を渡すと、その数量ちょうどで約定する(決済用)。 */
-function execute(sym, side, notional, reason, qty) {
+// その銘柄の価格が「いまの価格」だと言えるか。古い価格での売買(後出し)を防ぐ
+const otherFresh = {}; // 表示していない銘柄の価格を、最後に取りにいった時刻
+function priceOk(sym) {
+  if (sym !== state.symbol) return Date.now() - (otherFresh[sym] || 0) < 60000;
+  return state.live && !state.loading && state.bars.length > 0 && Date.now() - feed.okAt < 20000;
+}
+/* opts.price / opts.t: ページを閉じていた間に利確・損切りに届いていた場合の、約定価格と時刻 */
+function execute(sym, side, notional, reason, qty, opts) {
+  const fixed = opts && opts.price > 0;
+  if (!fixed && !priceOk(sym)) return '価格を最新の状態にできていないため、いまは売買できません。数秒待ってから、もう一度お試しください。';
   // 気配値が取れているときは、買いは売り注文の価格(ask)、売りは買い注文の価格(bid)で約定させる
-  const quote = liveQuote(sym);
-  const px = quote ? (side === 'buy' ? quote.ask : quote.bid) : T.last[sym];
+  const quote = fixed ? null : liveQuote(sym);
+  const px = fixed ? opts.price : quote ? (side === 'buy' ? quote.ask : quote.bid) : T.last[sym];
   if (!(px > 0)) return '価格を取得できていません。';
   if (qty === undefined) qty = notional / px; else notional = qty * px;
   if (!(notional > 0)) return '金額を入力してください。';
@@ -2100,15 +2169,51 @@ function execute(sym, side, notional, reason, qty) {
       T.positions[sym] = { qty: dir * qty, avg: px, tp: null, sl: null, opened: Date.now() };
     }
   }
-  T.history.unshift({ t: Date.now(), sym, side, qty, price: px, fee, pnl, reason: reason || 'manual' });
+  T.history.unshift({ t: fixed && opts.t ? opts.t : Date.now(), sym, side, qty, price: px, fee, pnl, reason: reason || 'manual', away: fixed });
   T.history.length = Math.min(T.history.length, 3000);
   saveTrade();
   return null;
 }
-function closePosition(sym, reason) {
+function closePosition(sym, reason, opts) {
   const p = T.positions[sym];
   if (!p) return 'ポジションがありません。';
-  return execute(sym, p.qty > 0 ? 'sell' : 'buy', 0, reason, Math.abs(p.qty));
+  return execute(sym, p.qty > 0 ? 'sell' : 'buy', 0, reason, Math.abs(p.qty), opts);
+}
+/* ページを閉じていた間(またはスリープ中)の値動きを取り寄せて、
+ * その間に利確・損切りの価格に届いていたら、届いた時点の価格で決済する。
+ * これをしないと、「損切りに届きそうなら閉じておき、戻ってから開く」ことで損切りを逃れられてしまう。 */
+const reconciled = {}; // sym -> true: 確認済み / 'busy': 確認中
+async function reconcile(sym) {
+  if (reconciled[sym]) return;
+  const pos = T.positions[sym];
+  const from = pos ? Math.max(pos.opened, T.seen[sym] || 0) : 0, gap = Date.now() - from;
+  if (!pos || (pos.tp === null && pos.sl === null) || gap < 90000) { reconciled[sym] = true; return; }
+  reconciled[sym] = 'busy';
+  const [api, ms] = gap <= 1000 * 6e4 ? ['1m', 6e4] : gap <= 1000 * 3e5 ? ['5m', 3e5] : gap <= 1000 * 36e5 ? ['1h', 36e5] : ['1d', 864e5];
+  try {
+    // from を含む足は、それより前の値動きも含むので使わない(次の足から調べる)
+    const rows = await fetchKlines(sym, api, 1000, 0, Math.ceil(from / ms) * ms);
+    const p = T.positions[sym];
+    if (p && p.opened === pos.opened) {
+      const long = p.qty > 0;
+      for (const b of rows) {
+        if (b.t + ms > Date.now()) break; // まだ確定していない足は、いまの価格での判定に任せる
+        let hit = null;
+        // 同じ足の中で両方に届いていたら、不利なほう(損切り)を先とみなす。足の始値がすでに越えていたら、その始値で約定
+        if (p.sl !== null && (long ? b.l <= p.sl : b.h >= p.sl)) hit = ['sl', long ? Math.min(p.sl, b.o) : Math.max(p.sl, b.o)];
+        else if (p.tp !== null && (long ? b.h >= p.tp : b.l <= p.tp)) hit = ['tp', p.tp];
+        if (!hit) continue;
+        if (closePosition(sym, hit[0], { price: hit[1], t: b.t + ms }) === null) {
+          const h = T.history[0], q = quoteOf(sym);
+          toast(`${labelOf(sym)}:ページを開いていない間に${hit[0] === 'tp' ? '利確' : '損切り'}の価格に届いていたため、その価格で決済しました(損益 ${fmtMoney(h.pnl - h.fee, q, true)} ${q})`);
+        }
+        break;
+      }
+    }
+  } catch (e) { /* 取り寄せられなかったときは、いまの価格での判定だけになる */ }
+  reconciled[sym] = true;
+  T.seen[sym] = Date.now();
+  saveTrade(); renderTrade(); draw();
 }
 // 利確・損切りの価格が、いまの価格と向きに合っているか調べる
 function checkLevels(dir, px, tp, sl) {
@@ -2145,23 +2250,29 @@ function toast(text) {
 function tradeTick() {
   const n = state.bars.length;
   if (!state.live || !n) return;
-  T.last[state.symbol] = state.bars[n - 1].c;
-  checkTriggers(state.symbol);
+  const sym = state.symbol;
+  T.last[sym] = state.bars[n - 1].c;
+  // 先に、閉じていた間の値動きを確かめる。済むまでは、いまの価格での判定をしない
+  if (reconciled[sym] === true) { T.seen[sym] = Date.now(); checkTriggers(sym); }
+  else if (!reconciled[sym] && !state.loading) reconcile(sym);
   renderTrade();
 }
 // 表示していない銘柄のポジションも、価格を取りにいって利確・損切りを判定する
 function pollPositions() {
   if (!state.live || document.hidden) return;
   Object.keys(T.positions).filter(sym => sym !== state.symbol).forEach(sym => {
-    fetchKlines(sym, '1m', 1).then(rows => {
+    fetchKlines(sym, '1m', 1).then(async rows => {
       T.last[sym] = rows[rows.length - 1].c;
-      checkTriggers(sym);
+      otherFresh[sym] = Date.now();
+      await reconcile(sym);
+      if (reconciled[sym] === true) { T.seen[sym] = Date.now(); checkTriggers(sym); }
       saveTrade(); renderTrade(); draw();
     }).catch(() => { /* 次の周期でやり直す */ });
   });
 }
 
 function setHtml(node, html) { if (node.innerHTML !== html) node.innerHTML = html; }
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 function setTxt(id, text, cls) {
   const n = $(id);
   if (n.textContent !== text) n.textContent = text;
@@ -2175,7 +2286,9 @@ function renderTrade() {
   document.querySelectorAll('.trQuote').forEach(n => { if (n.textContent !== q) n.textContent = q; });
   setTxt('trSym', curSymbol().label);
   setTxt('trPrice', fmtPrice(px));
-  $('trBuy').disabled = $('trSell').disabled = !(px > 0);
+  const tradable = px > 0 && priceOk(sym);
+  $('trBuy').disabled = $('trSell').disabled = !tradable;
+  $('pClose').disabled = !tradable;
   if (!(px > 0)) setTxt('trMsg', state.loading ? '' : '実際の価格を取得できていないため、いまは注文できません。');
   else if ($('trMsg').textContent.startsWith('実際の価格')) setTxt('trMsg', '');
 
@@ -2208,8 +2321,8 @@ function renderTrade() {
   const others = Object.keys(T.positions).filter(s => s !== sym);
   setHtml($('trOthers'), others.map(s => {
     const p = T.positions[s], u = unrealized(s), oq = quoteOf(s);
-    return `<button type="button" data-sym="${s}"><span>${labelOf(s)} <span class="dim">${p.qty > 0 ? '買い' : '売り'}</span></span>` +
-      `<span class="${pnlClass(u)}">${fmtMoney(u, oq, true)} ${oq}</span></button>`;
+    return `<button type="button" data-sym="${esc(s)}"><span>${esc(labelOf(s))} <span class="dim">${p.qty > 0 ? '買い' : '売り'}</span></span>` +
+      `<span class="${pnlClass(u)}">${fmtMoney(u, oq, true)} ${esc(oq)}</span></button>`;
   }).join(''));
 
   setHtml($('trHist'), T.history.length ? T.history.slice(0, 40).map(h => {
@@ -2217,7 +2330,7 @@ function renderTrade() {
     const when = `${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
     const why = h.reason === 'tp' ? '・利確' : h.reason === 'sl' ? '・損切り' : '';
     const net = h.pnl === null ? null : h.pnl - h.fee;
-    return `<div class="h-row"><span><span class="${h.side === 'buy' ? 'up' : 'down'}">${h.side === 'buy' ? '買い' : '売り'}</span> ${labelOf(h.sym)}${why}</span>` +
+    return `<div class="h-row"><span><span class="${h.side === 'buy' ? 'up' : 'down'}">${h.side === 'buy' ? '買い' : '売り'}</span> ${esc(labelOf(h.sym))}${why}${h.away ? '・不在中' : ''}</span>` +
       `<span class="h-pnl ${net === null ? 'dim' : pnlClass(net)}">${net === null ? '新規' : fmtMoney(net, hq, true) + ' ' + hq}</span>` +
       `<span class="dim">${fmtQty(h.qty)} @ ${fmtPrice(h.price)}</span><span class="dim h-pnl">${when}</span></div>`;
   }).join('') : '<span class="dim">まだ取引がありません。</span>');
@@ -2354,6 +2467,7 @@ function bindTrade() {
     armed = 0; reset.textContent = '口座をリセット';
     const last = T.last, quotes = T.quotes;
     T = freshTrade(); T.last = last; T.quotes = quotes;
+    Object.keys(reconciled).forEach(k => delete reconciled[k]);
     saveTrade(); renderTrade(); draw();
     setTxt('trMsg', '口座をリセットしました。', 'msg');
   });
@@ -2465,7 +2579,7 @@ function renderAnalysis() {
     `<p class="dim small">横軸は取引の順番です。保有中のポジションの含み損益は含みません。</p><h3>銘柄ごとの成績</h3>`;
   html += st.bySym.length
     ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>銘柄</th><th>決済</th><th>勝率</th><th>損益 (${q})</th></tr></thead><tbody>` +
-      st.bySym.map(s => `<tr><td>${labelOf(s.sym)}</td><td>${s.n}</td><td>${s.n ? (s.wins / s.n * 100).toFixed(0) + '%' : '—'}</td><td class="${pnlClass(s.net)}">${fmtMoney(s.net, q, true)}</td></tr>`).join('') +
+      st.bySym.map(s => `<tr><td>${esc(labelOf(s.sym))}</td><td>${s.n}</td><td>${s.n ? (s.wins / s.n * 100).toFixed(0) + '%' : '—'}</td><td class="${pnlClass(s.net)}">${fmtMoney(s.net, q, true)}</td></tr>`).join('') +
       `</tbody></table></div>`
     : `<p class="dim">まだ取引がありません。デモトレードで売買すると、ここに成績が出ます。</p>`;
   if (st.n > 0 && st.n < 30) html += `<p class="dim small">決済が ${st.n} 回と少ないため、勝率などの数字は偶然に大きく左右されます。目安として見てください。</p>`;
@@ -2510,6 +2624,19 @@ resize();
 loadData();
 setInterval(poll, 5000);
 setInterval(pollPositions, 15000);
-setInterval(() => { if (!document.hidden && !dlg.ind) draw(); }, 1000); // 残り時間の表示を進める
-document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+setInterval(() => {
+  if (document.hidden) return;
+  if (!dlg.ind) draw();   // 残り時間の表示を進める
+  renderTrade();          // 価格が古くなったら、注文ボタンを止める
+}, 1000);
+// 「最後に価格を確かめた時刻」を定期的に保存する(次に開いたとき、閉じていた間の値動きを調べる起点になる)
+setInterval(() => { if (!document.hidden && Object.keys(T.positions).length) saveTrade(); }, 30000);
+window.addEventListener('pagehide', saveTrade);
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenAt = Date.now(); saveTrade(); return; }
+  // 長く裏に回っていた(スリープなど)あとは、その間の値動きを調べ直す
+  if (hiddenAt && Date.now() - hiddenAt > 90000) Object.keys(reconciled).forEach(k => delete reconciled[k]);
+  poll();
+});
 })();
