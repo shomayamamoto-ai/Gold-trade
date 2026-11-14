@@ -1,6 +1,8 @@
 # サイトを GitHub Pages に公開する。
 # このブランチに push するたびに、自動で最新の内容に更新される。
 # 事前に、リポジトリの Settings → Pages → Source を「GitHub Actions」にしておく必要がある。
+# 使う部品は、版の名前ではなく中身を特定する番号(コミット)で固定している。
+# こうしておくと、部品の側があとから書き換えられても、確かめた内容のまま動く。
 name: Deploy to GitHub Pages
 
 on:
@@ -20,13 +22,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
       - name: Collect site files
         run: |
           mkdir _site
           cp index.html guide.html guide.js style.css indicators.js app.js _site/
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
           path: _site
 
@@ -42,4 +44,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
