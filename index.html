@@ -140,8 +140,12 @@
         <dt>平均取得価格</dt><dd id="pAvg"></dd>
         <dt>評価損益</dt><dd id="pPnl"></dd>
       </dl>
-      <label class="row"><span class="lbl">利確の価格</span><input id="pTp" class="ctl" type="number" inputmode="decimal" min="0" step="any" placeholder="なし"></label>
-      <label class="row"><span class="lbl">損切りの価格</span><input id="pSl" class="ctl" type="number" inputmode="decimal" min="0" step="any" placeholder="なし"></label>
+      <label class="row"><span class="lbl">利確の価格<small id="pTpEst" class="tr-est"></small></span><input id="pTp" class="ctl" type="number" inputmode="decimal" min="0" step="any" placeholder="なし"></label>
+      <label class="row"><span class="lbl">損切りの価格<small id="pSlEst" class="tr-est"></small></span><input id="pSl" class="ctl" type="number" inputmode="decimal" min="0" step="any" placeholder="なし"></label>
+      <div class="tr-btns tr-btns-sub">
+        <button id="pBe" class="ctl btn" type="button" title="損切りを、建てたときの価格に動かします">損切りを建値へ</button>
+        <button id="pHalf" class="ctl btn" type="button">半分を決済</button>
+      </div>
       <div class="tr-btns">
         <button id="pSave" class="ctl btn" type="button">利確・損切りを保存</button>
         <button id="pClose" class="ctl btn primary" type="button">決済する</button>
@@ -251,7 +255,7 @@
         <dt>インジケーターを足す</dt>
         <dd>「<span class="touch">指標</span><span class="mouse">インジケーター</span>」から選びます(57種類・名前で検索可)。☆ を押すと「よく使う」に入ります。いちばん下の「＋ 自分で作る」では、式を書いてオリジナルの線や、売買の合図(▲▼)も作れます。合図は、設定画面から「過去データで試す」「出たら知らせる」が使えます。設定や削除は、名前の横の<span class="touch">「⋯」</span><span class="mouse">アイコン</span>から。</dd>
         <dt>線を引く・画像で保存する</dt>
-        <dd>「ツール」から、水平線・トレンドライン・画像の保存ができます。</dd>
+        <dd>「ツール」から、水平線・垂直線・トレンドライン・長方形・フィボナッチを引けます。同じメニューで、表示の切りかえ(ローソク足・平均足・ライン)と、画像の保存もできます。</dd>
         <dt>デモトレード(仮想の資金で練習)</dt>
         <dd><span class="touch">画面下の「注文する」</span><span class="mouse">右上の「デモトレード」</span>から。利確・損切りの線は、チャート上でドラッグして動かせます。</dd>
         <dt>学ぶ</dt>

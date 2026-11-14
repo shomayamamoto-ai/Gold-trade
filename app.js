@@ -97,6 +97,9 @@ const IND_TYPES = {
   macd: { name: 'MACD', simple: true },
 };
 const DRAW_COLOR = '#2f80ed';
+const TWO_POINT = ['t', 'r', 'f']; // 2点で決める図形:トレンドライン、長方形、フィボナッチ
+const FIB = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+const CHART_TYPES = [['candle', 'ローソク足'], ['heikin', '平均足'], ['line', 'ライン(終値)']];
 const MA_KINDS = [['sma', '単純 (SMA)'], ['ema', '指数 (EMA)'], ['rma', 'Smoothed (RMA)'], ['wma', '加重 (WMA)'],
   ['hma', 'ハル (HMA)'], ['dema', '2重指数 (DEMA)'], ['tema', '3重指数 (TEMA)'], ['kama', '適応型 (KAMA)'], ['vwma', '出来高加重 (VWMA)']];
 // indicators.js で定義した定番インジケーターを、種類の一覧に加える
@@ -255,7 +258,7 @@ const legendsEl = $('legends');
 function save() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({
-      symbol: state.symbol, interval: state.interval, theme: state.theme, mainWeight: state.mainWeight, drawings: state.drawings,
+      symbol: state.symbol, interval: state.interval, theme: state.theme, mainWeight: state.mainWeight, drawings: state.drawings, chartType: state.chartType,
       tradeOpen: state.tradeOpen,
       custom: SYMBOLS.slice(BUILTIN).map(x => ({ id: x.id, label: x.label, quote: x.quote || null })),
       customInds: customDefs, favs: favs.filter(t => IND_TYPES[t]),
@@ -283,6 +286,7 @@ function load() {
   if (s && THEMES[s.theme]) state.theme = s.theme;
   else if (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) state.theme = 'dark';
   if (s && s.mainWeight > 0) state.mainWeight = s.mainWeight;
+  state.chartType = s && CHART_TYPES.some(c => c[0] === s.chartType) ? s.chartType : 'candle';
   state.tradeOpen = s && typeof s.tradeOpen === 'boolean' ? s.tradeOpen : window.innerWidth > 1000;
   if (s && s.drawings && typeof s.drawings === 'object') {
     const pt = q => q && typeof q === 'object' && isFinite(q.t) && isFinite(q.price) ? { t: +q.t, price: +q.price } : null;
@@ -291,7 +295,8 @@ function load() {
       state.drawings[sym] = s.drawings[sym].slice(0, 200).map(d => {
         const p1 = pt(d && d.p1), p2 = pt(d && d.p2);
         if (d && d.type === 'h' && p1) return { type: 'h', p1 };
-        if (d && d.type === 't' && p1 && p2) return { type: 't', p1, p2 };
+        if (d && TWO_POINT.includes(d.type) && p1 && p2) return { type: d.type, p1, p2 };
+        if (d && d.type === 'v' && p1) return { type: 'v', p1 };
         return null;
       }).filter(Boolean);
     });
@@ -1066,6 +1071,16 @@ function gridAndAxis(pane, min, max, yOf, th, fmt) {
   });
 }
 
+/* 平均足:値動きをならして、流れを見やすくした足(実際の4本値とは違う)。
+ *   終値 = (始値 + 高値 + 安値 + 終値) ÷ 4、始値 = 1本前の平均足の(始値 + 終値) ÷ 2 */
+function heikin(bars) {
+  const out = new Array(bars.length);
+  for (let i = 0; i < bars.length; i++) {
+    const b = bars[i], c = (b.o + b.h + b.l + b.c) / 4, o = i ? (out[i - 1].o + out[i - 1].c) / 2 : (b.o + b.c) / 2;
+    out[i] = { o, c, h: Math.max(b.h, o, c), l: Math.min(b.l, o, c) };
+  }
+  return out;
+}
 function drawMain(pane, i0, i1, th) {
   const bars = state.bars, pw = plotW(), bw = state.barW;
   let lo = Infinity, hi = -Infinity, vmax = 0;
@@ -1093,8 +1108,17 @@ function drawMain(pane, i0, i1, th) {
     ctx.fillStyle = rgba(up ? UP : DOWN, 0.45);
     ctx.fillRect(left, pane.y + pane.h - vh, body, vh);
   }
-  for (let i = i0; i <= i1; i++) {
-    const b = bars[i], x = xOf(i), up = b.c >= b.o;
+  if (state.chartType === 'line') {
+    // 終値を結んだ線
+    ctx.beginPath();
+    for (let i = i0; i <= i1; i++) { if (i === i0) ctx.moveTo(xOf(i), yOf(bars[i].c)); else ctx.lineTo(xOf(i), yOf(bars[i].c)); }
+    ctx.strokeStyle = th.text; ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; ctx.stroke(); ctx.lineWidth = 1;
+    ctx.lineTo(xOf(i1), pane.y + pane.h); ctx.lineTo(xOf(i0), pane.y + pane.h); ctx.closePath();
+    ctx.fillStyle = rgba(DRAW_COLOR, 0.06); ctx.fill();
+  }
+  const shown = state.chartType === 'heikin' ? heikin(bars) : bars;
+  for (let i = i0; i <= i1 && state.chartType !== 'line'; i++) {
+    const b = shown[i], x = xOf(i), up = b.c >= b.o;
     const left = Math.round(x - body / 2);
     ctx.fillStyle = up ? UP : DOWN;
     const cx = left + Math.floor(body / 2);
@@ -1378,7 +1402,18 @@ function hitDrawing(pos, tol) {
   for (let k = list.length - 1; k >= 0; k--) {
     const d = list[k];
     if (d.type === 'h') { if (Math.abs(pos.y - pane.yOf(d.p1.price)) <= tol) return d; continue; }
+    if (d.type === 'v') { if (Math.abs(pos.x - xOf(idxOfTime(d.p1.t))) <= tol) return d; continue; }
     const [a, b] = drawingPoints(d, pane);
+    if (d.type === 'r' || d.type === 'f') {
+      const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x), y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y);
+      if (pos.x < x0 - tol || pos.x > x1 + tol || pos.y < y0 - tol || pos.y > y1 + tol) continue;
+      // 長方形は枠の近く、フィボナッチは各水準の線の近くをつかむ(中をさわっても、下の足を選べるように)
+      const near = d.type === 'r'
+        ? Math.min(Math.abs(pos.x - x0), Math.abs(pos.x - x1), Math.abs(pos.y - y0), Math.abs(pos.y - y1)) <= tol
+        : FIB.some(f => Math.abs(pos.y - (b.y + (a.y - b.y) * f)) <= tol);
+      if (near) return d;
+      continue;
+    }
     const dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
     const u = len2 ? clamp(((pos.x - a.x) * dx + (pos.y - a.y) * dy) / len2, 0, 1) : 0;
     if (Math.hypot(pos.x - (a.x + u * dx), pos.y - (a.y + u * dy)) <= tol) return d;
@@ -1398,17 +1433,25 @@ function drawDrawings(pane) {
       const y = Math.round(pane.yOf(d.p1.price)) + 0.5;
       ctx.moveTo(0, y); ctx.lineTo(pw, y); ctx.stroke();
       tags.push([y, d.p1.price]);
+    } else if (d.type === 'v') {
+      const x = Math.round(xOf(idxOfTime(d.p1.t))) + 0.5;
+      ctx.moveTo(x, pane.y); ctx.lineTo(x, pane.y + pane.h); ctx.stroke();
+    } else if (d.type === 'r' || d.type === 'f') {
+      const [a, b] = drawingPoints(d, pane);
+      drawShape(d.type, a, b, d.p1.price, d.p2.price, on);
+      if (on) [a, b].forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill(); });
     } else {
       const [a, b] = drawingPoints(d, pane);
       ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       if (on) [a, b].forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill(); });
     }
   });
-  // トレンドラインの2点目を選んでいる間の下書き
-  if (state.tool === 't' && state.pending && state.hover) {
+  // 2点目を選んでいる間の下書き
+  if (TWO_POINT.includes(state.tool) && state.pending && state.hover) {
     const a = { x: xOf(idxOfTime(state.pending.t)), y: pane.yOf(state.pending.price) };
     ctx.lineWidth = 1.4; ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(state.hover.x, state.hover.y); ctx.stroke();
+    if (state.tool === 't') { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(state.hover.x, state.hover.y); ctx.stroke(); }
+    else drawShape(state.tool, a, state.hover, state.pending.price, pane.vOf(state.hover.y), false);
     ctx.setLineDash([]);
     ctx.beginPath(); ctx.arc(a.x, a.y, 4, 0, Math.PI * 2); ctx.fill();
   }
@@ -1444,6 +1487,26 @@ function saveImage() {
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   }, 'image/png');
 }
+// 長方形と、フィボナッチ・リトレースメント(p1 を 100%、p2 を 0% として、戻りの目安の水準を引く)
+function drawShape(type, a, b, price1, price2, on) {
+  const x0 = Math.min(a.x, b.x), w = Math.abs(b.x - a.x);
+  if (type === 'r') {
+    ctx.fillStyle = rgba(DRAW_COLOR, 0.1);
+    ctx.fillRect(x0, Math.min(a.y, b.y), w, Math.abs(b.y - a.y));
+    ctx.strokeRect(Math.round(x0) + 0.5, Math.round(Math.min(a.y, b.y)) + 0.5, w, Math.abs(b.y - a.y));
+    ctx.fillStyle = DRAW_COLOR;
+    return;
+  }
+  ctx.font = '11px -apple-system, "Segoe UI", "Hiragino Sans", sans-serif'; ctx.textBaseline = 'bottom'; ctx.textAlign = 'left';
+  FIB.forEach(f => {
+    const y = Math.round(b.y + (a.y - b.y) * f) + 0.5;
+    ctx.globalAlpha = f === 0 || f === 1 || f === 0.5 || f === 0.618 ? 1 : 0.6;
+    ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + Math.max(w, 40), y); ctx.stroke();
+    ctx.fillText(`${(f * 100).toFixed(1)}%  ${fmtPrice(price2 + (price1 - price2) * f)}`, x0 + 3, y - 2);
+  });
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = on ? 2.5 : 1.4;
+}
 function setTool(tool) {
   state.tool = tool; state.pending = null;
   if (tool) state.sel = null;
@@ -1453,8 +1516,11 @@ function updateHint() {
   const box = $('hint'), btn = $('hintBtn');
   let text = '';
   if (state.tool === 'h') text = '線を置きたい価格をタップ';
+  else if (state.tool === 'v') text = '線を置きたい日時をタップ';
+  else if (state.tool === 'f') text = state.pending ? '動きの終わり(戻りを測りたい側)をタップ' : '動きの始まり(安値か高値)をタップ';
+  else if (state.tool === 'r') text = state.pending ? '反対側の角をタップ' : '角をタップ';
   else if (state.tool === 't') text = state.pending ? '終点をタップ' : '始点をタップ';
-  else if (state.sel) text = state.sel.type === 't' ? 'ドラッグで移動(端の点で向きを変更)' : 'ドラッグで移動できます';
+  else if (state.sel) text = TWO_POINT.includes(state.sel.type) ? 'ドラッグで移動(端の点で形を変更)' : 'ドラッグで移動できます';
   box.hidden = !text;
   $('hintText').textContent = text;
   btn.textContent = state.tool ? '中止' : '削除';
@@ -1487,9 +1553,9 @@ function handleTap(pos, tol) {
     });
   }
   if (curDrawings().length >= 200) { toast('線は1銘柄につき200本までです。'); setTool(null); return; }
-  if (state.tool === 'h') { curDrawings().push({ type: 'h', p1: pt }); setTool(null); }
+  if (state.tool === 'h' || state.tool === 'v') { curDrawings().push({ type: state.tool, p1: pt }); setTool(null); }
   else if (!state.pending) { state.pending = pt; updateHint(); }
-  else { curDrawings().push({ type: 't', p1: state.pending, p2: pt }); setTool(null); }
+  else { curDrawings().push({ type: state.tool, p1: state.pending, p2: pt }); setTool(null); }
   save();
 }
 
@@ -1610,7 +1676,7 @@ function updateLegends() {
         setText(le, '.params', `${ov.p.kind.toUpperCase()} ${ov.p.len}`);
         setVals(le, ov.out && i >= 0 ? [['', fmtPrice(ov.out.val[i]), ov.p.color]] : []);
       });
-      setText(el, '.name', `${curSymbol().label} · ${curInterval().label}`);
+      setText(el, '.name', `${curSymbol().label} · ${curInterval().label}${state.chartType === 'heikin' ? ' · 平均足' : ''}`);
       const lt = feed.lastTick ? new Date(feed.lastTick) : null;
       setText(el, '.params', state.live
         ? `Binance · ${lt ? `${pad2(lt.getHours())}:${pad2(lt.getMinutes())}:${pad2(lt.getSeconds())} に値動き` : '取引待ち'}`
@@ -2117,6 +2183,14 @@ function buildTopbar() {
   const toggleDraw = on => { dMenu.hidden = !on; dBtn.setAttribute('aria-expanded', String(on)); };
   [['水平線', '決めた価格に横線を引く', () => setTool('h')],
    ['トレンドライン', '2点を結ぶ線を引く', () => setTool('t')],
+   ['垂直線', '決めた日時に縦線を引く', () => setTool('v')],
+   ['長方形', '2つの角を決めて、値動きの範囲を囲む', () => setTool('r')],
+   ['フィボナッチ', '上げ(下げ)の始まりと終わりを決めて、戻りの目安を引く', () => setTool('f')],
+   ['表示を切りかえ', 'ローソク足 → 平均足 → ライン の順に変わります', () => {
+     const k = CHART_TYPES.findIndex(c => c[0] === state.chartType);
+     state.chartType = CHART_TYPES[(k + 1) % CHART_TYPES.length][0];
+     save(); draw(); toast(`表示:${CHART_TYPES.find(c => c[0] === state.chartType)[1]}`);
+   }],
    ['線をすべて削除', 'この銘柄に引いた線を全部消す', () => { state.drawings[state.symbol] = []; state.sel = null; save(); setTool(null); }],
    ['画像として保存', 'いまのチャートを PNG 画像でダウンロード', () => { state.hover = null; render(); saveImage(); }],
    ['使い方', '画面の動かし方と、主な機能の場所', () => openHelp()],
@@ -2212,7 +2286,7 @@ function bindPointer() {
       resizing = null;
       const tol = e.pointerType === 'mouse' ? 8 : 18;
       let keys = ['p1', 'p2'];
-      if (state.sel.type === 't') {
+      if (TWO_POINT.includes(state.sel.type)) {
         // 端の点をつかんだときは、その点だけ動かす(向きや長さを変えられる)
         const ends = drawingPoints(state.sel, panes[0]);
         const k = ends.findIndex(q => Math.hypot(q.x - p.x, q.y - p.y) <= tol);
@@ -2252,8 +2326,8 @@ function bindPointer() {
       const di = Math.round((p.x - dragD.start.x) / state.barW);
       dragD.keys.forEach(k => {
         if (!o[k]) return;
-        d[k].price = o[k].price + dv;
-        if (d.type === 't') d[k].t = timeOfIdx(Math.round(idxOfTime(o[k].t)) + di);
+        if (d.type !== 'v') d[k].price = o[k].price + dv;
+        if (d.type !== 'h') d[k].t = timeOfIdx(Math.round(idxOfTime(o[k].t)) + di);
       });
       draw();
       return;
@@ -2797,6 +2871,16 @@ function renderTrade() {
     setTxt('pQty', `${fmtQty(pos.qty)}(${fmtMoney(Math.abs(pos.qty) * (px > 0 ? px : pos.avg), q)} ${q} 分)`);
     setTxt('pAvg', fmtPrice(pos.avg));
     setTxt('pPnl', `${fmtMoney(u, q, true)} ${q}(${(base ? u / base * 100 : 0).toFixed(2)}%)`, pnlClass(u));
+    // 利確・損切りに届いたときの損益の目安(手数料も引いた額)。入力中の値で計算する
+    const est = (id, out) => {
+      const v = parseFloat($(id).value);
+      if (!(v > 0)) { setTxt(out, ''); return; }
+      const r = pos.qty * (v - pos.avg) - Math.abs(pos.qty) * v * FEE - (pos.feeOpen || 0);
+      setTxt(out, `届くと ${fmtMoney(r, q, true)} ${q}`, 'tr-est ' + pnlClass(r));
+    };
+    est('pTp', 'pTpEst'); est('pSl', 'pSlEst');
+    $('pHalf').disabled = $('pClose').disabled || gone;
+    $('pBe').disabled = !tradable;
     // 入力中の値を消さないよう、ポジションが変わったときだけ入力欄を書き換える
     const key = [sym, pos.opened, pos.tp, pos.sl].join('|');
     if (key !== posKey) {
@@ -3080,6 +3164,30 @@ function bindTrade() {
     const h = T.history[0];
     setTxt('trMsg', `決済しました(損益 ${fmtMoney(netOf(h), q, true)} ${q})`, 'msg');
     renderTrade(); draw();
+  });
+  // 半分だけ決済する(残りはそのまま持ち続ける)
+  $('pHalf').addEventListener('click', () => {
+    const sym = state.symbol, q = quoteOf(sym), held = T.positions[sym];
+    if (!held) return;
+    const err = execute(sym, held.qty > 0 ? 'sell' : 'buy', 0, 'manual', Math.abs(held.qty) / 2);
+    if (err) { setTxt('pMsg', err, 'msg down'); return; }
+    const h = T.history[0];
+    setTxt('pMsg', `半分を決済しました(損益 ${fmtMoney(netOf(h), q, true)} ${q})。残りは持ち続けています。`, 'msg');
+    renderTrade(); draw();
+  });
+  // 損切りを、買った(売った)ときの価格に動かす。利益が出ているときに使うと、そこから下がっても損にならない
+  $('pBe').addEventListener('click', () => {
+    const pos = T.positions[state.symbol];
+    if (!pos) return;
+    const before = $('pSl').value;
+    $('pSl').value = String(+pos.avg.toPrecision(10));
+    $('pSave').click();
+    // 断られたとき(まだ利益が出ていないとき)は、入力欄を元に戻して理由を伝える
+    const now = T.positions[state.symbol];
+    if (now && now.sl !== parseFloat($('pSl').value)) {
+      $('pSl').value = before;
+      setTxt('pMsg', '損切りを建値に動かせるのは、利益が出ているときだけです(いまの価格が建値より不利な側にあります)。', 'msg down');
+    }
   });
   $('trOthers').addEventListener('click', e => {
     const b = e.target.closest('button[data-sym]');

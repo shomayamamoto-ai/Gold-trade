@@ -607,3 +607,7 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
 @media (max-width: 760px) { .bt-ctl .ctl { height: 40px; font-size: 16px; } }
 
 .tr-rate { min-height: 1.3em; margin: 2px 0 6px; font-size: 11px; font-variant-numeric: tabular-nums; }
+
+.tr-est { display: block; font-size: 11px; font-variant-numeric: tabular-nums; }
+.tr-btns-sub { margin-bottom: 6px; }
+.tr-btns-sub .btn { flex: 1 1 0; min-width: 0; }
