@@ -4253,6 +4253,28 @@ function bindBacktest() {
   window.addEventListener('resize', () => { if (!ov.hidden) renderBacktest(); });
 }
 
+// ---------------------------------------------------------------- 文字入力のキーボード(スマホ)
+/* スマホでキーボードが出ると、画面の下半分が隠れる。下から出すシート(注文画面・設定)が
+ * キーボードの下に隠れないよう、見えている範囲の高さと、キーボードの高さを CSS に伝える */
+function fitKeyboard() {
+  const vv = window.visualViewport, root = document.documentElement;
+  if (!vv) return;
+  const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+  // ピンチで拡大しているとき(scale が 1 でない)は、キーボードではないので動かさない
+  const on = kb > 80 && Math.abs(vv.scale - 1) < 0.01;
+  root.style.setProperty('--kb', on ? `${Math.round(kb)}px` : '0px');
+  root.style.setProperty('--vvh', `${Math.round(on ? vv.height : window.innerHeight)}px`);
+  root.classList.toggle('kb-open', on);
+  // 入力中の欄が隠れていたら、見える位置まで寄せる
+  const f = document.activeElement;
+  if (on && f && /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName) && f.scrollIntoView) setTimeout(() => f.scrollIntoView({ block: 'nearest' }), 50);
+}
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', fitKeyboard);
+  window.visualViewport.addEventListener('scroll', fitKeyboard);
+  fitKeyboard();
+}
+
 // ---------------------------------------------------------------- 起動
 load();
 buildTopbar();

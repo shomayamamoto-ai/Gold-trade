@@ -662,3 +662,25 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
   .toast { pointer-events: none; }
   body:has(.trade:not([hidden])) .toast { bottom: auto; top: 8px; }
 }
+
+/* ---- スマホ:文字入力のキーボードが出ている間、下から出すシートをキーボードの上に持ち上げる */
+@media (max-width: 760px) {
+  .trade { bottom: var(--kb, 0px); max-height: min(78dvh, calc(var(--vvh, 100dvh) - 6px)); }
+  .kb-open .trade { padding-bottom: 0; }
+  .kb-open .trade-bar { visibility: hidden; }
+  /* キーボードが出ている間は、見える範囲がせまい。売り・買いのボタンは固定せず、入力欄を広く見せる */
+  .kb-open .tr-card:first-child .tr-btns { position: static; margin: 8px 0 0; padding: 0; border-top: 0; }
+  .kb-open .tr-body { scroll-padding-bottom: 12px; }
+  .kb-open .toast { top: 8px; bottom: auto; }
+}
+@media (max-width: 560px) {
+  .overlay { bottom: var(--kb, 0px); }
+  .dialog { max-height: min(88vh, calc(var(--vvh, 100vh) - 6px)); }
+  .kb-open .dialog { padding-bottom: 0; }
+}
+/* ---- スマホ横向き:画面が低いので、売り・買いのボタンは固定しない(固定すると、入力欄がほとんど見えなくなる) */
+@media (max-height: 480px) and (orientation: landscape) and (max-width: 950px) {
+  .tr-card:first-child .tr-btns { position: static; margin: 8px 0 0; padding: 0; border-top: 0; }
+  .tr-body { scroll-padding-bottom: 12px; }
+  .toast { top: 8px; bottom: auto; }
+}
