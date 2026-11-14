@@ -14,7 +14,14 @@ GitHub Pages で公開する設定になっています(Settings → Pages → S
 
 `index.html` をブラウザで開くだけで動きます(ビルド不要)。教科書は `guide.html` です。
 
-- 銘柄:金(PAXG/USDT)、BTC、ETH、XRP、SOL、XRP/JPY、PEPE。一覧の「+ 銘柄を追加…」から、Binance の好きな通貨ペアを追加・削除可能
+- 銘柄:最初から52銘柄を、6つの分類で選べます。一覧の「すべての銘柄から探す」から、Binance で取引されている1,300以上の通貨ペアも追加できます
+  - 金(ゴールド):PAXG/USDT、XAUT/USDT
+  - 主要な暗号資産:BTC、ETH、BNB、XRP、SOL、TRX、DOGE、ADA、BCH、LINK、HYPE、XLM、ZEC、LTC、AVAX、SUI、HBAR、DOT、NEAR、UNI、AAVE、TAO(USDT 建て)
+  - 話題の銘柄:PEPE、SHIB、BONK、WIF、PENGU、TRUMP
+  - 米国株・ETF(Binance の bStocks。株価に連動するトークン):エヌビディア、テスラ、アップル、マイクロソフト、アルファベット、メタ、AMD、TSMC、ストラテジー、コインベース、サークル、S&P500 ETF、ナスダック100 ETF
+  - 円建て:BTC、ETH、XRP、SOL、BNB、DOGE、ADA
+  - 為替:EUR/USDT
+  - 選び方:時価総額の順位(CoinMarketCap、2026年1月)と、Binance の24時間の出来高(2026年11月14日)を調べ、取引中で出来高のあるものに限りました
 - 時間足:1分/5分/15分/30分/1時間/4時間/日/週/月
 - ドラッグで左右に移動、ホイール(スマホはピンチ)で拡大・縮小、ダブルクリックで元に戻す
 - ペインの境目を上下にドラッグすると、高さを変えられます(境目をダブルクリックで元に戻す)

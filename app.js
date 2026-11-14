@@ -11,14 +11,70 @@ if (window.top !== window.self && /\.github\.io$/.test(location.hostname)) {
 }
 
 // ---------------------------------------------------------------- 定数
+/* 最初から選べる銘柄。取引所(Binance)で実際に取引されていて、出来高のあるものを、分類ごとに並べる。
+ * 2026年11月に、時価総額の順位(CoinMarketCap)と、Binance の24時間の出来高を調べて選んだ。
+ * base は、取引所につながらないときに見本の値動きを作るための、だいたいの価格 */
+const SYMBOL_CATS = [
+  ['gold', '金(ゴールド)'], ['major', '主要な暗号資産'], ['meme', '話題の銘柄(値動きがとても大きい)'],
+  ['stock', '米国株・ETF(トークン化 bStocks)'], ['jpy', '円建て'], ['fx', '為替'],
+];
+// long は銘柄の一覧に出す名前(日本語の名前つき)。label は、凡例・履歴・お知らせなどに使う短い名前
+const sym = (id, long, base, cat, quote) => {
+  const pair = (long.match(/[A-Z0-9]+\/[A-Z]+/) || [long])[0];
+  return { id, long, label: cat === 'gold' ? long : pair, base, cat, quote: quote || 'USDT' };
+};
 const SYMBOLS = [
-  { id: 'PAXGUSDT', label: '金 PAXG/USDT', base: 4000 },
-  { id: 'BTCUSDT', label: 'BTC/USDT', base: 77000 },
-  { id: 'ETHUSDT', label: 'ETH/USDT', base: 3000 },
-  { id: 'XRPUSDT', label: 'XRP/USDT', base: 1.4 },
-  { id: 'SOLUSDT', label: 'SOL/USDT', base: 150 },
-  { id: 'XRPJPY', label: 'XRP/JPY', base: 165 },
-  { id: 'PEPEUSDT', label: 'PEPE/USDT', base: 0.0000045 },
+  sym('PAXGUSDT', '金 PAXG/USDT', 3800, 'gold'),
+  sym('XAUTUSDT', '金 XAUT/USDT', 3800, 'gold'),
+  sym('BTCUSDT', 'BTC/USDT ビットコイン', 66000, 'major'),
+  sym('ETHUSDT', 'ETH/USDT イーサリアム', 1800, 'major'),
+  sym('BNBUSDT', 'BNB/USDT', 590, 'major'),
+  sym('XRPUSDT', 'XRP/USDT リップル', 0.95, 'major'),
+  sym('SOLUSDT', 'SOL/USDT ソラナ', 72, 'major'),
+  sym('TRXUSDT', 'TRX/USDT トロン', 0.3, 'major'),
+  sym('DOGEUSDT', 'DOGE/USDT ドージコイン', 0.06, 'major'),
+  sym('ADAUSDT', 'ADA/USDT カルダノ', 0.15, 'major'),
+  sym('BCHUSDT', 'BCH/USDT ビットコインキャッシュ', 210, 'major'),
+  sym('LINKUSDT', 'LINK/USDT チェーンリンク', 9, 'major'),
+  sym('HYPEUSDT', 'HYPE/USDT ハイパーリキッド', 65, 'major'),
+  sym('XLMUSDT', 'XLM/USDT ステラ', 0.14, 'major'),
+  sym('ZECUSDT', 'ZEC/USDT ジーキャッシュ', 850, 'major'),
+  sym('LTCUSDT', 'LTC/USDT ライトコイン', 45, 'major'),
+  sym('AVAXUSDT', 'AVAX/USDT アバランチ', 7.5, 'major'),
+  sym('SUIUSDT', 'SUI/USDT スイ', 0.73, 'major'),
+  sym('HBARUSDT', 'HBAR/USDT ヘデラ', 0.058, 'major'),
+  sym('DOTUSDT', 'DOT/USDT ポルカドット', 0.75, 'major'),
+  sym('NEARUSDT', 'NEAR/USDT ニア', 3.1, 'major'),
+  sym('UNIUSDT', 'UNI/USDT ユニスワップ', 5, 'major'),
+  sym('AAVEUSDT', 'AAVE/USDT アーベ', 100, 'major'),
+  sym('TAOUSDT', 'TAO/USDT ビットテンソル', 190, 'major'),
+  sym('PEPEUSDT', 'PEPE/USDT', 0.0000039, 'meme'),
+  sym('SHIBUSDT', 'SHIB/USDT 柴犬コイン', 0.000004, 'meme'),
+  sym('BONKUSDT', 'BONK/USDT', 0.0000024, 'meme'),
+  sym('WIFUSDT', 'WIF/USDT', 0.13, 'meme'),
+  sym('PENGUUSDT', 'PENGU/USDT', 0.005, 'meme'),
+  sym('TRUMPUSDT', 'TRUMP/USDT', 0.97, 'meme'),
+  sym('NVDABUSDT', 'エヌビディア NVDAB/USDT', 160, 'stock'),
+  sym('TSLABUSDT', 'テスラ TSLAB/USDT', 385, 'stock'),
+  sym('AAPLBUSDT', 'アップル AAPLB/USDT', 356, 'stock'),
+  sym('MSFTBUSDT', 'マイクロソフト MSFTB/USDT', 520, 'stock'),
+  sym('GOOGLBUSDT', 'アルファベット GOOGLB/USDT', 290, 'stock'),
+  sym('METABUSDT', 'メタ METAB/USDT', 634, 'stock'),
+  sym('AMDBUSDT', 'AMD AMDB/USDT', 518, 'stock'),
+  sym('TSMBUSDT', 'TSMC TSMB/USDT', 391, 'stock'),
+  sym('MSTRBUSDT', 'ストラテジー MSTRB/USDT', 103, 'stock'),
+  sym('COINBUSDT', 'コインベース COINB/USDT', 120, 'stock'),
+  sym('CRCLBUSDT', 'サークル CRCLB/USDT', 59, 'stock'),
+  sym('SPYBUSDT', 'S&P500 ETF SPYB/USDT', 748, 'stock'),
+  sym('QQQBUSDT', 'ナスダック100 ETF QQQB/USDT', 671, 'stock'),
+  sym('BTCJPY', 'BTC/JPY ビットコイン', 10500000, 'jpy', 'JPY'),
+  sym('ETHJPY', 'ETH/JPY イーサリアム', 293000, 'jpy', 'JPY'),
+  sym('XRPJPY', 'XRP/JPY リップル', 153, 'jpy', 'JPY'),
+  sym('SOLJPY', 'SOL/JPY ソラナ', 11600, 'jpy', 'JPY'),
+  sym('BNBJPY', 'BNB/JPY', 94000, 'jpy', 'JPY'),
+  sym('DOGEJPY', 'DOGE/JPY ドージコイン', 9.6, 'jpy', 'JPY'),
+  sym('ADAJPY', 'ADA/JPY カルダノ', 24.6, 'jpy', 'JPY'),
+  sym('EURUSDT', 'EUR/USDT ユーロ', 1.1, 'fx'),
 ];
 const BUILTIN = SYMBOLS.length; // これより後ろは、利用者が追加した銘柄
 // 'DOGEUSDT' → 'DOGE/USDT' のように、読みやすい名前にする
@@ -2064,8 +2120,15 @@ function buildTopbar() {
   refreshSymbols = () => { fillSymbols(); $('symbol').value = state.symbol; };
   const fillSymbols = () => {
     sel.textContent = '';
-    SYMBOLS.forEach(s => sel.appendChild(el('option', { value: s.id, text: s.label })));
-    sel.appendChild(el('option', { value: '__add', text: '🔍 すべての銘柄から探す…' }));
+    // 分類ごとにまとめて並べる。利用者が追加した銘柄は「追加した銘柄」にまとめる
+    SYMBOL_CATS.concat([['', '追加した銘柄']]).forEach(([cat, name]) => {
+      const list = SYMBOLS.filter((s, i) => (cat ? s.cat === cat : i >= BUILTIN));
+      if (!list.length) return;
+      const g = el('optgroup', { label: name });
+      list.forEach(s => g.appendChild(el('option', { value: s.id, text: s.long || s.label })));
+      sel.appendChild(g);
+    });
+    sel.appendChild(el('option', { value: '__add', text: '🔍 すべての銘柄から探す(1,300以上)…' }));
     sel.value = state.symbol;
   };
   fillSymbols();
