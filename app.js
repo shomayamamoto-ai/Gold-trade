@@ -2513,10 +2513,16 @@ function acctStats(q) {
 }
 function fmtMoney(v, q, signed) {
   if (!isFinite(v)) return '—';
-  const dg = q === 'JPY' ? 0 : q === 'BTC' || q === 'ETH' ? 6 : 2;
-  const s = Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: dg, maximumFractionDigits: dg });
-  return (v < 0 ? '-' : signed ? '+' : '') + s;
+  const dg = moneyDigits(q);
+  const r = +v.toFixed(dg) || 0; // 先に丸めてから符号を決める(「-0.00」と出さない)
+  const s = Math.abs(r).toLocaleString('en-US', { minimumFractionDigits: dg, maximumFractionDigits: dg });
+  return (r < 0 ? '-' : signed ? '+' : '') + s;
 }
+// 決済通貨ごとの小数の桁数。暗号資産で数える口座(BTC 建てなど)は、1単位が大きいので細かくする
+const CRYPTO_QUOTES = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'DOGE', 'TRX', 'DOT'];
+function moneyDigits(q) { return q === 'JPY' ? 0 : CRYPTO_QUOTES.includes(q) ? 6 : 2; }
+function floorMoney(v, q) { const k = Math.pow(10, moneyDigits(q)); return Math.floor(v * k + 1e-9) / k; }
+const pct2 = v => { const s = v.toFixed(2); return s === '-0.00' ? '0.00' : s; };
 const fmtQty = v => {
   const a = Math.abs(v);
   return a >= 1000 ? fmtCompact(a) : a.toLocaleString('en-US', { maximumSignificantDigits: 6 });
@@ -2581,6 +2587,11 @@ function execute(sym, side, notional, reason, qty, opts) {
     else pos.levelsAt = now;
   } else {
     const st = acctStats(q);
+    // 「100%」などで入れた金額は、押したあとに価格が少し動くだけで、使える金額をわずかに超える。
+    // 超えた分が1%以内なら、断らずに、使える金額いっぱいまで減らして通す(金額で指定した成行注文だけ)
+    if (!fixed && reason === 'manual' && notional + fee > st.avail && notional + fee <= st.avail * 1.01 && st.avail > 0) {
+      notional = st.avail / (1 + FEE) * (1 - 1e-9); qty = notional / px; fee = notional * FEE;
+    }
     if (notional + fee > st.avail + 1e-9) {
       return `使える金額が足りません(使える金額: ${fmtMoney(st.avail, q)} ${q}、手数料込みで ${fmtMoney(notional + fee, q)} ${q} 必要)。`;
     }
@@ -2870,7 +2881,7 @@ function renderTrade() {
     setTxt('pSide', pos.qty > 0 ? '買い(ロング)' : '売り(ショート)', pos.qty > 0 ? 'up' : 'down');
     setTxt('pQty', `${fmtQty(pos.qty)}(${fmtMoney(Math.abs(pos.qty) * (px > 0 ? px : pos.avg), q)} ${q} 分)`);
     setTxt('pAvg', fmtPrice(pos.avg));
-    setTxt('pPnl', `${fmtMoney(u, q, true)} ${q}(${(base ? u / base * 100 : 0).toFixed(2)}%)`, pnlClass(u));
+    setTxt('pPnl', `${fmtMoney(u, q, true)} ${q}(${pct2(base ? u / base * 100 : 0)}%)`, pnlClass(u));
     // 利確・損切りに届いたときの損益の目安(手数料も引いた額)。入力中の値で計算する
     const est = (id, out) => {
       const v = parseFloat($(id).value);
@@ -3052,8 +3063,14 @@ function bindTrade() {
   document.querySelector('.tr-quick').addEventListener('click', e => {
     const pct = parseFloat(e.target.dataset.pct);
     if (!pct) return;
-    const q = quoteOf(state.symbol), v = acctStats(q).avail * pct / (1 + FEE);
-    amt.value = q === 'JPY' ? Math.floor(v) : Math.floor(v * 100) / 100;
+    const sym = state.symbol, q = quoteOf(sym), v = acctStats(q).avail * pct / (1 + FEE);
+    const pos = T.positions[sym], px = T.last[sym];
+    if (pos && px > 0 && floorMoney(v, q) <= 0) {
+      // 使える金額が残っていないとき(全額で持っているとき)は、保有分の何%かを入れる。決済に使える
+      amt.value = floorMoney(Math.abs(pos.qty) * px * pct, q) || '';
+      setTxt('trMsg', `使える金額が残っていないため、保有分の ${Math.round(pct * 100)}% の金額を入れました。「${pos.qty > 0 ? '売り' : '買い'}」を押すと、その分を決済します。`, 'msg');
+    } else amt.value = floorMoney(v, q);
+    renderRisk();
   });
   // 注文の種類(成行 / 指値)
   let orderType = 'market';
@@ -3087,7 +3104,7 @@ function bindTrade() {
     if (!r || !isFinite(pct)) return;
     const q = quoteOf(state.symbol), st = acctStats(q);
     const v = Math.min(st.equity * r / (pct + 2 * FEE), st.avail / (1 + FEE));
-    amt.value = q === 'JPY' ? Math.floor(v) : Math.floor(v * 100) / 100;
+    amt.value = floorMoney(v, q);
     renderRisk();
   });
   const order = side => {
@@ -3108,6 +3125,7 @@ function bindTrade() {
       else if (!(notional > 0)) err = '金額を入力してください。';
       else if (dir > 0 ? lp >= ref : lp <= ref) err = dir > 0 ? '買いの指値は、いまの価格より安くしてください(いまの価格で買うなら「成行」です)。' : '売りの指値は、いまの価格より高くしてください(いまの価格で売るなら「成行」です)。';
       else if (T.orders.length >= 20) err = '予約できる指値注文は20件までです。';
+      else if (opening && notional * (1 + FEE) > acctStats(q).avail + 1e-9) err = `使える金額が足りません(使える金額: ${fmtMoney(acctStats(q).avail, q)} ${q})。金額を減らしてください。`;
       else if (opening) err = checkLevels(dir, lp, tp, sl);
       if (err) { setTxt('trMsg', err, 'msg down'); return; }
       T.orders.push({ id: tnow() + Math.random(), sym, side, price: lp, notional, tp: opening ? tp : null, sl: opening ? sl : null, t: tnow(), note });
@@ -3116,7 +3134,10 @@ function bindTrade() {
       done();
       return;
     }
-    let err = opening && px > 0 ? checkLevels(dir, px, tp, sl) : null;
+    // 利確・損切りは、実際に約定する価格(買いは「買える価格」、売りは「売れる価格」)とも比べる。
+    // そうしないと、買った価格より安い「利確」が通り、すぐ損で決済されてしまう
+    const lq = liveQuote(sym), hiRef = Math.max(px, lq ? lq.ask : px), loRef = Math.min(px, lq ? lq.bid : px);
+    let err = opening && px > 0 ? (checkLevels(dir, dir > 0 ? hiRef : loRef, tp, null) || checkLevels(dir, dir > 0 ? loRef : hiRef, null, sl)) : null;
     if (!err) err = execute(sym, side, notional, 'manual', undefined, { note });
     if (err) { setTxt('trMsg', err, 'msg down'); return; }
     const pos = T.positions[sym];
@@ -3130,7 +3151,8 @@ function bindTrade() {
     const closedAll = !opening && !T.positions[sym], capped = closedAll && notional > h.qty * h.price * 1.02;
     setTxt('trMsg', (closedAll ? `${hadDir > 0 ? '買い' : '売り'}のポジションをすべて決済しました` : `${side === 'buy' ? '買い' : '売り'}ました`) + `:${fmtQty(h.qty)} @ ${fmtPrice(h.price)}` +
       (h.pnl === null ? '' : `(損益 ${fmtMoney(netOf(h), q, true)} ${q})`) +
-      (capped ? '。保有分を超える金額は注文していません。反対向きに持つには、もう一度注文してください。' : ''), 'msg');
+      (capped ? '。保有分を超える金額は注文していません。反対向きに持つには、もう一度注文してください。' : '') +
+      (!opening && (tp !== null || sl !== null) ? '。入力した利確・損切りは、決済の注文では使いません(変えるときは「保有中のポジション」の欄で)。' : ''), 'msg');
     done();
   };
   $('trOrderList').addEventListener('click', e => {
@@ -3211,8 +3233,9 @@ function bindTrade() {
       return;
     }
     armed = 0; reset.textContent = '口座をリセット';
-    const last = T.last, quotes = T.quotes;
+    const last = T.last, quotes = T.quotes, rev = T.rev;
     T = freshTrade(); T.last = last; T.quotes = quotes;
+    T.rev = rev; // 保存の通し番号は引きつぐ(0 に戻すと「古い内容」とみなされ、リセット前の状態に戻されてしまう)
     Object.keys(reconciled).forEach(k => delete reconciled[k]);
     saveTrade(); renderTrade(); draw();
     setTxt('trMsg', '口座をリセットしました。', 'msg');
@@ -3221,6 +3244,8 @@ function bindTrade() {
     if ($('symbol').value === '__add') return;
     amt.value = acct(quoteOf(state.symbol)).start / 10;
     $('trTp').value = ''; $('trSl').value = ''; setTxt('trMsg', '');
+    $('trLimit').value = ''; // 前の銘柄の指値の価格を、別の銘柄に持ちこさない
+    renderRisk();
     renderTrade();
   };
   $('symbol').addEventListener('change', onSymbol);
@@ -3324,7 +3349,7 @@ function renderAnalysis() {
     `<div class="kpi"><span class="dim">${label}</span><strong class="${cls || ''}">${value}</strong>${hint ? `<small>${hint}</small>` : ''}</div>`;
   const pfText = isFinite(st.pf) ? st.pf.toFixed(2) : st.wins && !st.losses ? '負けなし' : '—';
   let html = `<div class="kpis">` +
-    kpi('確定した損益', m(st.net, true), pnlClass(st.net), `開始資金 ${fmtMoney(st.start, q)} → ${fmtMoney(st.cash, q)}(${(st.net / st.start * 100).toFixed(2)}%)`) +
+    kpi('確定した損益', m(st.net, true), pnlClass(st.net), `開始資金 ${fmtMoney(st.start, q)} → ${fmtMoney(st.cash, q)}(${pct2(st.net / st.start * 100)}%)`) +
     kpi('勝率', st.n ? `${(st.wins / st.n * 100).toFixed(0)}%` : '—', '', `決済 ${st.n} 回(勝ち ${st.wins}・負け ${st.losses})`) +
     kpi('プロフィットファクター', pfText, isFinite(st.pf) ? pnlClass(st.pf - 1) : '', '利益の合計 ÷ 損失の合計。1 より大きければ全体でプラス') +
     kpi('最大ドローダウン', st.maxDD > 0 ? `${m(-st.maxDD)}` : '—', st.maxDD > 0 ? 'down' : '', st.maxDD > 0 ? `資金がいちばん多かった時点から、最大で ${st.maxDDPct.toFixed(2)}% 減った` : '資金のピークからの最大の落ち込み') +
@@ -3428,7 +3453,7 @@ function closeMaker() {
 function mkCheck(expr, out, optional, isMark) {
   out.classList.remove('bad', 'good');
   if (!expr.trim()) { out.textContent = optional ? '' : '式を入力してください。下の「使える部品」をタップすると入ります。'; return optional; }
-  const err = GT.checkFormula(expr);
+  const err = GT.checkFormula(expr, mk.def.inputs.length);
   if (err) { out.textContent = err; out.classList.add('bad'); return false; }
   let text = '式は正しく読み取れました。';
   try {
@@ -3446,9 +3471,10 @@ function mkCheck(expr, out, optional, isMark) {
 }
 function mkValid() {
   const d = mk.def;
-  const ok = d.name.trim() && d.lines.every(l => l.expr.trim() && !GT.checkFormula(l.expr)) &&
-    d.marks.every(m => m.expr.trim() && !GT.checkFormula(m.expr)) &&
-    (!d.hist.trim() || d.overlay || !GT.checkFormula(d.hist)) && (d.lines.length || d.marks.length || (!d.overlay && d.hist.trim()));
+  const nIn = d.inputs.length;
+  const ok = d.name.trim() && d.lines.every(l => l.expr.trim() && !GT.checkFormula(l.expr, nIn)) &&
+    d.marks.every(m => m.expr.trim() && !GT.checkFormula(m.expr, nIn)) &&
+    (!d.hist.trim() || d.overlay || !GT.checkFormula(d.hist, nIn)) && (d.lines.length || d.marks.length || (!d.overlay && d.hist.trim()));
   $('mkSave').disabled = !ok;
   drawMkPreview(!!ok);
   return !!ok;
@@ -3534,7 +3560,7 @@ function renderMaker() {
     add(...exprBox(d.hist, v => { d.hist = v; }, true, '棒グラフの式'));
     const bands = el('input', { class: 'ctl', type: 'text', inputmode: 'text', placeholder: '例: 0 または 70, 30', 'aria-label': '基準線' });
     bands.value = d.bands.join(', ');
-    bands.addEventListener('input', () => { d.bands = bands.value.split(/[,、\s]+/).map(Number).filter(v => isFinite(v) && Math.abs(v) <= 1e12).slice(0, 4); });
+    bands.addEventListener('input', () => { d.bands = bands.value.split(/[,、\s]+/).filter(t => t !== '').map(Number).filter(v => isFinite(v) && Math.abs(v) <= 1e12).slice(0, 4); });
     add(field('基準線', '横に引く目安の線。数をカンマで区切って4本まで', bands));
   }
 
@@ -3738,7 +3764,7 @@ function renderBacktest() {
   if (!ind || !state.indicators.includes(ind) || !ind.out || !ind.out.marks) { $('btOverlay').hidden = true; return; }
   const marks = ind.out.marks, bars = state.bars;
   const hasUp = marks.some(m => m.dir === 'up'), hasDown = marks.some(m => m.dir === 'down');
-  const r = GT.backtest(bars, marks, { side: bt.side, exit: bt.exit, hold: bt.hold, fee: FEE, sl: bt.sl / 100, tp: bt.tp / 100 });
+  const r = GT.backtest(bars, marks, { side: bt.side, exit: bt.side === 'both' ? 'signal' : bt.exit, hold: bt.hold, fee: FEE, sl: bt.sl / 100, tp: bt.tp / 100 });
   const iv = INTERVALS.find(x => x.id === state.interval);
   $('btTitle').textContent = `「${IND_TYPES[ind.type].name}」の合図で売買していたら`;
   body.textContent = '';
@@ -3807,12 +3833,15 @@ function renderBacktest() {
 
   if (r.trades.length) {
     add(el('h3', { text: `売買の記録(新しい順・${Math.min(50, r.trades.length)}件まで)` }));
+    // スマホでも横にずらさず読めるよう、大事な「損益」と「理由」を左に置く
     const rows = r.trades.slice(-50).reverse().map(t => el('tr', {}, [
-      el('td', { text: t.dir > 0 ? '買い' : '売り' }), el('td', { text: fmtDate(t.t0, iv && iv.ms < 86400000) }), el('td', { text: fmtPrice(t.p0) }),
-      el('td', { text: fmtDate(t.t1, iv && iv.ms < 86400000) }), el('td', { text: fmtPrice(t.p1) }), el('td', { text: `${t.bars}本` }), el('td', { text: t.why === 'sl' ? '損切り' : t.why === 'tp' ? '利確' : r.exitMode === 'signal' ? '合図' : '本数' }), el('td', { class: cls(t.ret), text: pct(t.ret, true) }),
+      el('td', { text: t.dir > 0 ? '買い' : '売り' }), el('td', { class: cls(t.ret), text: pct(t.ret, true) }),
+      el('td', { text: t.why === 'liq' ? '資金がゼロ' : t.why === 'sl' ? '損切り' : t.why === 'tp' ? '利確' : r.exitMode === 'signal' ? '合図' : '本数' }),
+      el('td', { text: fmtDate(t.t0, iv && iv.ms < 86400000) }), el('td', { text: fmtPrice(t.p0) }),
+      el('td', { text: fmtDate(t.t1, iv && iv.ms < 86400000) }), el('td', { text: fmtPrice(t.p1) }), el('td', { text: `${t.bars}本` }),
     ]));
     add(el('div', { class: 'tbl-wrap' }, [el('table', { class: 'tbl' }, [
-      el('thead', {}, [el('tr', {}, ['向き', '入った日', '価格', '手じまい', '価格', '期間', '理由', '損益'].map(t => el('th', { text: t })))]), el('tbody', {}, rows)])]));
+      el('thead', {}, [el('tr', {}, ['向き', '損益', '理由', '入った日', '価格', '手じまい', '価格', '期間'].map(t => el('th', { text: t })))]), el('tbody', {}, rows)])]));
   }
   drawBtCurve(cv, r);
 }

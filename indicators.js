@@ -785,6 +785,8 @@ function tokenize(text) {
     if (/\s/.test(ch)) { i++; continue; }
     if (/[0-9.]/.test(ch)) {
       let j = i; while (j < text.length && /[0-9.]/.test(text[j])) j++;
+      // 1e6 のような書き方(10 の何乗)も数として読む
+      const ex = /^e[+-]?\d+/i.exec(text.slice(j)); if (ex) j += ex[0].length;
       const v = Number(text.slice(i, j));
       if (!isFinite(v)) throw new FormulaError(`「${text.slice(i, j)}」は数として読めません。`);
       out.push({ t: 'num', v }); i = j; continue;
@@ -845,14 +847,21 @@ function parseFormula(text) {
 function evalFormula(ast, bars, vars) {
   const n = bars.length;
   const arr = v => (Array.isArray(v) ? v : new Array(n).fill(v));
-  const each2 = (a, b, fn) => (Array.isArray(a) || Array.isArray(b) ? arr(a).map((x, i) => fn(x, arr(b)[i])) : fn(a, b));
+  const each2 = (a, b, fn) => {
+    if (!Array.isArray(a) && !Array.isArray(b)) return fn(a, b);
+    const A = arr(a), B = arr(b); // 片方が数のときも、配列は1回だけ作る(足の数が多くても遅くならないように)
+    return A.map((x, i) => fn(x, B[i]));
+  };
   const len = v => {
     if (Array.isArray(v)) throw new FormulaError('期間(本数)には、数を入れてください(例: 20 や p1)。');
     return Math.max(1, Math.min(500, Math.round(v) || 1));
   };
+  const cmp = f => (x, y) => (isFinite(x) && isFinite(y) ? +f(x, y) : NaN);
   const ops = {
     '+': (x, y) => x + y, '-': (x, y) => x - y, '*': (x, y) => x * y, '/': (x, y) => (y === 0 ? NaN : x / y),
-    '>': (x, y) => +(x > y), '<': (x, y) => +(x < y), '>=': (x, y) => +(x >= y), '<=': (x, y) => +(x <= y), '==': (x, y) => +(x === y), '!=': (x, y) => +(x !== y),
+    // 比べる相手にまだ値がない足(期間が足りない最初のほう)は、「成り立たない」ではなく「分からない」にする。
+    // そうしないと not(...) や != が、最初の足すべてで成り立ってしまう
+    '>': cmp((x, y) => x > y), '<': cmp((x, y) => x < y), '>=': cmp((x, y) => x >= y), '<=': cmp((x, y) => x <= y), '==': cmp((x, y) => x === y), '!=': cmp((x, y) => x !== y),
   };
   function ev(nd) {
     switch (nd.k) {
@@ -904,9 +913,18 @@ function evalFormula(ast, bars, vars) {
   return arr(ev(ast)).map(v => (isFinite(v) ? v : NaN));
 }
 // 式を確かめる。問題なければ null、あれば説明の文を返す
-function checkFormula(text) {
+// nInputs を渡すと、用意していない p2・p3 を式で使っている場合も間違いとして知らせる
+function checkFormula(text, nInputs) {
   try {
     const ast = parseFormula(text);
+    if (nInputs !== undefined) {
+      const walk = nd => {
+        if (!nd || typeof nd !== 'object') return;
+        if (nd.k === 'var' && /^p[123]$/.test(nd.v) && +nd.v[1] > nInputs) throw new FormulaError(`式の中の ${nd.v} が「調整できる数値」にありません。数値を追加するか、式から ${nd.v} を消してください。`);
+        walk(nd.a); walk(nd.b); (nd.args || []).forEach(walk);
+      };
+      walk(ast);
+    }
     // 小さな見本データで一度計算してみて、計算の途中で分かる間違い(期間に価格を入れた等)も見つける
     const demo = [1, 2, 3, 4, 5].map(i => ({ t: i, o: i, h: i + 1, l: i - 0.5, c: i + 0.5, v: 10 * i }));
     evalFormula(ast, demo, { p1: 2, p2: 2, p3: 2 });
@@ -968,7 +986,7 @@ function backtest(bars, marks, opts) {
     if (i > 0) {
       const u = up(i - 1), d = down(i - 1), px = bars[i].o;
       if (pos && (exitMode === 'signal' ? (pos > 0 ? d : u) : i - entryI >= hold)) closeAt(i, px);
-      if (!pos && px > 0) {
+      if (!pos && px > 0 && eq > 0) {
         const want = u && side !== 'short' ? 1 : d && side !== 'long' ? -1 : 0;
         if (want) { pos = want; entry = px; entryI = i; eq *= 1 - fee; eqAtEntry = eq; }
       }
@@ -981,6 +999,8 @@ function backtest(bars, marks, opts) {
       if (hitSl) closeAt(i, later && (pos > 0 ? b.o < slPx : b.o > slPx) ? b.o : slPx, 'sl');
       else if (hitTp) closeAt(i, later && (pos > 0 ? b.o > tpPx : b.o < tpPx) ? b.o : tpPx, 'tp');
     }
+    // 売りから入って価格が2倍以上になると、資金がすべてなくなる。その時点で強制的に手じまい、以後は売買しない
+    if (pos < 0 && bars[i].h >= entry * 2) { closeAt(i, entry * 2, 'liq'); eq = 0; }
     if (pos) inBars++;
     const c = bars[i].c; // その足の終値で評価した資金
     curve.push(pos ? eqAtEntry * Math.max(0, pos > 0 ? c / entry : 2 - c / entry) : eq);
