@@ -1,5 +1,7 @@
 /* 教科書ページの動き(もくじ、文字サイズ、続きから読む など) */
 (() => {
+  // 公開ページが他のサイトの中に埋め込まれて、操作を誘導されるのを防ぐ
+  if (window.top !== window.self && /\.github\.io$/.test(location.hostname)) { document.documentElement.hidden = true; return; }
   const $ = id => document.getElementById(id);
   const CHART_KEY = 'gold-trade-chart-v1', KEY = 'gold-trade-guide-v1';
   const read = k => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { return {}; } };
