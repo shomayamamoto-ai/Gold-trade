@@ -595,7 +595,7 @@ DEFS.fisher = {
     for (let i = 0; i < bars.length; i++) {
       if (!isFinite(hh[i])) continue;
       v = 0.66 * ((hh[i] > ll[i] ? (m[i] - ll[i]) / (hh[i] - ll[i]) : 0.5) - 0.5) + 0.67 * v;
-      v = Math.max(-0.999, Math.min(0.999, v));
+      if (v > 0.99) v = 0.999; else if (v < -0.99) v = -0.999; // 対数が発散しないよう、端は 0.999 に丸める(TradingView と同じ扱い)
       prev = 0.5 * Math.log((1 + v) / (1 - v)) + 0.5 * prev;
       f[i] = prev;
     }
@@ -769,6 +769,11 @@ const FUNCS = {
   max: { args: 'xx', desc: '大きいほう', eg: 'max(open, close)' },
   min: { args: 'xx', desc: '小さいほう', eg: 'min(open, close)' },
   pow: { args: 'xx', desc: 'べき乗', eg: 'pow(close, 2)' },
+  crossover: { args: 'xx', desc: '1つ目が2つ目を下から上に抜けた足で 1', eg: 'crossover(close, sma(close, 20))' },
+  crossunder: { args: 'xx', desc: '1つ目が2つ目を上から下に抜けた足で 1', eg: 'crossunder(close, sma(close, 20))' },
+  and: { args: 'xx', desc: '両方が成り立てば 1', eg: 'and(close > open, volume > sma(volume, 20))' },
+  or: { args: 'xx', desc: 'どちらかが成り立てば 1', eg: 'or(rsi(close, 14) < 30, rsi(close, 14) > 70)' },
+  not: { args: 'x', desc: '成り立たなければ 1', eg: 'not(close > open)' },
   if: { args: 'xxx', desc: '条件が成り立てば2つ目、そうでなければ3つ目', eg: 'if(close > open, volume, 0)' },
 };
 class FormulaError extends Error {}
@@ -882,6 +887,14 @@ function evalFormula(ast, bars, vars) {
           case 'max': return each2(a[0], a[1], Math.max);
           case 'min': return each2(a[0], a[1], Math.min);
           case 'pow': return each2(a[0], a[1], Math.pow);
+          case 'crossover': case 'crossunder': {
+            const p = arr(a[0]), q = arr(a[1]), up = nd.f === 'crossover';
+            return p.map((v, i) => (i && isFinite(v) && isFinite(q[i]) && isFinite(p[i - 1]) && isFinite(q[i - 1])
+              ? +(up ? v > q[i] && p[i - 1] <= q[i - 1] : v < q[i] && p[i - 1] >= q[i - 1]) : NaN));
+          }
+          case 'and': return each2(a[0], a[1], (x, y) => (isFinite(x) && isFinite(y) ? +(x !== 0 && y !== 0) : NaN));
+          case 'or': return each2(a[0], a[1], (x, y) => (isFinite(x) && isFinite(y) ? +(x !== 0 || y !== 0) : NaN));
+          case 'not': return Array.isArray(a[0]) ? a[0].map(v => (isFinite(v) ? +(v === 0) : NaN)) : +(a[0] === 0);
           case 'if': { const c = arr(a[0]), t = arr(a[1]), f = arr(a[2]); return c.map((v, i) => (isFinite(v) ? (v ? t[i] : f[i]) : NaN)); }
           default: throw new FormulaError(`「${nd.f}」は計算できません。`);
         }
@@ -901,10 +914,12 @@ function checkFormula(text) {
   } catch (e) { return e instanceof FormulaError ? e.message : '式を読み取れませんでした。'; }
 }
 /* 利用者が作った定義から、ほかのインジケーターと同じ形の定義を作る。
- * def: { name, overlay, lines: [{ name, expr, color }], hist, bands: [数], inputs: [{ label, def }] } */
+ * def: { name, overlay, lines: [{ name, expr, color }], hist, bands: [数], inputs: [{ label, def }],
+ *        marks: [{ name, expr, dir: 'up' | 'down' }] }  marks は、式が 0 以外になった足に付ける合図(▲▼) */
 function makeCustom(def) {
   const lines = def.lines.map(l => ({ name: l.name, color: l.color, ast: parseFormula(l.expr) }));
   const hist = def.hist ? parseFormula(def.hist) : null;
+  const marks = (def.marks || []).map(m => ({ name: m.name, dir: m.dir === 'down' ? 'down' : 'up', ast: parseFormula(m.expr) }));
   const params = def.inputs.map((q, i) => ({ key: `p${i + 1}`, label: q.label || `数値 ${i + 1}`, type: 'num', def: q.def, min: -1e9, max: 1e9, step: 'any' }));
   lines.forEach((l, i) => params.push({ key: `c${i}`, label: `「${l.name || `線 ${i + 1}`}」の色`, type: 'color', def: l.color }));
   return {
@@ -915,6 +930,7 @@ function makeCustom(def) {
       return {
         lines: lines.map((l, i) => ({ name: l.name || `線${i + 1}`, val: evalFormula(l.ast, bars, vars), color: p[`c${i}`] || l.color })),
         hist: useHist ? evalFormula(hist, bars, vars) : undefined, histName: useHist ? '棒' : undefined,
+        marks: marks.map(m => ({ name: m.name, dir: m.dir, val: evalFormula(m.ast, bars, vars) })),
         bands: def.overlay ? [] : def.bands.slice(0, 4), label: def.inputs.map((q, i) => p[`p${i + 1}`]).join(' '),
       };
     },

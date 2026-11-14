@@ -112,6 +112,7 @@ Object.keys(GT.DEFS).forEach(id => {
 /* 保存されていたもの・ほかの人からもらったものは、そのまま信用しない。
  * 決めた形に合うものだけを取り出し、式は indicators.js の読み取り器で確かめる(式は「計算」しかできない) */
 const customDefs = [];
+const favs = []; // メニューで ★ を付けた種類
 const CUSTOM_MAX = 30, CUSTOM_ID = /^u_[a-z0-9]{6,12}$/;
 const plain = (v, max) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, '').trim().slice(0, max) : '');
 function cleanCustom(raw) {
@@ -126,13 +127,19 @@ function cleanCustom(raw) {
   if (lines.includes(null)) return null;
   const hist = !overlay && typeof raw.hist === 'string' && raw.hist.trim() ? raw.hist.trim() : '';
   if (hist && GT.checkFormula(hist)) return null;
-  if (!lines.length && !hist) return null;
+  const marks = (Array.isArray(raw.marks) ? raw.marks : []).slice(0, 2).map((m, i) => {
+    if (!m || typeof m.expr !== 'string' || GT.checkFormula(m.expr)) return null;
+    return { name: plain(m.name, 12) || `合図${i + 1}`, expr: m.expr.trim(), dir: m.dir === 'down' ? 'down' : 'up' };
+  });
+  if (marks.includes(null)) return null;
+  if (!lines.length && !hist && !marks.length) return null;
   const bands = (Array.isArray(raw.bands) ? raw.bands : []).filter(v => typeof v === 'number' && isFinite(v) && Math.abs(v) <= 1e12).slice(0, 4);
   const inputs = (Array.isArray(raw.inputs) ? raw.inputs : []).slice(0, 3).map((q, i) => ({
     label: plain(q && q.label, 20) || `数値 ${i + 1}`,
     def: q && typeof q.def === 'number' && isFinite(q.def) && Math.abs(q.def) <= 1e9 ? q.def : 1,
   }));
-  return { id: typeof raw.id === 'string' && CUSTOM_ID.test(raw.id) ? raw.id : '', name, overlay, lines, hist, bands, inputs };
+  // 線も棒もなく合図だけのものは、空の枠ができないよう、チャートに重ねる扱いにする
+  return { id: typeof raw.id === 'string' && CUSTOM_ID.test(raw.id) ? raw.id : '', name, overlay: overlay || (!lines.length && !hist), lines, hist, bands, inputs, marks };
 }
 function newCustomId() {
   let id;
@@ -154,13 +161,13 @@ function registerCustom(raw) {
   return def;
 }
 function describeCustom(def) {
-  const text = def.lines.map(l => l.expr).concat(def.hist ? [def.hist] : []).join(' / ');
+  const text = def.lines.map(l => l.expr).concat(def.hist ? [def.hist] : [], def.marks.map(m => m.expr)).join(' / ');
   return text.length > 60 ? text.slice(0, 59) + '…' : text;
 }
 // 共有用の文字にする・文字から読み取る(読み取ったものも cleanCustom で確かめる)
 const SHARE_HEAD = 'GTI1:';
 function customToText(def) {
-  return SHARE_HEAD + JSON.stringify({ name: def.name, overlay: def.overlay, lines: def.lines, hist: def.hist, bands: def.bands, inputs: def.inputs });
+  return SHARE_HEAD + JSON.stringify({ name: def.name, overlay: def.overlay, lines: def.lines, hist: def.hist, bands: def.bands, inputs: def.inputs, marks: def.marks });
 }
 function customFromText(text) {
   const t = String(text || '').trim();
@@ -251,7 +258,7 @@ function save() {
       symbol: state.symbol, interval: state.interval, theme: state.theme, mainWeight: state.mainWeight, drawings: state.drawings,
       tradeOpen: state.tradeOpen,
       custom: SYMBOLS.slice(BUILTIN).map(x => ({ id: x.id, label: x.label, quote: x.quote || null })),
-      customInds: customDefs,
+      customInds: customDefs, favs: favs.filter(t => IND_TYPES[t]),
       indicators: state.indicators.map(i => ({ type: i.type, hidden: i.hidden, p: i.p })),
     }));
   } catch (e) { /* 保存できなくても表示は続ける */ }
@@ -290,6 +297,7 @@ function load() {
     });
   }
   if (s && Array.isArray(s.customInds)) s.customInds.slice(0, CUSTOM_MAX).forEach(d => { if (d && CUSTOM_ID.test(d.id)) registerCustom(d); });
+  if (s && Array.isArray(s.favs)) s.favs.slice(0, 60).forEach(t => { if (typeof t === 'string' && Object.prototype.hasOwnProperty.call(IND_TYPES, t) && !favs.includes(t)) favs.push(t); });
   const list = s && Array.isArray(s.indicators)
     ? s.indicators.filter(i => i && IND_TYPES[i.type])
     : [{ type: 'ma' }, { type: 'ccOnly' }, { type: 'enhanced' }];
@@ -1017,6 +1025,24 @@ function drawMain(pane, i0, i1, th) {
     const f = ind.out.fill;
     if (f) fillBetween(lines[f.a], lines[f.b], f, yOf, i0, i1);
     lines.forEach(l => strokeSeries(l, yOf, i0, i1));
+  });
+  // 自分で作ったインジケーターの合図(▲ は足の下、▼ は足の上)。下の枠に出しているものの合図も、ここに出す
+  let slot = 0;
+  state.indicators.forEach(ind => {
+    if (ind.hidden || !ind.out || !ind.out.marks || !ind.out.marks.length || !shownHere(ind)) return;
+    const size = clamp(bw * 0.45, 4.5, 7);
+    ind.out.marks.forEach(m => {
+      const up = m.dir === 'up', gap = 5 + slot * (size * 2 + 3);
+      ctx.fillStyle = up ? UP : DOWN;
+      ctx.beginPath();
+      for (let i = i0; i <= i1; i++) {
+        if (!(m.val[i] > 0 || m.val[i] < 0)) continue;
+        const x = xOf(i), y = up ? yOf(bars[i].l) + gap : yOf(bars[i].h) - gap;
+        ctx.moveTo(x, y); ctx.lineTo(x - size, y + (up ? 1 : -1) * size * 1.6); ctx.lineTo(x + size, y + (up ? 1 : -1) * size * 1.6); ctx.closePath();
+      }
+      ctx.fill();
+    });
+    slot++;
   });
   // 最新の価格ライン
   const last = bars[bars.length - 1];
@@ -1918,22 +1944,45 @@ function buildTopbar() {
       list.textContent = '';
       const q = menuQuery.trim().toLowerCase();
       let shown = 0;
+      const row = (type, T) => {
+        const b = el('button', { type: 'button', class: 'menu-main', text: T.name }, []);
+        b.appendChild(el('small', { text: `${T.overlay ? 'チャートに重ねる' : '下に表示'} ・ ${T.desc || hints[type]}` }));
+        b.addEventListener('click', () => {
+          toggleMenu(false);
+          if (state.indicators.length >= 30) { toast('インジケーターは30個までです。使っていないものを削除してから追加してください。'); return; }
+          addIndicator(type);
+        });
+        const on = favs.includes(type);
+        const star = el('button', { type: 'button', class: 'menu-side' + (on ? ' on' : ''), text: on ? '★' : '☆', 'aria-label': `${T.name} を「よく使う」${on ? 'から外す' : 'に入れる'}`, 'aria-pressed': String(on) });
+        star.addEventListener('click', e => {
+          e.stopPropagation();
+          const at = favs.indexOf(type);
+          if (at >= 0) favs.splice(at, 1); else favs.push(type);
+          save();
+          const top = list.scrollTop, before = list.scrollHeight;
+          fillList();
+          list.scrollTop = top + (list.scrollHeight - before); // 上に行が増減しても、見ている位置を動かさない
+        });
+        const kids = [b];
+        if (T.custom) {
+          const edit = el('button', { type: 'button', class: 'menu-side', text: '✎', 'aria-label': `${T.name} を編集` });
+          edit.addEventListener('click', e => { e.stopPropagation(); toggleMenu(false); openMaker(type); });
+          kids.push(edit);
+        }
+        kids.push(star);
+        return el('div', { class: 'menu-row' }, kids);
+      };
+      if (!q) {
+        const mine = favs.filter(t => IND_TYPES[t]);
+        if (mine.length) list.appendChild(el('div', { class: 'sect', text: 'よく使う(★)' }));
+        mine.forEach(t => list.appendChild(row(t, IND_TYPES[t])));
+      }
       GT.GROUPS.forEach(([gid, gname]) => {
         const types = Object.entries(IND_TYPES).filter(([type, T]) => T.group === gid &&
           (!q || `${T.name} ${T.short || ''} ${type} ${T.desc || hints[type] || ''}`.toLowerCase().includes(q)));
         if (!types.length) return;
         list.appendChild(el('div', { class: 'sect', text: gname }));
-        types.forEach(([type, T]) => {
-          const b = el('button', { type: 'button', text: T.name }, []);
-          b.appendChild(el('small', { text: `${T.overlay ? 'チャートに重ねる' : '下に表示'} ・ ${T.desc || hints[type]}` }));
-          b.addEventListener('click', () => {
-            toggleMenu(false);
-            if (state.indicators.length >= 30) { toast('インジケーターは30個までです。使っていないものを削除してから追加してください。'); return; }
-            addIndicator(type);
-          });
-          list.appendChild(b);
-          shown++;
-        });
+        types.forEach(([type, T]) => { list.appendChild(row(type, T)); shown++; });
       });
       if (!shown) list.appendChild(el('div', { class: 'sect', text: '見つかりませんでした。別の言葉で探してください。' }));
       if (q) return;
@@ -3134,13 +3183,21 @@ const MK_SAMPLES = [
   ['値幅で決める損切りの目安(チャートに重ねる)', { name: '損切りの目安', overlay: true, lines: [{ name: '目安', expr: 'highest(close, p1) - atr(p1) * p2', color: '#c0392b' }], hist: '', bands: [], inputs: [{ label: '期間', def: 22 }, { label: '値幅の何倍', def: 3 }] }],
   ['上げた足・下げた足の出来高(棒グラフ)', { name: '上げ下げ出来高', overlay: false, lines: [], hist: 'if(close > open, volume, -volume)', bands: [0], inputs: [] }],
 ];
-const blankCustom = () => ({ id: '', name: '', overlay: false, lines: [{ name: '線1', expr: '', color: MK_COLORS[0] }], hist: '', bands: [], inputs: [] });
+MK_SAMPLES.push(
+  ['平均線の交差で合図を出す(▲▼)', { name: '交差の合図', overlay: true, lines: [{ name: '短', expr: 'ema(close, p1)', color: '#2f80ed' }, { name: '長', expr: 'ema(close, p2)', color: '#f5a623' }], hist: '', bands: [], inputs: [{ label: '短い期間', def: 10 }, { label: '長い期間', def: 30 }],
+    marks: [{ name: '上抜け', expr: 'crossover(ema(close, p1), ema(close, p2))', dir: 'up' }, { name: '下抜け', expr: 'crossunder(ema(close, p1), ema(close, p2))', dir: 'down' }] }],
+  ['RSI が下がりすぎ・上がりすぎた足に合図', { name: 'RSI の合図', overlay: true, lines: [], hist: '', bands: [], inputs: [{ label: '期間', def: 14 }, { label: '下の基準', def: 30 }, { label: '上の基準', def: 70 }],
+    marks: [{ name: '下がりすぎ', expr: 'crossunder(rsi(close, p1), p2)', dir: 'up' }, { name: '上がりすぎ', expr: 'crossover(rsi(close, p1), p3)', dir: 'down' }] }],
+);
+MK_SAMPLES.forEach(x => { if (!x[1].marks) x[1].marks = []; });
+const blankCustom = () => ({ id: '', name: '', overlay: false, lines: [{ name: '線1', expr: '', color: MK_COLORS[0] }], hist: '', bands: [], inputs: [], marks: [] });
 const mk = { def: null, editId: null, opener: null, focus: null };
 
 function openMaker(editId) {
   const cur = editId && customDefs.find(d => d.id === editId);
   mk.editId = cur ? cur.id : null;
   mk.def = cur ? JSON.parse(JSON.stringify(cur)) : blankCustom();
+  if (!Array.isArray(mk.def.marks)) mk.def.marks = [];
   mk.opener = document.activeElement;
   mk.focus = null;
   $('mkTitle').textContent = cur ? 'インジケーターを編集' : 'インジケーターを作る';
@@ -3153,7 +3210,7 @@ function closeMaker() {
   if (mk.opener && mk.opener.isConnected) mk.opener.focus();
 }
 // 式を確かめて、問題なければ「いまの値」を、あれば理由を出す
-function mkCheck(expr, out, optional) {
+function mkCheck(expr, out, optional, isMark) {
   out.classList.remove('bad', 'good');
   if (!expr.trim()) { out.textContent = optional ? '' : '式を入力してください。下の「使える部品」をタップすると入ります。'; return optional; }
   const err = GT.checkFormula(expr);
@@ -3163,7 +3220,11 @@ function mkCheck(expr, out, optional) {
     const vars = {};
     mk.def.inputs.forEach((q, i) => { vars[`p${i + 1}`] = q.def; });
     const vals = GT.evalFormula(GT.parseFormula(expr), state.bars, vars), last = vals[vals.length - 1];
-    if (state.bars.length) text = isFinite(last) ? `OK ・ いまの値: ${fmtCompact(last)}` : 'OK ・ いまの足では値が出ません(期間が長すぎる、0で割っている、など)';
+    if (state.bars.length && isMark) {
+      const N = Math.min(120, vals.length), hits = vals.slice(-N).filter(v => v > 0 || v < 0).length;
+      text = hits ? `OK ・ 直近${N}本のうち ${hits}本で合図が出ます` : `OK ・ ただし直近${N}本では一度も成り立っていません`;
+      if (hits > N * 0.4) text += '(多すぎるかもしれません。条件をしぼると見やすくなります)';
+    } else if (state.bars.length) text = isFinite(last) ? `OK ・ いまの値: ${fmtCompact(last)}` : 'OK ・ いまの足では値が出ません(期間が長すぎる、0で割っている、など)';
   } catch (e) { /* 値の見本が出せないだけなので、そのまま進める */ }
   out.textContent = text; out.classList.add('good');
   return true;
@@ -3171,8 +3232,10 @@ function mkCheck(expr, out, optional) {
 function mkValid() {
   const d = mk.def;
   const ok = d.name.trim() && d.lines.every(l => l.expr.trim() && !GT.checkFormula(l.expr)) &&
-    (!d.hist.trim() || d.overlay || !GT.checkFormula(d.hist)) && (d.lines.length || (!d.overlay && d.hist.trim()));
+    d.marks.every(m => m.expr.trim() && !GT.checkFormula(m.expr)) &&
+    (!d.hist.trim() || d.overlay || !GT.checkFormula(d.hist)) && (d.lines.length || d.marks.length || (!d.overlay && d.hist.trim()));
   $('mkSave').disabled = !ok;
+  drawMkPreview(!!ok);
   return !!ok;
 }
 function renderMaker() {
@@ -3180,14 +3243,14 @@ function renderMaker() {
   body.textContent = '';
   const add = (...nodes) => nodes.forEach(nd => body.appendChild(nd));
   const field = (label, hint, node) => el('label', { class: 'mk-field' }, [labelCell(label, hint), node]);
-  const exprBox = (value, onChange, optional, label) => {
+  const exprBox = (value, onChange, optional, label, isMark) => {
     const ta = el('textarea', { class: 'ctl mk-expr', rows: '2', spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', maxlength: '300', 'aria-label': label, placeholder: '例: sma(close, 20)' });
     ta.value = value;
     const out = el('p', { class: 'mk-check', 'aria-live': 'polite' });
-    const run = () => { onChange(ta.value); mkCheck(ta.value, out, optional); mkValid(); };
+    const run = () => { onChange(ta.value); mkCheck(ta.value, out, optional, isMark); mkValid(); };
     ta.addEventListener('input', run);
     ta.addEventListener('focus', () => { mk.focus = ta; });
-    mkCheck(value, out, optional);
+    mkCheck(value, out, optional, isMark);
     return [ta, out];
   };
 
@@ -3260,6 +3323,28 @@ function renderMaker() {
     add(field('基準線', '横に引く目安の線。数をカンマで区切って4本まで', bands));
   }
 
+  add(el('div', { class: 'sect', text: '合図(2つまで。式が成り立った足に ▲ か ▼ をローソク足に付けます)' }));
+  d.marks.forEach((m, i) => {
+    const nm = el('input', { class: 'ctl', type: 'text', maxlength: '12', 'aria-label': `合図${i + 1} の名前` });
+    nm.value = m.name;
+    nm.addEventListener('input', () => { m.name = nm.value; });
+    const dir = el('select', { class: 'ctl mk-dir', 'aria-label': `合図${i + 1} の形` }, [el('option', { value: 'up', text: '▲ 足の下' }), el('option', { value: 'down', text: '▼ 足の上' })]);
+    dir.value = m.dir;
+    dir.addEventListener('change', () => { m.dir = dir.value; mkValid(); });
+    const rm = el('button', { class: 'x', type: 'button', 'aria-label': `合図${i + 1} を削除`, text: '×' });
+    rm.addEventListener('click', () => { d.marks.splice(i, 1); renderMaker(); });
+    add(el('div', { class: 'mk-row' }, [nm, dir, rm]));
+    add(...exprBox(m.expr, v => { m.expr = v; }, false, `合図${i + 1} の条件`, true));
+  });
+  if (d.marks.length < 2) {
+    const b = el('button', { class: 'ctl btn small', type: 'button', text: '＋ 合図を追加' });
+    b.addEventListener('click', () => { d.marks.push({ name: `合図${d.marks.length + 1}`, expr: '', dir: d.marks.length ? 'down' : 'up' }); renderMaker(); });
+    add(b);
+  }
+
+  add(el('div', { class: 'sect', text: '見本(いま開いているチャートの直近120本で描いたもの)' }));
+  add(el('canvas', { id: 'mkPreview', class: 'mk-preview', role: 'img', 'aria-label': '作っているインジケーターの見本' }));
+
   // 使える部品:タップすると、最後にさわった式の欄に入る
   const parts = el('details', { class: 'mk-parts' }, [el('summary', { text: '使える部品(タップで式に入ります)' })]);
   const chips = (title, items) => {
@@ -3302,6 +3387,68 @@ function renderMaker() {
   }
   $('mkShare').hidden = $('mkDelete').hidden = !mk.editId;
   mkValid();
+}
+// 作成画面の小さな見本。上半分に終値と合図、重ねる線。下の枠に出すものは下半分に描く
+function drawMkPreview(ok) {
+  const cv = $('mkPreview');
+  if (!cv) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), w = cv.clientWidth || 300, h = 150;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const c = cv.getContext('2d'), th = THEMES[state.theme];
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+  const note = t => { c.fillStyle = th.cross; c.font = '12px system-ui, sans-serif'; c.textAlign = 'center'; c.fillText(t, w / 2, h / 2); };
+  const N = Math.min(120, state.bars.length);
+  if (!ok) return note('式が正しく入ると、ここに見本が出ます');
+  if (N < 10) return note('チャートの読み込みが終わると、ここに見本が出ます');
+  let out;
+  try {
+    const vars = {};
+    mk.def.inputs.forEach((q, i) => { vars[`p${i + 1}`] = q.def; });
+    const made = GT.makeCustom(Object.assign({}, mk.def, { name: mk.def.name || 'x', bands: mk.def.bands || [] }));
+    out = made.compute(state.bars, vars);
+    out.lines.forEach((l, i) => { l.color = mk.def.lines[i].color; });
+  } catch (e) { return note('見本を描けませんでした'); }
+  const bars = state.bars.slice(-N), off = state.bars.length - N, X = i => (i + 0.5) / N * w;
+  const split = mk.def.overlay ? h : Math.round(h * 0.5);
+  const scale = (series, y0, y1, extra) => {
+    let lo = Infinity, hi = -Infinity;
+    series.forEach(a => { for (let i = 0; i < N; i++) { const v = a[i]; if (isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); } } });
+    (extra || []).forEach(v => { lo = Math.min(lo, v); hi = Math.max(hi, v); });
+    if (!isFinite(lo)) { lo = -1; hi = 1; }
+    if (hi === lo) { hi += 1; lo -= 1; }
+    return v => y1 - 8 - (v - lo) / (hi - lo) * (y1 - y0 - 16);
+  };
+  const path = (a, Y, color, width) => {
+    c.strokeStyle = color; c.lineWidth = width; c.beginPath();
+    let pen = false;
+    for (let i = 0; i < N; i++) { const v = a[i]; if (!isFinite(v)) { pen = false; continue; } if (pen) c.lineTo(X(i), Y(v)); else c.moveTo(X(i), Y(v)); pen = true; }
+    c.stroke();
+  };
+  const tail = a => a.slice(off), close = bars.map(b => b.c);
+  const over = mk.def.overlay ? out.lines.map(l => tail(l.val)) : [];
+  const Yp = scale([close].concat(over), 0, split);
+  path(close, Yp, th.cross, 1);
+  over.forEach((a, i) => path(a, Yp, out.lines[i].color, 1.5));
+  (out.marks || []).forEach(m => {
+    const up = m.dir === 'up';
+    c.fillStyle = up ? UP : DOWN;
+    tail(m.val).forEach((v, i) => {
+      if (!(v > 0 || v < 0)) return;
+      const x = X(i), y = Yp(close[i]) + (up ? 5 : -5), s = 4;
+      c.beginPath(); c.moveTo(x, y); c.lineTo(x - s, y + (up ? 7 : -7)); c.lineTo(x + s, y + (up ? 7 : -7)); c.closePath(); c.fill();
+    });
+  });
+  if (!mk.def.overlay) {
+    c.strokeStyle = th.axis; c.lineWidth = 1; c.beginPath(); c.moveTo(0, split + 0.5); c.lineTo(w, split + 0.5); c.stroke();
+    const hist = out.hist ? tail(out.hist) : null, lines = out.lines.map(l => tail(l.val));
+    const Yi = scale(lines.concat(hist ? [hist] : []), split, h, (out.bands || []).concat(hist ? [0] : []));
+    c.setLineDash([2, 3]); c.strokeStyle = th.cross; c.beginPath();
+    (out.bands || []).forEach(v => { c.moveTo(0, Yi(v)); c.lineTo(w, Yi(v)); });
+    c.stroke(); c.setLineDash([]);
+    if (hist) hist.forEach((v, i) => { if (!isFinite(v)) return; c.fillStyle = rgba(v >= 0 ? UP : DOWN, 0.6); const y = Yi(v), y0 = Yi(0); c.fillRect(X(i) - w / N * 0.35, Math.min(y, y0), Math.max(1, w / N * 0.7), Math.max(1, Math.abs(y - y0))); });
+    lines.forEach((a, i) => path(a, Yi, out.lines[i].color, 1.5));
+  }
 }
 function saveMaker() {
   if (!mkValid()) return;

@@ -586,3 +586,12 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
   .mk-chip { min-height: 40px; justify-content: center; }
   .mk-row input[type="color"] { width: 44px; height: 40px; }
 }
+
+/* ---- メニューの行(本体 + ★ / 編集)と、作成画面の見本 */
+.menu-row { display: flex; align-items: stretch; }
+.menu-row .menu-main { flex: 1 1 auto; min-width: 0; width: auto; }
+.menu .menu-side { flex: 0 0 auto; width: 36px; padding: 0; text-align: center; color: var(--muted); font-size: 15px; }
+.menu .menu-side.on { color: #f5a623; }
+.mk-preview { display: block; width: 100%; height: 150px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg, transparent); }
+.mk-row .mk-dir { flex: 0 0 112px; }
+@media (max-width: 760px) { .menu .menu-side { width: 44px; font-size: 17px; } }
