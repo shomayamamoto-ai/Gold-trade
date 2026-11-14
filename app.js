@@ -164,6 +164,7 @@ const state = {
   mainWeight: 2.6,    // メインペインの高さの比率
   loading: false,
   tradeOpen: false,   // デモトレードのパネルを開いているか
+  dragLine: null,     // ドラッグ中の取引の線 {kind:'tp'|'sl'|'order'|'entry', id, price}
   drawings: {},       // 銘柄ごとの線 {type:'h'|'t', p1:{t,price}, p2}
   tool: null,         // 'h' = 水平線 / 't' = トレンドライン
   pending: null,      // トレンドラインの1点目
@@ -1955,7 +1956,7 @@ function paneWeight(k, v) {
 }
 function bindPointer() {
   const pts = new Map();
-  let pinch = 0, resizing = null, moved = 0, dragD = null;
+  let pinch = 0, resizing = null, moved = 0, dragD = null, dragT = null;
   const pos = e => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
 
   canvas.addEventListener('pointerdown', e => {
@@ -1968,6 +1969,11 @@ function bindPointer() {
       // 高さの比率をいったんピクセルにそろえてから、境目の上下だけ動かす
       panes.forEach((pn, j) => paneWeight(j, pn.h));
       resizing = { k, y: p.y, a: panes[k].h, b: panes[k + 1].h };
+      state.hover = null;
+    } else if (pts.size === 1 && !state.tool && (dragT = tradeLineAt(p, e.pointerType === 'mouse' ? 5 : 14))) {
+      // 利確・損切り・指値の線をつかんだ:チャートは動かさず、線だけ動かす
+      resizing = null;
+      state.dragLine = Object.assign({}, dragT);
       state.hover = null;
     } else if (pts.size === 1 && !state.tool && state.sel && hitDrawing(p, e.pointerType === 'mouse' ? 6 : 16) === state.sel) {
       // 選択中の線をつかんだ:チャートは動かさず、線だけ動かす
@@ -1998,6 +2004,14 @@ function bindPointer() {
       draw();
       return;
     }
+    if (dragT && prev) {
+      const pane = panes[0];
+      moved += Math.abs(p.x - prev.x) + Math.abs(p.y - prev.y);
+      pts.set(e.pointerId, p);
+      state.dragLine.price = pane.vOf(clamp(p.y, pane.y + 2, pane.y + pane.h - 2));
+      draw();
+      return;
+    }
     if (dragD && prev) {
       const pane = panes[0], d = state.sel, o = dragD.orig;
       moved += Math.abs(p.x - prev.x) + Math.abs(p.y - prev.y);
@@ -2024,13 +2038,17 @@ function bindPointer() {
       if (pinch > 0 && dist > 0) zoomAt((a.x + b.x) / 2, dist / pinch);
       pinch = dist;
     } else if (!prev && e.pointerType === 'mouse') {
-      canvas.style.cursor = dividerAt(p.y, 4) >= 0 ? 'ns-resize' : '';
+      canvas.style.cursor = dividerAt(p.y, 4) >= 0 || tradeLineAt(p, 5) ? 'ns-resize' : '';
     }
     state.hover = p; draw();
   });
   const up = e => {
     pts.delete(e.pointerId); pinch = 0;
-    const special = !!resizing || (dragD && moved > 8);
+    const special = !!resizing || (dragD && moved > 8) || !!dragT;
+    if (dragT) {
+      if (moved > 4 && e.type === 'pointerup') commitLine(state.dragLine);
+      dragT = null; state.dragLine = null;
+    }
     if (resizing) { resizing = null; save(); }
     if (dragD) { dragD = null; save(); }
     if (!special && moved <= 8 && e.type === 'pointerup' && !pts.size) {
@@ -2585,6 +2603,54 @@ function renderTrade() {
     : `デモ資金 ${fmtMoney(st.equity, q)} ${q}`, pos ? pnlClass(u) : '');
 }
 
+// 画面上の位置が、取引の線(利確・損切り・指値・建値)の上かどうか
+function tradeLineAt(p, tol) {
+  const pane = panes[0];
+  if (!state.live || !pane || !pane.yOf || p.x > plotW() || p.y < pane.y || p.y > pane.y + pane.h) return null;
+  const sym = state.symbol, pos = T.positions[sym];
+  const near = price => Math.abs(p.y - pane.yOf(price)) <= tol;
+  if (pos && pos.tp !== null && near(pos.tp)) return { kind: 'tp', price: pos.tp };
+  if (pos && pos.sl !== null && near(pos.sl)) return { kind: 'sl', price: pos.sl };
+  const o = T.orders.find(x => x.sym === sym && near(x.price));
+  if (o) return { kind: 'order', id: o.id, price: o.price };
+  // 建値の線は、利確か損切りがまだ無いときだけつかめる(引っぱって新しく置く)
+  if (pos && (pos.tp === null || pos.sl === null) && near(pos.avg)) return { kind: 'entry', price: pos.avg };
+  return null;
+}
+// 建値の線を引っぱったとき、上下どちらに動かしたかで、利確か損切りかを決める
+function entryDragKind(pos, price) {
+  const profitSide = pos.qty > 0 ? price > pos.avg : price < pos.avg;
+  const kind = profitSide ? 'tp' : 'sl';
+  return pos[kind] === null ? kind : null;
+}
+// ドラッグで動かした線を確定する。入力欄から変えるときと同じ決まりで確かめる
+function commitLine(dl) {
+  const sym = state.symbol;
+  syncIfStale();
+  if (!priceOk(sym) || reconciled[sym] !== true || !clockReady) { toast('価格を最新の状態にできていないため、いまは変更できません。'); return; }
+  const price = +dl.price.toFixed(priceDigits(dl.price));
+  if (!(price > 0)) return;
+  if (dl.kind === 'order') {
+    const o = T.orders.find(x => x.id === dl.id);
+    if (!o) return;
+    const dir = o.side === 'buy' ? 1 : -1, quote = liveQuote(sym), ref = quote ? (dir > 0 ? quote.ask : quote.bid) : T.last[sym];
+    const err = (dir > 0 ? price >= ref : price <= ref)
+      ? (dir > 0 ? '買いの指値は、いまの価格より安くしてください。' : '売りの指値は、いまの価格より高くしてください。')
+      : checkLevels(dir, price, o.tp, o.sl);
+    if (err) { toast(err); return; }
+    o.price = price;
+  } else {
+    const pos = T.positions[sym];
+    if (!pos) return;
+    const kind = dl.kind === 'entry' ? entryDragKind(pos, price) : dl.kind;
+    if (!kind) return;
+    const tp = kind === 'tp' ? price : pos.tp, sl = kind === 'sl' ? price : pos.sl;
+    const err = checkLevels(Math.sign(pos.qty), T.last[sym], tp, sl);
+    if (err) { toast(err); return; }
+    pos.tp = tp; pos.sl = sl; pos.levelsAt = tnow();
+  }
+  saveTrade(); renderTrade(); draw();
+}
 // チャートに建値・利確・損切りの線と、売買した位置の印を描く
 function drawTrade(pane, i0, i1) {
   if (!state.live) return;
@@ -2616,12 +2682,24 @@ function drawTrade(pane, i0, i1) {
         tags.push([y, price, color]);
       }
     };
-    T.orders.forEach(o => { if (o.sym === sym) line(o.price, '#5b7fd6', [2, 4], o.side === 'buy' ? '買い指値' : '売り指値'); });
+    const dl = state.dragLine;
+    T.orders.forEach(o => {
+      if (o.sym !== sym) return;
+      const moving = dl && dl.kind === 'order' && dl.id === o.id;
+      line(moving ? dl.price : o.price, '#5b7fd6', [2, 4], `${o.side === 'buy' ? '買い指値' : '売り指値'} ↕${moving ? ' ' + fmtPrice(dl.price) : ''}`);
+    });
     if (pos) {
       const q = quoteOf(sym), u = unrealized(sym);
+      // その価格で決済した場合の損益の見込み(手数料込み)
+      const est = price => pos.qty * (price - pos.avg) - Math.abs(pos.qty) * price * FEE - (pos.feeOpen || 0);
+      const lbl = (name, price, moving) => `${name} ↕${moving ? ` ${fmtPrice(price)}(${fmtMoney(est(price), q, true)} ${q})` : ''}`;
       line(pos.avg, pos.qty > 0 ? '#1f9d8f' : '#e0463f', [], `${pos.qty > 0 ? '買い' : '売り'} ${fmtMoney(u, q, true)} ${q}`);
-      if (pos.tp !== null) line(pos.tp, '#1f9d8f', [5, 4], '利確');
-      if (pos.sl !== null) line(pos.sl, '#e0463f', [5, 4], '損切り');
+      const newKind = dl && dl.kind === 'entry' ? entryDragKind(pos, dl.price) : null;
+      ['tp', 'sl'].forEach(kind => {
+        const moving = dl && (dl.kind === kind || newKind === kind);
+        const price = moving ? dl.price : pos[kind];
+        if (price !== null) line(price, kind === 'tp' ? '#1f9d8f' : '#e0463f', [5, 4], lbl(kind === 'tp' ? '利確' : '損切り', price, moving));
+      });
     }
   }
   ctx.lineWidth = 1;
