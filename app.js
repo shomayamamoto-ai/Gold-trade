@@ -15,41 +15,65 @@ if (window.top !== window.self && /\.github\.io$/.test(location.hostname)) {
  * 2026年11月に、時価総額の順位(CoinMarketCap)と、Binance の24時間の出来高を調べて選んだ。
  * base は、取引所につながらないときに見本の値動きを作るための、だいたいの価格 */
 const SYMBOL_CATS = [
-  ['gold', '金(ゴールド)'], ['major', '主要な暗号資産'], ['meme', '話題の銘柄(値動きがとても大きい)'],
-  ['stock', '米国株・ETF(トークン化 bStocks)'], ['jpy', '円建て'], ['fx', '為替'],
+  ['pop', '人気の銘柄'], ['gold', '金(ゴールド)'], ['major', '主要な暗号資産'], ['meme', '話題の銘柄(値動きがとても大きい)'],
+  ['stock', '米国株・ETF(トークン化 bStocks)'], ['jpy', '円建て'], ['fx', '為替・BTC 建て'],
 ];
 // long は銘柄の一覧に出す名前(日本語の名前つき)。label は、凡例・履歴・お知らせなどに使う短い名前
 const sym = (id, long, base, cat, quote) => {
   const pair = (long.match(/[A-Z0-9]+\/[A-Z]+/) || [long])[0];
   return { id, long, label: cat === 'gold' ? long : pair, base, cat, quote: quote || 'USDT' };
 };
+/* 並び順は、利用者から届いた TradingView の銘柄リスト(人気の銘柄が上)に合わせた(2026年11月)。
+ * リストは米ドル建て(BTCUSD など)だが、このサイトは Binance のデータを使うので、同じ銘柄の USDT 建てを載せている。
+ * Binance で取引されていない銘柄(TRIA、FLUID、FLR、LIGHTER、GFI、VVV)と、指数・先物(DVOL など)は載せていない */
 const SYMBOLS = [
-  sym('PAXGUSDT', '金 PAXG/USDT', 3800, 'gold'),
-  sym('XAUTUSDT', '金 XAUT/USDT', 3800, 'gold'),
-  sym('BTCUSDT', 'BTC/USDT ビットコイン', 66000, 'major'),
-  sym('ETHUSDT', 'ETH/USDT イーサリアム', 1800, 'major'),
-  sym('BNBUSDT', 'BNB/USDT', 590, 'major'),
-  sym('XRPUSDT', 'XRP/USDT リップル', 0.95, 'major'),
-  sym('SOLUSDT', 'SOL/USDT ソラナ', 72, 'major'),
-  sym('TRXUSDT', 'TRX/USDT トロン', 0.3, 'major'),
-  sym('DOGEUSDT', 'DOGE/USDT ドージコイン', 0.06, 'major'),
-  sym('ADAUSDT', 'ADA/USDT カルダノ', 0.15, 'major'),
-  sym('BCHUSDT', 'BCH/USDT ビットコインキャッシュ', 210, 'major'),
-  sym('LINKUSDT', 'LINK/USDT チェーンリンク', 9, 'major'),
-  sym('HYPEUSDT', 'HYPE/USDT ハイパーリキッド', 65, 'major'),
-  sym('XLMUSDT', 'XLM/USDT ステラ', 0.14, 'major'),
-  sym('ZECUSDT', 'ZEC/USDT ジーキャッシュ', 850, 'major'),
-  sym('LTCUSDT', 'LTC/USDT ライトコイン', 45, 'major'),
-  sym('AVAXUSDT', 'AVAX/USDT アバランチ', 7.5, 'major'),
-  sym('SUIUSDT', 'SUI/USDT スイ', 0.73, 'major'),
-  sym('HBARUSDT', 'HBAR/USDT ヘデラ', 0.058, 'major'),
-  sym('DOTUSDT', 'DOT/USDT ポルカドット', 0.75, 'major'),
-  sym('NEARUSDT', 'NEAR/USDT ニア', 3.1, 'major'),
-  sym('UNIUSDT', 'UNI/USDT ユニスワップ', 5, 'major'),
-  sym('AAVEUSDT', 'AAVE/USDT アーベ', 100, 'major'),
+  sym('BTCUSDT', 'BTC/USDT ビットコイン', 65000, 'pop'),
+  sym('ETHUSDT', 'ETH/USDT イーサリアム', 1800, 'pop'),
+  sym('SOLUSDT', 'SOL/USDT ソラナ', 71, 'pop'),
+  sym('XRPUSDT', 'XRP/USDT リップル', 0.96, 'pop'),
+  sym('HYPEUSDT', 'HYPE/USDT ハイパーリキッド', 66, 'pop'),
+  sym('LINKUSDT', 'LINK/USDT チェーンリンク', 9.1, 'pop'),
+  sym('INJUSDT', 'INJ/USDT インジェクティブ', 6.8, 'pop'),
+  sym('XLMUSDT', 'XLM/USDT ステラ', 0.14, 'pop'),
+  sym('ADAUSDT', 'ADA/USDT カルダノ', 0.15, 'pop'),
+  sym('BCHUSDT', 'BCH/USDT ビットコインキャッシュ', 208, 'pop'),
+  sym('DOGEUSDT', 'DOGE/USDT ドージコイン', 0.059, 'pop'),
+  sym('LTCUSDT', 'LTC/USDT ライトコイン', 45, 'pop'),
+  sym('SUSDT', 'S/USDT ソニック', 0.033, 'pop'),
+  sym('SUIUSDT', 'SUI/USDT スイ', 0.72, 'pop'),
+  sym('ZECUSDT', 'ZEC/USDT ジーキャッシュ', 880, 'pop'),
+  sym('BNBUSDT', 'BNB/USDT', 590, 'pop'),
+  sym('PAXGUSDT', '金 PAXG/USDT', 3860, 'gold'),
+  sym('XAUTUSDT', '金 XAUT/USDT', 3860, 'gold'),
+  sym('ICPUSDT', 'ICP/USDT インターネットコンピューター', 2.2, 'major'),
+  sym('ZROUSDT', 'ZRO/USDT レイヤーゼロ', 1.4, 'major'),
   sym('TAOUSDT', 'TAO/USDT ビットテンソル', 190, 'major'),
+  sym('ATOMUSDT', 'ATOM/USDT コスモス', 1.3, 'major'),
+  sym('NEARUSDT', 'NEAR/USDT ニア', 3.1, 'major'),
+  sym('AVAXUSDT', 'AVAX/USDT アバランチ', 7.2, 'major'),
+  sym('ETCUSDT', 'ETC/USDT イーサリアムクラシック', 5.9, 'major'),
+  sym('ARBUSDT', 'ARB/USDT アービトラム', 0.13, 'major'),
+  sym('SEIUSDT', 'SEI/USDT セイ', 0.039, 'major'),
+  sym('DASHUSDT', 'DASH/USDT ダッシュ', 37, 'major'),
+  sym('RENDERUSDT', 'RENDER/USDT レンダー', 1.4, 'major'),
+  sym('CHZUSDT', 'CHZ/USDT チリーズ', 0.0097, 'major'),
+  sym('ONDOUSDT', 'ONDO/USDT オンド', 0.3, 'major'),
+  sym('POLUSDT', 'POL/USDT ポリゴン', 0.08, 'major'),
+  sym('AAVEUSDT', 'AAVE/USDT アーベ', 108, 'major'),
+  sym('APTUSDT', 'APT/USDT アプトス', 0.45, 'major'),
+  sym('GRTUSDT', 'GRT/USDT ザ・グラフ', 0.017, 'major'),
+  sym('FILUSDT', 'FIL/USDT ファイルコイン', 0.6, 'major'),
+  sym('JASMYUSDT', 'JASMY/USDT ジャスミー', 0.0032, 'major'),
+  sym('AEROUSDT', 'AERO/USDT エアロドローム', 0.42, 'major'),
+  sym('UNIUSDT', 'UNI/USDT ユニスワップ', 5.1, 'major'),
+  sym('FETUSDT', 'FET/USDT', 0.13, 'major'),
+  sym('DOTUSDT', 'DOT/USDT ポルカドット', 0.72, 'major'),
+  sym('QNTUSDT', 'QNT/USDT クアント', 156, 'major'),
+  sym('TRXUSDT', 'TRX/USDT トロン', 0.3, 'major'),
+  sym('HBARUSDT', 'HBAR/USDT ヘデラ', 0.058, 'major'),
+  sym('SHIBUSDT', 'SHIB/USDT 柴犬コイン', 0.0000039, 'meme'),
   sym('PEPEUSDT', 'PEPE/USDT', 0.0000039, 'meme'),
-  sym('SHIBUSDT', 'SHIB/USDT 柴犬コイン', 0.000004, 'meme'),
+  sym('PUMPUSDT', 'PUMP/USDT パンプファン', 0.0029, 'meme'),
   sym('BONKUSDT', 'BONK/USDT', 0.0000024, 'meme'),
   sym('WIFUSDT', 'WIF/USDT', 0.13, 'meme'),
   sym('PENGUUSDT', 'PENGU/USDT', 0.005, 'meme'),
@@ -65,6 +89,8 @@ const SYMBOLS = [
   sym('MSTRBUSDT', 'ストラテジー MSTRB/USDT', 103, 'stock'),
   sym('COINBUSDT', 'コインベース COINB/USDT', 120, 'stock'),
   sym('CRCLBUSDT', 'サークル CRCLB/USDT', 59, 'stock'),
+  sym('SPCXBUSDT', 'スペースX SPCXB/USDT', 135, 'stock'),
+  sym('SOXLBUSDT', '半導体3倍 ETF SOXLB/USDT', 54, 'stock'),
   sym('SPYBUSDT', 'S&P500 ETF SPYB/USDT', 748, 'stock'),
   sym('QQQBUSDT', 'ナスダック100 ETF QQQB/USDT', 671, 'stock'),
   sym('BTCJPY', 'BTC/JPY ビットコイン', 10500000, 'jpy', 'JPY'),
@@ -75,6 +101,8 @@ const SYMBOLS = [
   sym('DOGEJPY', 'DOGE/JPY ドージコイン', 9.6, 'jpy', 'JPY'),
   sym('ADAJPY', 'ADA/JPY カルダノ', 24.6, 'jpy', 'JPY'),
   sym('EURUSDT', 'EUR/USDT ユーロ', 1.1, 'fx'),
+  sym('ETHBTC', 'ETH/BTC イーサリアム(BTC 建て)', 0.028, 'fx', 'BTC'),
+  sym('SOLBTC', 'SOL/BTC ソラナ(BTC 建て)', 0.0011, 'fx', 'BTC'),
 ];
 const BUILTIN = SYMBOLS.length; // これより後ろは、利用者が追加した銘柄
 // 'DOGEUSDT' → 'DOGE/USDT' のように、読みやすい名前にする
@@ -163,7 +191,7 @@ const IND_TYPES = {
 };
 const DRAW_COLOR = '#2f80ed';
 const ALERT_COLOR = '#e67e22';
-const TWO_POINT = ['t', 'r', 'f']; // 2点で決める図形:トレンドライン、長方形、フィボナッチ
+const TWO_POINT = ['t', 'r', 'f', 'm']; // 2点で決める図形:トレンドライン、長方形、フィボナッチ
 const FIB = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
 const CHART_TYPES = [['candle', 'ローソク足'], ['heikin', '平均足'], ['line', 'ライン(終値)']];
 const MA_KINDS = [['sma', '単純 (SMA)'], ['ema', '指数 (EMA)'], ['rma', 'Smoothed (RMA)'], ['wma', '加重 (WMA)'],
@@ -254,7 +282,7 @@ function defaultParams(type) {
   INTERVALS.forEach(iv => { vis[iv.id] = true; });
   if (GT.DEFS[type]) return Object.assign(GT.defaults(type), GT.DEFS[type].overlay ? {} : { weight: 1 }, GT.DEFS[type].custom ? { alert: false } : {}, { vis });
   if (type === 'ma') return { kind: 'sma', len: 20, source: 'close', color: '#f5a623', width: 1.5, vis };
-  if (type === 'rsi') return { len: 14, source: 'close', upper: 70, lower: 30, color: '#7e57c2', weight: 1, vis };
+  if (type === 'rsi') return { len: 14, source: 'close', upper: 70, lower: 30, color: '#7e57c2', showMa: true, maLen: 14, cMa: '#f5a623', weight: 1, vis };
   if (type === 'macd') {
     return { fast: 12, slow: 26, signal: 9, source: 'close', colMacd: '#2f80ed', colSignal: '#f5a623', weight: 1, vis };
   }
@@ -346,6 +374,7 @@ function readDrawings(s) {
       if (d && TWO_POINT.includes(d.type) && p1 && p2) return { type: d.type, p1, p2 };
       if (d && d.type === 'v' && p1) return { type: 'v', p1 };
       if (d && d.type === 'a' && p1) return { type: 'a', p1, above: !!d.above, done: !!d.done };
+      if (d && d.type === 'x' && p1 && typeof d.text === 'string' && plain(d.text, 40)) return { type: 'x', p1, text: plain(d.text, 40) };
       return null;
     }).filter(Boolean);
   });
@@ -506,8 +535,11 @@ function computeRSI(bars, p) {
   }
   const au = rma(up, n), ad = rma(dn, n);
   const val = au.map((u, i) => !isFinite(u) ? NaN : ad[i] === 0 ? 100 : 100 - 100 / (1 + u / ad[i]));
+  const lines = [{ name: 'RSI', val, color: p.color }];
+  // RSI をならした平均線(RSI が平均線の上にあるか下にあるかで、勢いの向きを見る)
+  if (p.showMa) lines.push({ name: 'MA', val: sma(val, lenOf(p.maLen)), color: p.cMa, width: 1 });
   return {
-    lines: [{ name: 'RSI', val, color: p.color }], hist: null,
+    lines, hist: null,
     bands: [+p.upper, +p.lower], fixed: [0, 100], label: String(n),
   };
 }
@@ -539,7 +571,7 @@ function recompute() {
  * 知らせるのは、見ている間に新しく確定した足だけ(開いた直後や、銘柄・時間足を変えた直後には出さない) */
 function checkAlerts() {
   const n = state.bars.length;
-  if (n < 3) return;
+  if (n < 3 || state.replay) return; // リプレイ中の合図は、過去の再生なので知らせない
   const closed = state.bars[n - 2], key = `${state.symbol}|${state.interval}`;
   state.indicators.forEach(ind => {
     if (!ind.p.alert || !ind.out || !ind.out.marks || !ind.out.marks.length) { ind.alertKey = null; return; }
@@ -672,7 +704,13 @@ function queueRecompute() {
 function setBars(raw, resetView, light) {
   const iv = curInterval(), before = state.bars.length;
   state.raw = raw;
-  state.bars = groupBars(raw, iv.group, iv.ms);
+  state.allBars = groupBars(raw, iv.group, iv.ms);
+  // リプレイ中は、決めた足までしか見せない(売買の判定には、いつも全部の足=本物の価格を使う)
+  if (state.replay) {
+    let n = 0;
+    while (n < state.allBars.length && state.allBars[n].t <= state.replay.t) n++;
+    state.bars = state.allBars.slice(0, Math.max(2, n));
+  } else state.bars = state.allBars;
   if (light && state.bars.length === before) queueRecompute();
   else { clearTimeout(recTimer); recTimer = 0; timedRecompute(); }
   tradeTick();
@@ -681,6 +719,7 @@ function setBars(raw, resetView, light) {
 }
 async function loadData() {
   const token = ++state.loadToken;
+  stopReplay(true); // 銘柄・時間足を変えたら、リプレイは終わる
   const iv = curInterval(), sym = curSymbol();
   setStatus('', '読み込み中');
   setLoading(true);
@@ -697,6 +736,7 @@ async function loadData() {
     delete dead[sym.id];
     setLoading(false);
     setBars(raw, true);
+    if (state.pendingRange) applyRange();
     openStream();
     if (!clockReady) syncClock();
     pollPositions(); // ほかの銘柄のポジションも、すぐに最新の価格で評価し直す
@@ -1316,6 +1356,21 @@ function drawMain(pane, i0, i1, th) {
     axisTag(y, fmtPrice(last.c), col, '#ffffff', pane);
     if (left > 0) axisTag(y + 18, fmtRemain(left), col, '#ffffff', pane);
   }
+  // 重ねて描いている線(移動平均線など)の、いちばん新しい値を、線と同じ色のラベルで価格の目盛りに出す
+  // (スマホでは目盛りがせまく、ラベルで埋まってしまうので出さない)
+  if (!compact) {
+    const li = bars.length - 1;
+    visibleOverlays().forEach(ind => {
+      if (ind.hidden || !ind.out) return;
+      const lines = ind.out.lines || [{ val: ind.out.val, color: ind.p.color }];
+      lines.forEach(l => {
+        const v = l.val[li - (l.offset > 0 ? l.offset : 0)];
+        if (!isFinite(v) || !COLOR_RE.test(l.color || '')) return;
+        const yy = yOf(v);
+        if (yy > pane.y + 9 && yy < pane.y + pane.h - 9) axisTag(yy, fmtPrice(v), l.color, '#ffffff', pane);
+      });
+    });
+  }
 }
 
 function drawIndicator(pane, i0, i1, th) {
@@ -1545,17 +1600,19 @@ function drawingPoints(d, pane) {
 function hitDrawing(pos, tol) {
   const pane = panes[0];
   if (!pane || !pane.yOf || pos.x > plotW() || pos.y > pane.y + pane.h) return null;
+  if (state.hideDraw) return null;
   const list = curDrawings();
   for (let k = list.length - 1; k >= 0; k--) {
     const d = list[k];
+    if (d.type === 'x') { const q = drawingPoints(d, pane)[0]; if (pos.x >= q.x - tol && pos.x <= q.x + Math.max(40, d.text.length * 12) && Math.abs(pos.y - q.y) <= tol + 8) return d; continue; }
     if (d.type === 'h' || d.type === 'a') { if (Math.abs(pos.y - pane.yOf(d.p1.price)) <= tol) return d; continue; }
     if (d.type === 'v') { if (Math.abs(pos.x - xOf(idxOfTime(d.p1.t))) <= tol) return d; continue; }
     const [a, b] = drawingPoints(d, pane);
-    if (d.type === 'r' || d.type === 'f') {
+    if (d.type === 'r' || d.type === 'f' || d.type === 'm') {
       const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x), y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y);
       if (pos.x < x0 - tol || pos.x > x1 + tol || pos.y < y0 - tol || pos.y > y1 + tol) continue;
       // 長方形は枠の近く、フィボナッチは各水準の線の近くをつかむ(中をさわっても、下の足を選べるように)
-      const near = d.type === 'r'
+      const near = d.type !== 'f'
         ? Math.min(Math.abs(pos.x - x0), Math.abs(pos.x - x1), Math.abs(pos.y - y0), Math.abs(pos.y - y1)) <= tol
         : FIB.some(f => Math.abs(pos.y - (b.y + (a.y - b.y) * f)) <= tol);
       if (near) return d;
@@ -1569,6 +1626,7 @@ function hitDrawing(pos, tol) {
 }
 function drawDrawings(pane) {
   const pw = plotW(), tags = [], alertTags = [];
+  if (state.hideDraw) return; // 「線を隠す」を選んでいる間は、何も描かない(消えてはいない)
   ctx.save();
   ctx.beginPath(); ctx.rect(0, pane.y, pw, pane.h); ctx.clip();
   ctx.strokeStyle = DRAW_COLOR; ctx.fillStyle = DRAW_COLOR;
@@ -1589,6 +1647,18 @@ function drawDrawings(pane) {
     } else if (d.type === 'v') {
       const x = Math.round(xOf(idxOfTime(d.p1.t))) + 0.5;
       ctx.moveTo(x, pane.y); ctx.lineTo(x, pane.y + pane.h); ctx.stroke();
+    } else if (d.type === 'x') {
+      const q = drawingPoints(d, pane)[0];
+      ctx.save();
+      ctx.font = `${on ? '700 ' : ''}13px -apple-system, "Segoe UI", "Hiragino Sans", sans-serif`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      const w = ctx.measureText(d.text).width;
+      ctx.fillStyle = rgba(THEMES[state.theme].bg, 0.8); ctx.fillRect(q.x - 3, q.y - 10, w + 6, 20);
+      ctx.fillStyle = DRAW_COLOR; ctx.fillText(d.text, q.x, q.y);
+      ctx.restore();
+    } else if (d.type === 'm') {
+      const [a, b] = drawingPoints(d, pane);
+      drawMeasure(a, b, d.p1, d.p2);
+      if (on) [a, b].forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill(); });
     } else if (d.type === 'r' || d.type === 'f') {
       const [a, b] = drawingPoints(d, pane);
       drawShape(d.type, a, b, d.p1.price, d.p2.price, on);
@@ -1604,6 +1674,7 @@ function drawDrawings(pane) {
     const a = { x: xOf(idxOfTime(state.pending.t)), y: pane.yOf(state.pending.price) };
     ctx.lineWidth = 1.4; ctx.setLineDash([4, 4]);
     if (state.tool === 't') { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(state.hover.x, state.hover.y); ctx.stroke(); }
+    else if (state.tool === 'm') { ctx.setLineDash([]); drawMeasure(a, state.hover, state.pending, { t: timeOfIdx(idxAtX(state.hover.x)), price: pane.vOf(state.hover.y) }); }
     else drawShape(state.tool, a, state.hover, state.pending.price, pane.vOf(state.hover.y), false);
     ctx.setLineDash([]);
     ctx.beginPath(); ctx.arc(a.x, a.y, 4, 0, Math.PI * 2); ctx.fill();
@@ -1648,6 +1719,39 @@ function saveImage() {
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   }, 'image/png');
 }
+// ものさし:2点の間の値幅・変化率・足の本数を表示する
+function drawMeasure(a, b, p1, p2) {
+  const up = p2.price >= p1.price, col = up ? UP : DOWN;
+  const x0 = Math.min(a.x, b.x), y0 = Math.min(a.y, b.y), w = Math.abs(b.x - a.x), h = Math.abs(b.y - a.y);
+  ctx.save();
+  ctx.fillStyle = rgba(col, 0.12); ctx.fillRect(x0, y0, w, h);
+  ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.strokeRect(Math.round(x0) + 0.5, Math.round(y0) + 0.5, w, h);
+  const d = p2.price - p1.price, pct = p1.price ? d / p1.price * 100 : 0;
+  const nb = Math.round(Math.abs(idxOfTime(p2.t) - idxOfTime(p1.t)));
+  const text = `${d >= 0 ? '+' : ''}${fmtPrice(d, p1.price)}(${d >= 0 ? '+' : ''}${pct.toFixed(2)}%)・${nb}本`;
+  ctx.font = '12px -apple-system, "Segoe UI", "Hiragino Sans", sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+  const tw = ctx.measureText(text).width + 12, tx = clamp(x0 + w / 2, tw / 2 + 2, plotW() - tw / 2 - 2), ty = up ? y0 - 13 : y0 + h + 13;
+  ctx.fillStyle = col; ctx.fillRect(tx - tw / 2, ty - 10, tw, 20);
+  ctx.fillStyle = '#ffffff'; ctx.fillText(text, tx, ty);
+  ctx.restore();
+}
+// 線を変える前の状態を覚えておく(「元に戻す」用。銘柄ごとに20回分まで)
+const undoStack = [];
+function snapDraw() {
+  undoStack.push({ sym: state.symbol, list: JSON.stringify(curDrawings()) });
+  if (undoStack.length > 20) undoStack.shift();
+}
+function undoDraw() {
+  for (let k = undoStack.length - 1; k >= 0; k--) {
+    if (undoStack[k].sym !== state.symbol) continue;
+    const snap = undoStack.splice(k, 1)[0];
+    state.drawings[state.symbol] = readDrawings({ drawings: { [state.symbol]: JSON.parse(snap.list) } })[state.symbol] || [];
+    state.sel = null; save(); updateHint(); draw();
+    toast('線を、ひとつ前の状態に戻しました。');
+    return;
+  }
+  toast('元に戻せる変更がありません。');
+}
 // 長方形と、フィボナッチ・リトレースメント(p1 を 100%、p2 を 0% として、戻りの目安の水準を引く)
 function drawShape(type, a, b, price1, price2, on) {
   const x0 = Math.min(a.x, b.x), w = Math.abs(b.x - a.x);
@@ -1682,6 +1786,9 @@ function updateHint() {
   let text = '';
   if (state.tool === 'h') text = '線を置きたい価格をタップ';
   else if (state.tool === 'a') text = '知らせてほしい価格をタップ';
+  else if (state.tool === 'x') text = '文字を置きたい場所をタップ';
+  else if (state.tool === 'replay') text = 'リプレイを始める足をタップ';
+  else if (state.tool === 'm') text = state.pending ? '測りたい終わりの点をタップ' : '測りたい始まりの点をタップ';
   else if (state.tool === 'v') text = '線を置きたい日時をタップ';
   else if (state.tool === 'f') text = state.pending ? '動きの終わり(戻りを測りたい側)をタップ' : '動きの始まり(安値か高値)をタップ';
   else if (state.tool === 'r') text = state.pending ? '反対側の角をタップ' : '角をタップ';
@@ -1694,6 +1801,7 @@ function updateHint() {
 }
 function removeSelected() {
   if (!state.sel) return;
+  snapDraw();
   state.drawings[state.symbol] = curDrawings().filter(d => d !== state.sel);
   state.sel = null;
   save(); updateHint(); draw();
@@ -1718,7 +1826,16 @@ function handleTap(pos, tol) {
       if (d < best) { best = d; pt.price = v; }
     });
   }
+  if (state.tool === 'replay') { const i = Math.round(idxAtX(pos.x)); setTool(null); startReplay(i); return; }
   if (curDrawings().length >= 200) { toast('線は1銘柄につき200本までです。'); setTool(null); return; }
+  if (state.hideDraw) { state.hideDraw = false; toast('隠していた線を、表示に戻しました。'); }
+  if (state.tool === 'x') {
+    const text = plain(window.prompt('チャートに書きこむ文字(40文字まで)', '') || '', 40);
+    if (text) { snapDraw(); curDrawings().push({ type: 'x', p1: pt, text }); save(); }
+    setTool(null);
+    return;
+  }
+  if (state.tool !== 'a' && (state.tool === 'h' || state.tool === 'v' || state.pending)) snapDraw();
   if (state.tool === 'a') {
     // いまの価格より上に置いたら「上がって届いたとき」、下なら「下がって届いたとき」に知らせる
     const last = state.bars[state.bars.length - 1].c;
@@ -2096,7 +2213,10 @@ function renderDialog() {
       fSelect('source', 'ソース', SOURCES),
       fNumber('upper', '上の基準線', 50, 100, 1, 'これより上は「買われすぎ」の目安'),
       fNumber('lower', '下の基準線', 0, 50, 1, 'これより下は「売られすぎ」の目安'),
-      fColor('color', '線の色')
+      fColor('color', '線の色'),
+      fCheck('showMa', 'RSI の平均線を表示', 'RSI をならした線。RSI がこの線の上なら勢いは上向き'),
+      fNumber('maLen', '平均線の期間', 1, 500, 1),
+      fColor('cMa', '平均線の色')
     );
   } else if (ind.type === 'macd' && dlg.tab === 'params') {
     add(
@@ -2219,13 +2339,16 @@ function buildTopbar() {
     fillSymbols(); closeSym(); setTool(null); save(); loadData();
     sel.dispatchEvent(new Event('symbolpicked'));
   };
+  // 人気の順:最初から選べる銘柄の並び(上ほど人気)を使い、そこにないものは後ろへ
+  const POP = {}; SYMBOLS.slice(0, BUILTIN).forEach((s, i) => { const b = s.id.slice(0, -s.quote.length); if (!(b in POP)) POP[b] = i; });
+  const pop = b => (b in POP ? POP[b] : 9999);
   const searchUniverse = () => {
     if (!universe) return [];
     const text = symIn.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     const score = u => (u.base === text ? 0 : u.base.startsWith(text) ? 1 : u.id.startsWith(text) ? 2 : u.id.includes(text) ? 3 : 9);
     return universe
       .filter(u => (!chip || u.quote === chip) && (!text || score(u) < 9))
-      .sort((x, y) => (text ? score(x) - score(y) : 0) || rank(x.quote) - rank(y.quote) || x.base.localeCompare(y.base));
+      .sort((x, y) => (text ? score(x) - score(y) : 0) || rank(x.quote) - rank(y.quote) || pop(x.base) - pop(y.base) || x.base.localeCompare(y.base));
   };
   const fillResults = () => {
     const box = $('symResults'), chips = $('symChips');
@@ -2394,6 +2517,12 @@ function buildTopbar() {
    ['トレンドライン', '2点を結ぶ線を引く', () => setTool('t')],
    ['垂直線', '決めた日時に縦線を引く', () => setTool('v')],
    ['価格のお知らせ', '決めた価格に届いたら知らせる線を置く(注文はしません)', () => setTool('a')],
+   ['ものさし', '2点の間の値幅・変化率・足の本数を測る', () => setTool('m')],
+   ['文字', 'チャートにメモの文字を書きこむ', () => setTool('x')],
+   ['線を隠す / 表示する', '引いた線を、消さずに一時的に見えなくする', () => { state.hideDraw = !state.hideDraw; state.sel = null; updateHint(); draw(); toast(state.hideDraw ? '線を隠しました(消えてはいません)。もう一度選ぶと表示します。' : '線を表示しました。'); }],
+   ['元に戻す', '線の追加・移動・削除を、ひとつ前に戻す(Ctrl + Z)', () => undoDraw()],
+   ['リプレイ', '過去の足を選び、そこから値動きを1本ずつ再生する', () => { if (state.replay) stopReplay(false); setTool('replay'); }],
+   ['全画面表示', '画面いっぱいに表示する(もう一度選ぶと戻る)', () => { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (e) { toast('この端末では、全画面表示を使えません。'); } }],
    ['長方形', '2つの角を決めて、値動きの範囲を囲む', () => setTool('r')],
    ['フィボナッチ', '上げ(下げ)の始まりと終わりを決めて、戻りの目安を引く', () => setTool('f')],
    ['売買ルールを試す', '移動平均の交差や RSI などで売買していたら、どうなっていたかを過去データで計算', () => openRules()],
@@ -2402,7 +2531,7 @@ function buildTopbar() {
      state.chartType = CHART_TYPES[(k + 1) % CHART_TYPES.length][0];
      save(); draw(); toast(`表示:${CHART_TYPES.find(c => c[0] === state.chartType)[1]}`);
    }],
-   ['線をすべて削除', 'この銘柄に引いた線を全部消す', () => { state.drawings[state.symbol] = []; state.sel = null; save(); setTool(null); }],
+   ['線をすべて削除', 'この銘柄に引いた線を全部消す', () => { snapDraw(); state.drawings[state.symbol] = []; state.sel = null; save(); setTool(null); }],
    ['画像として保存', 'いまのチャートを PNG 画像でダウンロード', () => { state.hover = null; render(); saveImage(); }],
    ['使い方の案内', '画面の主な場所を、順番に案内します(1分ほど)', () => startTour()],
    ['使い方(一覧)', '画面の動かし方と、主な機能の場所', () => openHelp()],
@@ -2505,6 +2634,7 @@ function bindPointer() {
         const k = ends.findIndex(q => Math.hypot(q.x - p.x, q.y - p.y) <= tol);
         if (k >= 0) keys = [k ? 'p2' : 'p1'];
       }
+      snapDraw();
       dragD = { start: p, keys, orig: JSON.parse(JSON.stringify(state.sel)) };
       state.dragging = state.sel;
     } else {
@@ -3124,7 +3254,8 @@ function tradeTick() {
   const n = state.bars.length;
   if (!state.live || !n) return;
   const sym = state.symbol;
-  T.last[sym] = state.bars[n - 1].c;
+  const allB = state.allBars && state.allBars.length ? state.allBars : state.bars;
+  T.last[sym] = allB[allB.length - 1].c; // リプレイ中でも、売買に使うのは本物の最新の価格
   const lo = feed.lo, hi = feed.hi;
   feed.lo = Infinity; feed.hi = -Infinity;
   checkPriceAlerts(sym, Math.min(lo, T.last[sym]), Math.max(hi, T.last[sym]));
@@ -3186,7 +3317,7 @@ function renderTrade() {
   // ポジションを持っているときは、どちらのボタンが「決済」になるかをボタンに書く
   setTxt('trSellSub', pos ? (pos.qty > 0 ? '買いを決済する' : '売りを増やす') : '下がると利益');
   setTxt('trBuySub', pos ? (pos.qty < 0 ? '売りを決済する' : '買いを増やす') : '上がると利益');
-  const tradable = px > 0 && priceOk(sym) && reconciled[sym] === true && clockReady;
+  const tradable = px > 0 && priceOk(sym) && reconciled[sym] === true && clockReady && !state.replay;
   $('trBuy').disabled = $('trSell').disabled = !tradable;
   const levSel = $('trLev');
   if (pos) { levSel.value = String(pos.lev || 1); levSel.disabled = true; setTxt('trLevHint', '保有中のポジションに合わせます'); }
@@ -3194,7 +3325,10 @@ function renderTrade() {
   // 閉じていた間の値動きの確認が終わらず売買できないときは、その理由を出す(何も出ないと故障に見える)
   const WAIT = '開いていなかった間の値動きを確認しています。終わるまで売買できません(通信が不安定だと、時間がかかります)。';
   const WAIT_PRICE = '最新の価格を確認しています。数秒で売買できるようになります。';
-  const waiting = px > 0 && !tradable && (reconciled[sym] !== true || !clockReady);
+  const REPLAY_MSG = 'リプレイ中は売買できません。リプレイを終わると、売買できるようになります。';
+  if (state.replay && !$('trMsg').textContent) setTxt('trMsg', REPLAY_MSG, 'msg');
+  else if (!state.replay && $('trMsg').textContent === REPLAY_MSG) setTxt('trMsg', '');
+  const waiting = px > 0 && !tradable && !state.replay && (reconciled[sym] !== true || !clockReady);
   // 調べるもの(ポジション・指値)がないときは、「価格を確かめている」とだけ出す(閉じていた間の確認と言うと、誤解させる)
   const msgNow = pos || T.orders.some(o => o.sym === sym) ? WAIT : WAIT_PRICE;
   const cur = $('trMsg').textContent;
@@ -4549,6 +4683,103 @@ function bindBacktest() {
   window.addEventListener('resize', () => { if (!ov.hidden) renderBacktest(); });
 }
 
+// ---------------------------------------------------------------- リプレイ(過去の値動きを1本ずつ再生する)
+function startReplay(i) {
+  const all = state.allBars || state.bars;
+  if (all.length < 20) return;
+  i = clamp(Math.round(i), 10, all.length - 2);
+  state.replay = { t: all[i].t, playing: false, speed: 1, timer: 0 };
+  setBars(state.raw, false);
+  state.end = state.bars.length + Math.max(8, Math.floor(plotW() / state.barW * 0.3)); // 右に、これから出てくる足のための空きを作る
+  renderReplay(); renderTrade(); draw();
+}
+function stepReplay() {
+  const r = state.replay, all = state.allBars || [];
+  if (!r) return;
+  const n = state.bars.length;
+  if (n >= all.length) { playReplay(false); toast('最新の足まで再生しました。「終了」で、ふつうの表示に戻ります。'); return; }
+  const follow = state.end >= n - 0.01;
+  r.t = all[n].t;
+  setBars(state.raw, false);
+  if (follow && state.end < state.bars.length + 3) state.end += 1;
+  renderReplay(); draw();
+}
+function playReplay(on) {
+  const r = state.replay;
+  if (!r) return;
+  clearInterval(r.timer); r.timer = 0; r.playing = !!on;
+  if (on) r.timer = setInterval(stepReplay, 1000 / r.speed);
+  renderReplay();
+}
+function stopReplay(silent) {
+  const r = state.replay;
+  if (!r) return;
+  clearInterval(r.timer);
+  state.replay = null;
+  if (!silent) { setBars(state.raw, false); state.end = state.bars.length + 5; renderTrade(); draw(); }
+  renderReplay();
+}
+function renderReplay() {
+  const box = $('replayBar'), r = state.replay;
+  box.hidden = !r;
+  if (!r) return;
+  const last = state.bars[state.bars.length - 1];
+  $('rpText').textContent = `リプレイ中 ${fmtDate(last.t, curInterval().ms < 864e5)}`;
+  $('rpPlay').textContent = r.playing ? '⏸ 止める' : '▶ 再生';
+  $('rpPlay').setAttribute('aria-pressed', String(r.playing));
+  $('rpSpeed').value = String(r.speed);
+}
+// Ctrl + Z(Mac は ⌘ + Z)で、線の変更をひとつ戻す。文字を入力している最中は、入力欄の「元に戻す」を優先する
+document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '')) return;
+  e.preventDefault(); undoDraw();
+});
+function bindReplay() {
+  $('rpPlay').addEventListener('click', () => playReplay(!state.replay.playing));
+  $('rpStep').addEventListener('click', () => { playReplay(false); stepReplay(); });
+  $('rpSpeed').addEventListener('change', () => { const r = state.replay; if (!r) return; r.speed = clamp(parseFloat($('rpSpeed').value) || 1, 0.5, 20); if (r.playing) playReplay(true); });
+  $('rpStop').addEventListener('click', () => stopReplay(false));
+}
+
+// ---------------------------------------------------------------- 表示する期間(1日・5日・1ヶ月 … すべて)と、時計
+// [id, 表示名, 使う時間足, さかのぼる日数(0 = すべて、-1 = 今年の初めから)]
+const RANGES = [['1d', '1日', '5m', 1], ['5d', '5日', '30m', 5], ['1m', '1ヶ月', '1h', 30], ['3m', '3ヶ月', '4h', 91], ['6m', '6ヶ月', '1d', 182],
+  ['ytd', '年初来', '1d', -1], ['1y', '1年', '1d', 365], ['5y', '5年', '1w', 1826], ['all', 'すべて', '1M', 0]];
+function applyRange() {
+  const r = RANGES.find(x => x[0] === state.pendingRange), bars = state.bars;
+  state.pendingRange = null;
+  if (!r || !bars.length) return;
+  const now = bars[bars.length - 1].t;
+  const from = r[3] === 0 ? -Infinity : r[3] < 0 ? Date.UTC(new Date(now).getUTCFullYear(), 0, 1) : now - r[3] * 864e5;
+  let k = 0;
+  for (let i = bars.length - 1; i >= 0 && bars[i].t >= from; i--) k++;
+  k = Math.max(k, 5);
+  state.barW = clamp(plotW() / (k + 4), 1.5, 60);
+  state.end = bars.length + 3;
+  draw();
+}
+function bindRange() {
+  const bar = $('rangeBtns');
+  RANGES.forEach(([id, label, iv]) => {
+    const b = el('button', { type: 'button', text: label, title: `直近の${label}を表示(${(INTERVALS.find(x => x.id === iv) || {}).label}足)` });
+    b.addEventListener('click', () => {
+      state.pendingRange = id;
+      if (state.interval === iv) { applyRange(); return; }
+      // 期間に合った時間足に切りかえる(読み込みが終わったら、その期間が画面に収まるように合わせる)
+      const btn = [...$('intervals').children][INTERVALS.findIndex(x => x.id === iv)];
+      if (btn) btn.click(); else state.pendingRange = null;
+    });
+    bar.appendChild(b);
+  });
+  // 時計:この端末の時刻と、協定世界時からのずれ
+  const tick = () => {
+    const d = new Date(tnow()), off = -d.getTimezoneOffset(), h = Math.trunc(off / 60), m = Math.abs(off % 60);
+    setTxt('clock', `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())} UTC${off >= 0 ? '+' : '-'}${Math.abs(h)}${m ? ':' + pad2(m) : ''}`);
+  };
+  tick(); setInterval(tick, 1000);
+}
+
 // ---------------------------------------------------------------- 文字入力のキーボード(スマホ)
 /* スマホでキーボードが出ると、画面の下半分が隠れる。下から出すシート(注文画面・設定)が
  * キーボードの下に隠れないよう、見えている範囲の高さと、キーボードの高さを CSS に伝える */
@@ -4576,6 +4807,8 @@ load();
 buildTopbar();
 bindTrade();
 bindMaker();
+bindReplay();
+bindRange();
 bindTour();
 bindBacktest();
 bindHelp();

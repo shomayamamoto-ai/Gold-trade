@@ -731,3 +731,28 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
      出しっぱなしにすると、ローソク足のほとんどが隠れてしまう */
   .stack .legend:not(.main):not(.open) .vals { display: none; }
 }
+
+/* ---- 表示する期間のボタンと時計(チャートの下) */
+.range-bar { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; min-height: 30px; padding: 2px 10px; border-top: 1px solid var(--line); background: var(--bg); font-size: 12px; }
+.range-btns { display: flex; flex: 1 1 auto; min-width: 0; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.range-btns::-webkit-scrollbar { display: none; }
+.range-btns button { flex: 0 0 auto; height: 26px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; white-space: nowrap; }
+.range-btns button:hover { background: var(--hover); color: var(--text); }
+#clock { flex: 0 0 auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* ---- リプレイの操作(チャートの下のほうに浮かべる) */
+.hint.replay { bottom: 36px; gap: 6px; padding: 6px 10px; flex-wrap: wrap; justify-content: center; white-space: normal; border-radius: 12px; }
+.hint.replay[hidden] { display: none; }
+.hint.replay .ctl { height: 28px; }
+.hint.replay select.ctl { width: auto; padding: 0 6px; }
+#rpText { font-variant-numeric: tabular-nums; font-weight: 600; }
+@media (max-width: 760px) {
+  .range-btns button { height: 34px; padding: 0 10px; font-size: 13px; }
+  #clock { display: none; }
+  .hint.replay .ctl { height: 36px; }
+  .kb-open .range-bar { display: none; }
+}
+@media (max-width: 760px) {
+  /* スマホでは、リプレイの操作を画面の幅いっぱいに1〜2段で出す */
+  .hint.replay { left: 8px; right: 8px; transform: none; max-width: none; }
+  #rpText { flex: 1 1 100%; text-align: center; }
+}
