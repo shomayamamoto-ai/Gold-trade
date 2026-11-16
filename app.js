@@ -2620,6 +2620,23 @@ function bindPointer() {
  * レバレッジなし:建てられる金額は「使える金額」まで。 */
 const TRADE_KEY = 'gold-trade-paper-v1';
 const FEE = 0.001; // 売買金額に対する手数料の割合(0.1%)
+/* レバレッジ取引(分離マージン)。
+ * 証拠金 = 取引額 ÷ レバレッジ。損失がポジションの証拠金に近づくと、強制決済される。
+ * 維持証拠金の割合は、Binance の先物の小さい建玉の水準(0.4〜0.5% ほど)に合わせて 0.5% とした。
+ * 1倍は、これまでどおりの「現物」の扱い(証拠金ではなく、取引額そのものを使う) */
+const LEVERAGES = [1, 2, 3, 5, 10, 20, 50, 100], MAX_LEV = 100, MMR = 0.005;
+// ポジションの強制決済の価格(1倍のときは null)
+function liqPrice(p) {
+  if (!p || !(p.lev > 1) || !(p.margin > 0)) return null;
+  const q = Math.abs(p.qty);
+  const v = p.qty > 0 ? (p.avg * q - p.margin) / (q * (1 - MMR)) : (p.margin + q * p.avg) / (q * (1 + MMR));
+  return v > 0 ? v : null;
+}
+// これから建てる場合の、強制決済の価格の目安
+function liqAt(dir, entry, lev) {
+  if (!(lev > 1) || !(entry > 0)) return null;
+  return dir > 0 ? entry * (1 - 1 / lev) / (1 - MMR) : entry * (1 + 1 / lev) / (1 + MMR);
+}
 const START_CASH = { JPY: 1000000, BTC: 1, ETH: 10, BNB: 20, TRY: 300000, IDR: 150000000, BRL: 50000 };
 const freshTrade = () => ({ rev: 0, accounts: {}, positions: {}, history: [], orders: [], last: {}, quotes: {}, seen: {} });
 const cleanNote = v => (typeof v === 'string' ? v.replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 120) : '');
@@ -2638,18 +2655,22 @@ function loadTradeState() {
   each(t.last, (s, v) => { if (SYM_RE.test(s) && fin(v) && v > 0) out.last[s] = v; });
   each(t.seen, (s, v) => { if (SYM_RE.test(s) && fin(v)) out.seen[s] = v; });
   const level = v => (fin(v) && v > 0 ? v : null);
+  const levOf = v => (fin(v) && v >= 1 && v <= MAX_LEV ? Math.round(v) : 1);
   each(t.positions, (s, v) => {
     if (!SYM_RE.test(s) || !v || !fin(v.qty) || v.qty === 0 || !fin(v.avg) || !(v.avg > 0)) return;
     const opened = fin(v.opened) ? v.opened : Date.now();
     out.positions[s] = {
       qty: v.qty, avg: v.avg, tp: level(v.tp), sl: level(v.sl), opened,
       id: fin(v.id) ? v.id : opened, levelsAt: fin(v.levelsAt) ? v.levelsAt : opened, feeOpen: fin(v.feeOpen) && v.feeOpen >= 0 ? v.feeOpen : 0,
+      lev: levOf(v.lev),
     };
+    const P1 = out.positions[s];
+    P1.margin = P1.lev > 1 ? (fin(v.margin) && v.margin > 0 ? v.margin : Math.abs(P1.qty) * P1.avg / P1.lev) : 0;
   });
   if (Array.isArray(t.orders)) {
     t.orders.slice(0, 20).forEach(o => {
       if (!o || !SYM_RE.test(o.sym) || !fin(o.price) || !(o.price > 0) || !fin(o.notional) || !(o.notional > 0) || !fin(o.id)) return;
-      out.orders.push({ id: o.id, sym: o.sym, side: o.side === 'sell' ? 'sell' : 'buy', price: o.price, notional: o.notional, tp: level(o.tp), sl: level(o.sl), t: fin(o.t) ? o.t : 0, note: cleanNote(o.note), reduce: o.reduce === true });
+      out.orders.push({ id: o.id, sym: o.sym, side: o.side === 'sell' ? 'sell' : 'buy', price: o.price, notional: o.notional, tp: level(o.tp), sl: level(o.sl), t: fin(o.t) ? o.t : 0, note: cleanNote(o.note), reduce: o.reduce === true, lev: levOf(o.lev) });
     });
   }
   if (Array.isArray(t.history)) {
@@ -2658,7 +2679,7 @@ function loadTradeState() {
       out.history.push({
         t: h.t, sym: h.sym, side: h.side === 'sell' ? 'sell' : 'buy', qty: h.qty, price: h.price, fee: h.fee,
         pnl: fin(h.pnl) ? h.pnl : null, reason: ['tp', 'sl', 'liq', 'limit'].includes(h.reason) ? h.reason : 'manual', away: !!h.away, note: cleanNote(h.note),
-        feeIn: fin(h.feeIn) && h.feeIn >= 0 ? h.feeIn : 0, pid: fin(h.pid) ? h.pid : null,
+        feeIn: fin(h.feeIn) && h.feeIn >= 0 ? h.feeIn : 0, pid: fin(h.pid) ? h.pid : null, lev: levOf(h.lev) > 1 ? levOf(h.lev) : undefined,
       });
     });
   }
@@ -2714,7 +2735,9 @@ function acct(q) {
 }
 function unrealized(sym) {
   const p = T.positions[sym], px = T.last[sym];
-  return p && px > 0 ? p.qty * (px - p.avg) : 0;
+  if (!p || !(px > 0)) return 0;
+  const u = p.qty * (px - p.avg);
+  return p.lev > 1 ? Math.max(u, -p.margin) : u; // レバレッジのポジションは、証拠金より多くは失わない
 }
 /* 口座の状態。
  * 使える金額 = 評価額 − 保有分の時価。含み益を元手に買い増して、実質的にレバレッジをかけることはできない。
@@ -2725,6 +2748,8 @@ function acctStats(q) {
     if (quoteOf(sym) !== q) return;
     const p = T.positions[sym], ui = unrealized(sym), last = T.last[sym] > 0 ? T.last[sym] : p.avg;
     u += ui;
+    // レバレッジのポジションは、証拠金を取り置く。損失は証拠金の中で収まるので、二重には引かない。含み益は余力に数えない
+    if (p.lev > 1) { margin += p.margin; return; }
     uSafe += priceOk(sym) ? ui : Math.min(ui, 0);
     margin += Math.abs(p.qty) * Math.max(p.avg, last);
   });
@@ -2794,6 +2819,8 @@ function execute(sym, side, notional, reason, qty, opts) {
   // これがないと、決済のつもりの注文が、反対向きの新しいポジションを作ってしまう
   if (opts && opts.closeOnly && (!pos || Math.sign(pos.qty) === dir)) return 'このポジションは、すでに決済されています。';
   if (opts && opts.closeOnly && qty > Math.abs(pos.qty)) { qty = Math.abs(pos.qty); notional = qty * px; fee = notional * FEE; }
+  // 買い増し・売り増しは、保有中のポジションのレバレッジに合わせる
+  const lev = pos ? (pos.lev || 1) : clamp(Math.round((opts && opts.lev) || 1), 1, MAX_LEV);
   if (pos && Math.sign(pos.qty) !== dir) {
     // 反対向き=保有分を減らす(決済)
     const held = Math.abs(pos.qty);
@@ -2802,6 +2829,12 @@ function execute(sym, side, notional, reason, qty, opts) {
     // 保有分の 98% 以上を決済する注文も、全部の決済として扱う(価格が動いた分の、ごく小さな端数を残さない)
     if (qty >= held * 0.98) { qty = held; notional = qty * px; fee = notional * FEE; }
     pnl = qty * (px - pos.avg) * Math.sign(pos.qty);
+    if (pos.lev > 1) {
+      // 決済する割合の証拠金を戻す。損失は、その証拠金までで止まる(分離マージン)
+      const mPart = (pos.margin || 0) * Math.min(1, qty / held);
+      pnl = Math.max(pnl, -mPart);
+      pos.margin = Math.max(0, (pos.margin || 0) - mPart);
+    }
     feeIn = (pos.feeOpen || 0) * (qty / held);
     pos.feeOpen = (pos.feeOpen || 0) - feeIn;
     pid = pos.id;
@@ -2819,26 +2852,29 @@ function execute(sym, side, notional, reason, qty, opts) {
     const st = acctStats(q);
     // 「100%」などで入れた金額は、押したあとに価格が少し動くだけで、使える金額をわずかに超える。
     // 超えた分が1%以内なら、断らずに、使える金額いっぱいまで減らして通す(金額で指定した成行注文だけ)
-    if (!fixed && reason === 'manual' && notional + fee > st.avail && notional + fee <= st.avail * 1.01 && st.avail > 0) {
-      notional = st.avail / (1 + FEE) * (1 - 1e-9); qty = notional / px; fee = notional * FEE;
+    // 必要なお金:1倍は取引額そのもの、レバレッジは証拠金(取引額 ÷ レバレッジ)。どちらも手数料を足す
+    const need = () => (lev > 1 ? notional / lev : notional) + fee;
+    if (!fixed && reason === 'manual' && need() > st.avail && need() <= st.avail * 1.01 && st.avail > 0) {
+      notional = st.avail / ((lev > 1 ? 1 / lev : 1) + FEE) * (1 - 1e-9); qty = notional / px; fee = notional * FEE;
     }
-    if (notional + fee > st.avail + 1e-9) {
-      return `使える金額が足りません(使える金額: ${fmtMoney(st.avail, q)} ${q}、手数料込みで ${fmtMoney(notional + fee, q)} ${q} 必要)。`;
+    if (need() > st.avail + 1e-9) {
+      return `使える金額が足りません(使える金額: ${fmtMoney(st.avail, q)} ${q}、${lev > 1 ? `証拠金と` : ''}手数料込みで ${fmtMoney(need(), q)} ${q} 必要)。`;
     }
     a.cash -= fee;
     if (pos) {
       pos.avg = (Math.abs(pos.qty) * pos.avg + qty * px) / (Math.abs(pos.qty) + qty);
       pos.qty += dir * qty;
       pos.feeOpen = (pos.feeOpen || 0) + fee;
+      if (pos.lev > 1) pos.margin = (pos.margin || 0) + notional / pos.lev;
       pos.levelsAt = now;
     } else {
-      T.positions[sym] = { qty: dir * qty, avg: px, tp: null, sl: null, opened: now, id: now, levelsAt: now, feeOpen: fee };
+      T.positions[sym] = { qty: dir * qty, avg: px, tp: null, sl: null, opened: now, id: now, levelsAt: now, feeOpen: fee, lev, margin: lev > 1 ? notional / lev : 0 };
     }
     pid = T.positions[sym].id;
   }
   T.history.unshift({
     t: fixed && opts.t ? opts.t : now, sym, side, qty, price: px, fee, pnl, reason: reason || 'manual',
-    away: fixed && opts.away !== false, feeIn, pid, note: cleanNote(opts && opts.note),
+    away: fixed && opts.away !== false, feeIn, pid, note: cleanNote(opts && opts.note), lev: lev > 1 ? lev : undefined,
   });
   T.history.length = Math.min(T.history.length, 3000);
   saveTrade();
@@ -2913,7 +2949,8 @@ async function scanAway(sym, from, test) {
 async function reconcile(sym) {
   if (reconciled[sym]) return;
   const pos0 = T.positions[sym], orders0 = T.orders.filter(o => o.sym === sym);
-  const watching = (pos0 && (pos0.tp !== null || pos0.sl !== null)) || orders0.length > 0;
+  const guarded = p => !!p && (p.tp !== null || p.sl !== null || p.lev > 1); // 利確・損切り・強制決済のどれかがある
+  const watching = guarded(pos0) || orders0.length > 0;
   if (!watching) { reconciled[sym] = true; if (clockReady) T.seen[sym] = tnow(); return; }
   if (mono() < (recRetryAt[sym] || 0)) return;
   reconciled[sym] = 'busy';
@@ -2923,7 +2960,7 @@ async function reconcile(sym) {
     const seen0 = T.seen[sym] || 0;
     // それぞれ「いつから調べるか」が違う:ポジションは建てた時刻と条件を変えた時刻、指値は予約した時刻。どれも、最後に価格を確かめた時刻より前は調べない
     const posStart = p => Math.max(p.opened, p.levelsAt || 0, seen0), ordStart = o => Math.max(o.t || 0, seen0);
-    const starts = orders0.map(ordStart).concat(pos0 && (pos0.tp !== null || pos0.sl !== null) ? [posStart(pos0)] : []);
+    const starts = orders0.map(ordStart).concat(guarded(pos0) ? [posStart(pos0)] : []);
     const from = Math.min(tnow(), ...starts);
     if (tnow() - from >= 60000) {
       // 待っている間に(別のタブなどで)内容が変わっていたら、いったんやめて最初からやり直す
@@ -2934,14 +2971,17 @@ async function reconcile(sym) {
         const q = quoteOf(sym);
         // 1. 利確・損切り
         const p = T.positions[sym];
-        if (p && (p.tp !== null || p.sl !== null) && tStart >= posStart(p)) {
+        if (guarded(p) && tStart >= posStart(p)) {
           const long = p.qty > 0;
           let hit = null;
+          const L = liqPrice(p), liqFirst = L !== null && (p.sl === null || (long ? L >= p.sl : L <= p.sl));
+          if (liqFirst && (long ? lo <= L : hi >= L)) hit = ['liq', long ? Math.min(L, open) : Math.max(L, open)];
+          else
           // 同じ時間帯の中で両方に届いていたら、不利なほう(損切り)を先とみなす。最初の価格がすでに越えていたら、その価格で約定
           if (p.sl !== null && (long ? lo <= p.sl : hi >= p.sl)) hit = ['sl', long ? Math.min(p.sl, open) : Math.max(p.sl, open)];
           else if (p.tp !== null && (long ? hi >= p.tp : lo <= p.tp)) hit = ['tp', p.tp];
           if (hit && closePosition(sym, hit[0], { price: hit[1], t: tEnd }) === null) {
-            toast(`${labelOf(sym)}:ページを開いていない間に${hit[0] === 'tp' ? '利確' : '損切り'}の価格に届いていたため、その価格で決済しました(損益 ${fmtMoney(netOf(T.history[0]), q, true)} ${q})`);
+            toast(`${labelOf(sym)}:ページを開いていない間に${hit[0] === 'tp' ? '利確' : hit[0] === 'liq' ? '強制決済' : '損切り'}の価格に届いていたため、その価格で決済しました(損益 ${fmtMoney(netOf(T.history[0]), q, true)} ${q})`);
           }
         }
         // 2. 指値注文。この時間帯に指値まで届いていたら約定させる。始まった時点ですでに指値より有利だったら、その価格で約定
@@ -2953,7 +2993,7 @@ async function reconcile(sym) {
         });
         expect = sig();
         const left = T.positions[sym];
-        return !(left && (left.tp !== null || left.sl !== null)) && !T.orders.some(o => o.sym === sym); // もう調べるものがなければ終わり
+        return !guarded(left) && !T.orders.some(o => o.sym === sym); // もう調べるものがなければ終わり
       });
       if (changed) throw new Error('changed');
     }
@@ -2974,7 +3014,7 @@ function fillOrder(o, fill, awayT) {
   // 保有分を減らす注文で、残りがごくわずか(2%未満)になるなら、端数を残さず全部決済する
   let qty;
   if (had && !opening) { const held = Math.abs(had.qty), want = o.notional / fill; qty = want >= held * 0.98 ? held : want; }
-  const err = execute(sym, o.side, o.notional, 'limit', qty, Object.assign(away ? { price: fill, t: awayT, note: o.note } : { price: fill, away: false, note: o.note }, o.reduce ? { closeOnly: true } : {}));
+  const err = execute(sym, o.side, o.notional, 'limit', qty, Object.assign(away ? { price: fill, t: awayT, note: o.note } : { price: fill, away: false, note: o.note }, o.reduce ? { closeOnly: true } : {}, { lev: o.lev || 1 }));
   T.orders = T.orders.filter(x => x !== o);
   if (err) { toast(`${labelOf(sym)}:指値注文を取り消しました(${err})`); saveTrade(); return; }
   const pos = T.positions[sym];
@@ -3012,16 +3052,21 @@ function checkTriggers(sym, lo, hi) {
   lo = Math.min(isFinite(lo) ? lo : px, px); hi = Math.max(isFinite(hi) ? hi : px, px);
   const long = p.qty > 0;
   let reason = null, level = 0;
+  // 強制決済の価格が損切りより手前にあれば、そちらに先に届く
+  const L = liqPrice(p), liqFirst = L !== null && (p.sl === null || (long ? L >= p.sl : L <= p.sl));
+  if (liqFirst && (long ? lo <= L : hi >= L)) { reason = 'liq'; level = L; }
   // 両方に届いていたら、不利なほう(損切り)を先とみなす
-  if (p.sl !== null && (long ? lo <= p.sl : hi >= p.sl)) { reason = 'sl'; level = p.sl; }
+  else if (p.sl !== null && (long ? lo <= p.sl : hi >= p.sl)) { reason = 'sl'; level = p.sl; }
   else if (p.tp !== null && (long ? hi >= p.tp : lo <= p.tp)) { reason = 'tp'; level = p.tp; }
   if (!reason) return;
   // いまも越えたままなら、いまの価格で決済。すでに戻っていたら、届いた価格で決済したものとする
-  const still = reason === 'sl' ? (long ? px <= level : px >= level) : (long ? px >= level : px <= level);
+  const still = reason !== 'tp' ? (long ? px <= level : px >= level) : (long ? px >= level : px <= level);
   const q = quoteOf(sym);
   if (closePosition(sym, reason, still ? undefined : { price: level, away: false }) === null) {
     const h = T.history[0];
-    toast(`${labelOf(sym)}:${reason === 'tp' ? '利確' : '損切り'}の価格に届いたので決済しました(損益 ${fmtMoney(netOf(h), q, true)} ${q})`);
+    toast(reason === 'liq'
+      ? `${labelOf(sym)}:強制決済の価格に届いたため、ポジションが強制的に決済されました(損益 ${fmtMoney(netOf(h), q, true)} ${q})`
+      : `${labelOf(sym)}:${reason === 'tp' ? '利確' : '損切り'}の価格に届いたので決済しました(損益 ${fmtMoney(netOf(h), q, true)} ${q})`);
   }
 }
 /* 予約中の指値注文を調べる。前回調べてからの安値・高値が指値に届いていたら約定させる。
@@ -3130,6 +3175,7 @@ function setTxt(id, text, cls) {
 const numOrNull = id => { const v = parseFloat($(id).value); return isFinite(v) && v > 0 ? v : null; };
 let posKey = '';
 let lastHistKey = '';
+let curLev = () => 1; // 注文の画面ができたら、選んでいるレバレッジを返すものに置きかわる
 const histKeyPeek = (hf, sym) => `${T.rev}|${T.history.length}|${T.history.length ? T.history[0].t : 0}|${hf}|${hf === 'sym' ? sym : ''}`;
 function renderTrade() {
   const sym = state.symbol, q = quoteOf(sym), st = acctStats(q);
@@ -3142,6 +3188,9 @@ function renderTrade() {
   setTxt('trBuySub', pos ? (pos.qty < 0 ? '売りを決済する' : '買いを増やす') : '上がると利益');
   const tradable = px > 0 && priceOk(sym) && reconciled[sym] === true && clockReady;
   $('trBuy').disabled = $('trSell').disabled = !tradable;
+  const levSel = $('trLev');
+  if (pos) { levSel.value = String(pos.lev || 1); levSel.disabled = true; setTxt('trLevHint', '保有中のポジションに合わせます'); }
+  else { levSel.disabled = false; setTxt('trLevHint', '1倍 = レバレッジなし。高いほど危険'); }
   // 閉じていた間の値動きの確認が終わらず売買できないときは、その理由を出す(何も出ないと故障に見える)
   const WAIT = '開いていなかった間の値動きを確認しています。終わるまで売買できません(通信が不安定だと、時間がかかります)。';
   const WAIT_PRICE = '最新の価格を確認しています。数秒で売買できるようになります。';
@@ -3173,6 +3222,9 @@ function renderTrade() {
     setTxt('pSide', pos.qty > 0 ? '買い(ロング)' : '売り(ショート)', pos.qty > 0 ? 'up' : 'down');
     setTxt('pQty', `${fmtQty(pos.qty)}(${fmtMoney(Math.abs(pos.qty) * (px > 0 ? px : pos.avg), q)} ${q} 分)`);
     setTxt('pAvg', fmtPrice(pos.avg));
+    const L = liqPrice(pos);
+    setTxt('pLev', pos.lev > 1 ? `×${pos.lev}(証拠金 ${fmtMoney(pos.margin, q)} ${q})` : '×1(レバレッジなし)', pos.lev > 1 ? 'down' : '');
+    setTxt('pLiq', L !== null ? `${fmtPrice(L)}(いまから ${px > 0 ? ((pos.qty > 0 ? px - L : L - px) / px * 100).toFixed(2) : '—'}%)` : 'なし');
     setTxt('pPnl', `${fmtMoney(u, q, true)} ${q}(${pct2(base ? u / base * 100 : 0)}%)`, pnlClass(u));
     // 利確・損切りに届いたときの損益の目安(手数料も引いた額)。入力中の値で計算する
     const est = (id, out) => {
@@ -3222,7 +3274,7 @@ function renderTrade() {
     const when = `${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
     const why = h.reason === 'tp' ? '・利確' : h.reason === 'sl' ? '・損切り' : h.reason === 'liq' ? '・強制決済' : h.reason === 'limit' ? '・指値' : '';
     const net = h.pnl === null ? null : netOf(h);
-    return `<div class="h-row"><span><span class="${h.side === 'buy' ? 'up' : 'down'}">${h.side === 'buy' ? '買い' : '売り'}</span> ${esc(labelOf(h.sym))}${why}${h.away ? '・不在中' : ''}</span>` +
+    return `<div class="h-row"><span><span class="${h.side === 'buy' ? 'up' : 'down'}">${h.side === 'buy' ? '買い' : '売り'}${h.lev > 1 ? ` ×${h.lev}` : ''}</span> ${esc(labelOf(h.sym))}${why}${h.away ? '・不在中' : ''}</span>` +
       `<span class="h-pnl ${net === null ? 'dim' : pnlClass(net)}">${net === null ? '新規' : fmtMoney(net, hq, true) + ' ' + esc(hq)}</span>` +
       `<span class="dim">${fmtQty(h.qty)} @ ${fmtPrice(h.price)}</span><span class="dim h-pnl">${when}</span>` +
       `${h.note ? `<span class="h-note">メモ:${esc(h.note)}</span>` : ''}</div>`;
@@ -3232,7 +3284,7 @@ function renderTrade() {
   const u = pos ? unrealized(sym) : 0;
   $('tbClose').hidden = !pos; $('tbClose').disabled = !tradable;
   setTxt('tbText', pos
-    ? `${pos.qty > 0 ? '買い' : '売り'}を保有中 損益 ${fmtMoney(u, q, true)} ${q}`
+    ? `${pos.qty > 0 ? '買い' : '売り'}${pos.lev > 1 ? ` ×${pos.lev}` : ''}を保有中 損益 ${fmtMoney(u, q, true)} ${q}`
     : `デモ資金 ${fmtMoney(st.equity, q)} ${q}`, pos ? pnlClass(u) : '');
 }
 
@@ -3282,7 +3334,11 @@ function commitLine(dl) {
       return;
     }
     const tp = kind === 'tp' ? price : pos.tp, sl = kind === 'sl' ? price : pos.sl;
-    const err = checkLevels(Math.sign(pos.qty), T.last[sym], tp, sl);
+    let err = checkLevels(Math.sign(pos.qty), T.last[sym], tp, sl);
+    if (!err && pos.lev > 1 && sl !== null) {
+      const L = liqPrice(pos);
+      if (L !== null && (pos.qty > 0 ? sl <= L : sl >= L)) err = `損切りの価格が、強制決済の価格(${fmtPrice(L)})より遠いため、先に強制決済されます。損切りを ${fmtPrice(L)} より${pos.qty > 0 ? '上' : '下'}にしてください。`;
+    }
     if (err) { toast(err); return; }
     pos.tp = tp; pos.sl = sl; pos.levelsAt = tnow();
   }
@@ -3331,6 +3387,8 @@ function drawTrade(pane, i0, i1) {
       const est = price => pos.qty * (price - pos.avg) - Math.abs(pos.qty) * price * FEE - (pos.feeOpen || 0);
       const lbl = (name, price, moving) => `${name} ↕${moving ? ` ${fmtPrice(price)}(${fmtMoney(est(price), q, true)} ${q})` : ''}`;
       line(pos.avg, pos.qty > 0 ? '#1f9d8f' : '#e0463f', [], `${pos.qty > 0 ? '買い' : '売り'} ${fmtMoney(u, q, true)} ${q}`);
+      const LQ = liqPrice(pos);
+      if (LQ !== null) line(LQ, '#e67e22', [2, 3], `強制決済 ×${pos.lev}`);
       const newKind = dl && dl.kind === 'entry' ? entryDragKind(pos, dl.price) : null;
       ['tp', 'sl'].forEach(kind => {
         const moving = dl && (dl.kind === kind || newKind === kind);
@@ -3365,6 +3423,16 @@ function bindTrade() {
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && window.innerWidth <= 760) setOpen(false); });
 
   const amt = $('trAmt');
+  // 選んでいるレバレッジ。同じ銘柄のポジションを持っているときは、そのポジションのものに合わせる
+  curLev = () => { const p = T.positions[state.symbol]; return p ? (p.lev || 1) : clamp(parseInt($('trLev').value, 10) || 1, 1, MAX_LEV); };
+  let levWarned = false;
+  $('trLev').addEventListener('change', () => {
+    if (curLev() > 1 && !levWarned) {
+      levWarned = true;
+      toast('レバレッジをかけると、小さな値動きで大きく損をします。証拠金がなくなる手前で強制的に決済されます(デモなので、実際のお金は動きません)。');
+    }
+    renderUnit(); renderRisk(); renderTrade();
+  });
   amt.value = acct(quoteOf(state.symbol)).start / 10;
   /* 注文の大きさは「金額」でも「数量」でも入れられる。中では、いつも金額に直して扱う。
    * 数量から金額への換算には、実際に約定する側の価格(買いは買える価格、売りは売れる価格)を使う */
@@ -3393,7 +3461,9 @@ function bindTrade() {
     cur.classList.toggle('trQuote', unit !== 'qty'); // 金額のときは、決済通貨の表示をほかと同じように自動で保つ
     setTxt('trAmtHint', unit === 'qty' ? 'いくつ売買するか' : 'いくら分を売買するか');
     setTxt('trUnit', unit === 'qty' ? '金額で入力' : '数量で入力');
-    setTxt('trAmtEst', v > 0 && px > 0 ? (unit === 'qty' ? `≈ ${fmtMoney(v * px, q)} ${q}` : `≈ ${fmtQty(v / px)} ${baseOf(sym)}`) : '');
+    const lv = curLev(), nOf = unit === 'qty' ? v * px : v;
+    const levTxt = lv > 1 && nOf > 0 && px > 0 ? ` ・ 証拠金 ${fmtMoney(nOf / lv, q)} ${q} ・ 強制決済の目安 買い ${fmtPrice(liqAt(1, px, lv))} / 売り ${fmtPrice(liqAt(-1, px, lv))}` : '';
+    setTxt('trAmtEst', v > 0 && px > 0 ? (unit === 'qty' ? `≈ ${fmtMoney(v * px, q)} ${q}` : `≈ ${fmtQty(v / px)} ${baseOf(sym)}`) + levTxt : '');
   }
   $('trUnit').addEventListener('click', () => {
     const n = notionalOf(0);
@@ -3405,7 +3475,7 @@ function bindTrade() {
   document.querySelector('.tr-quick').addEventListener('click', e => {
     const pct = parseFloat(e.target.dataset.pct);
     if (!pct) return;
-    const sym = state.symbol, q = quoteOf(sym), v = acctStats(q).avail * pct / (1 + FEE);
+    const sym = state.symbol, q = quoteOf(sym), lv = curLev(), v = acctStats(q).avail * pct / ((lv > 1 ? 1 / lv : 1) + FEE);
     const pos = T.positions[sym], px = T.last[sym];
     if (pos && px > 0 && floorMoney(v, q) <= 0) {
       // 使える金額が残っていないとき(全額で持っているとき)は、保有分の何%かを入れる。決済に使える
@@ -3445,7 +3515,7 @@ function bindTrade() {
     const r = parseFloat(e.target.dataset.risk), pct = stopPct();
     if (!r || !isFinite(pct)) return;
     const q = quoteOf(state.symbol), st = acctStats(q);
-    const v = Math.min(st.equity * r / (pct + 2 * FEE), st.avail / (1 + FEE));
+    const lv = curLev(), v = Math.min(st.equity * r / (pct + 2 * FEE), st.avail / ((lv > 1 ? 1 / lv : 1) + FEE));
     setNotional(floorMoney(v, q));
     renderRisk();
   });
@@ -3467,11 +3537,11 @@ function bindTrade() {
       else if (!(notional > 0)) err = '金額を入力してください。';
       else if (dir > 0 ? lp >= ref : lp <= ref) err = dir > 0 ? '買いの指値は、いまの価格より安くしてください(いまの価格で買うなら「成行」です)。' : '売りの指値は、いまの価格より高くしてください(いまの価格で売るなら「成行」です)。';
       else if (T.orders.length >= 20) err = '予約できる指値注文は20件までです。';
-      else if (opening && notional * (1 + FEE) > acctStats(q).avail + 1e-9) err = `使える金額が足りません(使える金額: ${fmtMoney(acctStats(q).avail, q)} ${q})。金額を減らしてください。`;
+      else if (opening && notional * ((curLev() > 1 ? 1 / curLev() : 1) + FEE) > acctStats(q).avail + 1e-9) err = `使える金額が足りません(使える金額: ${fmtMoney(acctStats(q).avail, q)} ${q})。金額を減らしてください。`;
       else if (opening) err = checkLevels(dir, lp, tp, sl);
       if (err) { setTxt('trMsg', err, 'msg down'); return; }
       // ポジションを減らすために置いた指値は「決済用」として覚えておく(ポジションがなくなったら、いっしょに取り消す)
-      T.orders.push({ id: tnow() + Math.random(), sym, side, price: lp, notional, tp: opening ? tp : null, sl: opening ? sl : null, t: tnow(), note, reduce: !opening });
+      T.orders.push({ id: tnow() + Math.random(), sym, side, price: lp, notional, tp: opening ? tp : null, sl: opening ? sl : null, t: tnow(), note, reduce: !opening, lev: opening ? curLev() : 1 });
       saveTrade();
       setTxt('trMsg', `${side === 'buy' ? '買い' : '売り'}の指値注文を予約しました(${fmtPrice(lp)} で ${fmtMoney(notional, q)} ${q} 分)。`, 'msg');
       done();
@@ -3481,7 +3551,13 @@ function bindTrade() {
     // そうしないと、買った価格より安い「利確」が通り、すぐ損で決済されてしまう
     const lq = liveQuote(sym), hiRef = Math.max(px, lq ? lq.ask : px), loRef = Math.min(px, lq ? lq.bid : px);
     let err = opening && px > 0 ? (checkLevels(dir, dir > 0 ? hiRef : loRef, tp, null) || checkLevels(dir, dir > 0 ? loRef : hiRef, null, sl)) : null;
-    if (!err) err = execute(sym, side, notional, 'manual', undefined, { note });
+    // レバレッジで新しく建てるとき、損切りが強制決済より遠ければ断る
+    const levNow = curLev();
+    if (!err && opening && !had && levNow > 1 && sl !== null) {
+      const L = liqAt(dir, dir > 0 ? hiRef : loRef, levNow);
+      if (L !== null && (dir > 0 ? sl <= L : sl >= L)) err = `損切りの価格が、強制決済の価格の目安(${fmtPrice(L)})より遠いため、先に強制決済されます。損切りを ${fmtPrice(L)} より${dir > 0 ? '上' : '下'}にするか、レバレッジを下げてください。`;
+    }
+    if (!err) err = execute(sym, side, notional, 'manual', undefined, { note, lev: levNow });
     if (err) { setTxt('trMsg', err, 'msg down'); return; }
     const pos = T.positions[sym];
     if (pos && opening) {
@@ -3517,7 +3593,11 @@ function bindTrade() {
     // 価格が最新で、閉じていた間の確認も済んでいるときだけ変更できる(過去の値動きを見てからの書き換えを防ぐ)
     if (!priceOk(sym) || reconciled[sym] !== true || !clockReady) { setTxt('pMsg', '価格を最新の状態にできていないため、いまは変更できません。数秒待ってから、もう一度お試しください。', 'msg down'); return; }
     const tp = numOrNull('pTp'), sl = numOrNull('pSl');
-    const err = checkLevels(Math.sign(pos.qty), T.last[sym], tp, sl);
+    let err = checkLevels(Math.sign(pos.qty), T.last[sym], tp, sl);
+    if (!err && pos.lev > 1 && sl !== null) {
+      const L = liqPrice(pos);
+      if (L !== null && (pos.qty > 0 ? sl <= L : sl >= L)) err = `損切りの価格が、強制決済の価格(${fmtPrice(L)})より遠いため、先に強制決済されます。損切りを ${fmtPrice(L)} より${pos.qty > 0 ? '上' : '下'}にしてください。`;
+    }
     if (err) { setTxt('pMsg', err, 'msg down'); return; }
     pos.tp = tp; pos.sl = sl; pos.levelsAt = tnow();
     saveTrade(); renderTrade(); draw();
