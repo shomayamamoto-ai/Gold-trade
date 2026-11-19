@@ -250,6 +250,15 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 .termpop p { margin: 0 0 6px; }
 .termpop a { font-size: 13px; }
 @media print { .find, .termpop, #findBtn { display: none !important; } .term { text-decoration: none; } }
+.try { margin: 18px 0 20px; padding: 10px 14px 8px; border: 1px dashed var(--accent); border-radius: 10px; }
+.try .try-h { margin: 0 0 6px; }
+.try .try-h strong { margin-right: 6px; padding: 1px 8px; border-radius: 999px; background: var(--accent); color: var(--bg); font-size: 12.5px; }
+.try ol { margin-bottom: 8px; }
+.try .try-aim { margin: 0 0 6px; color: var(--muted); font-size: 13.5px; }
+.try .try-done { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: 13.5px; cursor: pointer; }
+.try .try-done input { width: 18px; height: 18px; accent-color: var(--accent); }
+.try.done { border-style: solid; }
+@media print { .try .try-done { display: none; } }
 </style>
 </head>
 <body>
@@ -351,6 +360,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   </div>
 </div>
 <p>第1章から第10章の終わりには、<strong>確認問題</strong>があります。選ぶと、その場で答えと解説が出ます。読んだだけで終わらせず、身についたかを確かめるのに使ってください。結果は、この端末に覚えておき、左のもくじに「4/5」のように出ます。</p>
+<p>本文のあちこちに、<strong>「チャートで試す」</strong>の課題が17個あります。ボタンを押すと、その課題に合った銘柄とインジケーターでチャートが開きます。読むだけでなく、手を動かすと身につきます。<span id="tryCount"></span></p>
 
 <nav class="toc" aria-label="もくじ">
   <ol>
@@ -446,6 +456,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 </table></div>
 <p><span class="tag idea">考え方</span>形だけで売買すると、だまされることが多くあります。大事なのは<strong>どこで出たか</strong>です。たとえば下ヒゲの長い足は、何度も止められてきた安値(サポート)の上で出たときに意味を持ちます。何もない場所で出た同じ形は、ほとんど手がかりになりません。</p>
 
+<div class="try" data-id="candle">
+  <p class="try-h"><strong>チャートで試す</strong> 下ヒゲの長い足を探す</p>
+  <p class="open-chart"><a href="index.html?symbol=BTCUSDT&amp;interval=1d">BTC の日足を開く<span aria-hidden="true"> →</span></a></p>
+  <ol>
+    <li>チャートを左へ動かして、<strong>下ヒゲが実体の2倍以上ある足</strong>を3つ探します。</li>
+    <li>それぞれ、出た場所は安値のあたりか、高値のあたりかを見ます。</li>
+    <li>次の3本で、上がったか下がったかを確かめます。</li>
+  </ol>
+  <p class="try-aim">ねらい:同じ形でも、出た場所でそのあとの動きが違うことを、自分の目で確かめる。</p>
+</div>
+
 <h3 id="structure">相場の構造 — 高値と安値の並び方を見る</h3>
 <p><span class="tag common">常識</span>価格は一直線には進まず、上げ下げを繰り返しながら進みます。その「山(高値)」と「谷(安値)」の並び方で、流れの向きを判断します。この考え方は、100年以上前から使われている「ダウ理論」に由来します。</p>
 <figure>
@@ -471,6 +492,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 </ul>
 <p><span class="tag idea">考え方</span>このサイトのインジケーターに付く丸印(山と谷の印)は、この山と谷を機械的に拾ったものです。チャートを開いたら、まず直近の山と谷を3つずつ目で追い、「切り上がっているか、切り下がっているか」を声に出して確かめる習慣をつけると、判断がぶれにくくなります。</p>
 
+<div class="try" data-id="structure">
+  <p class="try-h"><strong>チャートで試す</strong> 高値と安値に印を付ける</p>
+  <p class="open-chart"><a href="index.html?symbol=BTCUSDT&amp;interval=4h">BTC の4時間足を開く<span aria-hidden="true"> →</span></a></p>
+  <ol>
+    <li>「ツール → 水平線」で、直近の目立つ高値2つと安値2つに線を引きます。</li>
+    <li>高値は切り上がっていますか。安値はどうですか。</li>
+    <li>「上昇」「下降」「どちらでもない」のどれかを、言葉で言ってみます。</li>
+  </ol>
+  <p class="try-aim">ねらい:流れを「なんとなく」ではなく、高値と安値の並び方で判断する習慣をつける。</p>
+</div>
+
 <h3 id="sr">サポートとレジスタンス — 価格が止まりやすい場所</h3>
 <p><span class="tag common">常識</span>過去に何度も下げ止まった価格帯を「サポート(支持線)」、何度も上げ止まった価格帯を「レジスタンス(抵抗線)」と呼びます。</p>
 <h4>なぜ同じ場所で止まるのか</h4>
@@ -490,8 +522,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 <ul>
   <li><span class="tag common">常識</span>サポートを下に抜けると、その線は今度はレジスタンスになりやすい(役割の入れ替わり)。</li>
   <li><span class="tag common">常識</span>何度も止められた線ほど、多くの人に意識されています。ただし、試される回数が増えるほど、いずれ抜ける可能性も高まるとされます。</li>
-  <li><span class="tag idea">考え方</span>線は「1本の細い線」ではなく「ある程度の幅を持った帯」と考えてください。ぴったり同じ価格で止まることは、ほとんどありません。</li>
-  <li><span class="tag common">常識</span>10,000 や 100,000 のような切りのよい数字も、意識されやすい価格です。</li>
+  <li><span class="tag idea">考え方</span>線の引き方(帯で見る、終値を目安にする、切りのよい数字)は、すぐ下の<a href="#sr2">「線ではなく帯で見る」</a>でまとめます。</li>
 </ul>
 <p>このサイトでは「ツール」→「水平線」で線を引けます。線を置くとき、近くの高値・安値に自動で合わせます。</p>
 
@@ -504,6 +535,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <li><span class="tag common">常識</span><strong>長い時間足の線ほど、重く扱います。</strong>週足・日足で見つけた帯のほうが、15分足で見つけた帯より、多くの人に見られています。</li>
   <li><span class="tag idea">考え方</span><strong>帯に届いても、すぐには入りません。</strong>そこではね返るのか、抜けるのかは、届いた時点では分かりません。はね返す足(長いヒゲ、包み足)と出来高の増加を見てから入る、抜けたならいったん戻ってくるのを待つ、というように、「確かめてから」入るのが基本です。</li>
 </ul>
+
+<div class="try" data-id="sr">
+  <p class="try-h"><strong>チャートで試す</strong> 止まった場所に帯を引く</p>
+  <p class="open-chart"><a href="index.html?symbol=PAXGUSDT&amp;interval=1d">金の日足を開く<span aria-hidden="true"> →</span></a></p>
+  <ol>
+    <li>過去半年で、価格が2回以上はね返された高さを探します。</li>
+    <li>「ツール → 長方形」で、ヒゲの先から終値のあたりまでを帯として囲みます。</li>
+    <li>いまの価格は、その帯の上ですか、下ですか。次に近づいたら、何を見て判断しますか。</li>
+  </ol>
+  <p class="try-aim">ねらい:サポートとレジスタンスを、線ではなく帯として見る。</p>
+</div>
 
 <h3 id="dow">ダウ理論 — テクニカル分析の土台になった6つの考え方</h3>
 <p><span class="tag fact">事実</span>ダウ理論は、ダウ・ジョーンズ社を創業したチャールズ・ダウが、19世紀の終わりから20世紀の初めに新聞の論説で述べた考え方を、のちにハミルトンやレイアがまとめたものです。<sup>[24]</sup> 今のテクニカル分析の多くは、この考え方の上に成り立っています。</p>
@@ -646,6 +688,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 </ol>
 <p><span class="tag idea">考え方</span>長い足の向きに逆らう売買(日足が下降なのに買う)は、成功しても取れる幅が小さく、失敗すると大きく負けやすい取引です。迷ったら、長い足の向きにだけ売買すると決めてしまうのが単純で確実です。</p>
 
+<div class="try" data-id="mtf">
+  <p class="try-h"><strong>チャートで試す</strong> 長い足から順に見る</p>
+  <p class="open-chart"><a href="index.html?symbol=BTCUSDT&amp;interval=1w">BTC の週足を開く<span aria-hidden="true"> →</span></a></p>
+  <ol>
+    <li>週足で、流れが上向きか下向きかを決めます。</li>
+    <li>日足に切りかえて、同じ向きかを見ます。</li>
+    <li>4時間足に切りかえます。週足・日足と逆の向きに見えたら、それは「大きな流れの中の、小さな戻り」かもしれません。</li>
+  </ol>
+  <p class="try-aim">ねらい:短い足だけを見て、大きな流れに逆らう失敗を防ぐ。</p>
+</div>
+
 <h3 id="orders">注文のしくみと、見えないコスト</h3>
 <div class="tbl-wrap"><table>
   <thead><tr><th>注文の種類</th><th>内容</th><th>向いている場面</th></tr></thead>
@@ -752,6 +805,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <li><span class="tag fact">実測</span><strong>暗号資産どうしは強く連動しています。</strong>ETH・SOL・DOGE は 0.8 前後で、BTC が下がる日はほぼ一緒に下がります。この表では金だけが 0.28 と低く、別の動きをしました(連動の強さは、期間で変わります。下の「そのほかの銘柄」の表のあとを見てください)。</li>
 </ul>
 <p><span class="tag idea">考え方</span>ここから導ける実用的な結論は2つです。1つ目は、<strong>値動きの大きい銘柄ほど、買う金額を小さくする</strong>こと(第6章で計算方法を説明します)。2つ目は、<strong>暗号資産を何種類も買っても、危険はあまり減らない</strong>ことです。</p>
+
+<div class="try" data-id="measure">
+  <p class="try-h"><strong>チャートで試す</strong> 値動きの大きさを測る</p>
+  <p class="open-chart"><a href="index.html?symbol=PEPEUSDT&amp;interval=1d">PEPE の日足を開く<span aria-hidden="true"> →</span></a></p>
+  <ol>
+    <li>「ツール → ものさし」で、ふつうの大きさの足を1本、安値から高値まで測ります(変化率が出ます)。</li>
+    <li>銘柄を金(PAXG/USDT)に変えて、同じように測ります。</li>
+    <li>何倍ちがいましたか。同じ10万円を買ったとき、1日でどのくらい増減しそうですか。</li>
+  </ol>
+  <p class="try-aim">ねらい:「同じ金額でも、危険の大きさは銘柄で違う」を、数字で実感する。</p>
+</div>
 
 <div class="card" id="paxg">
   <h3>金 — PAXG/USDT</h3>
@@ -1263,6 +1327,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 <p><span class="tag fact">実測</span>BTC/USDT の過去2年分で、日本時間の1時間ごとの売買代金を比べました(全体の平均を1とした倍率)。いちばん多いのは <strong>23時台(1.79倍)と0時台(1.76倍)</strong>、次が22時台(1.39倍)と1時台(1.38倍)です。米国の株式市場が開く時間と重なります。少ないのは <strong>13〜15時台(0.74〜0.78倍)</strong>と、6〜8時台(0.77〜0.81倍)でした。「夜8〜10時がいちばん活発」と教えられることがありますが、20時台は 0.78倍と、むしろ少ない時間でした。増えはじめるのは22時からです。</p>
 <p><span class="tag idea">考え方</span>初めのうちは、重要な発表の直前直後には新しく入らない、と決めておくと、理由の分からない急な動きに巻き込まれにくくなります。</p>
 
+<div class="try" data-id="hours">
+  <p class="try-h"><strong>チャートで試す</strong> 売買の多い時間を確かめる</p>
+  <p class="open-chart"><a href="index.html?symbol=BTCUSDT&amp;interval=1h&amp;ind=volma">BTC の1時間足(出来高の平均つき)を開く<span aria-hidden="true"> →</span></a></p>
+  <ol>
+    <li>下の出来高の棒が、1日のうちで高くなる時間を、3日分見ます。</li>
+    <li>日本時間で何時ごろですか(チャートの下の時刻を見ます)。</li>
+    <li>土曜・日曜の棒は、平日とくらべてどうですか。</li>
+  </ol>
+  <p class="try-aim">ねらい:自分が取引する時間が、動きやすい時間かどうかを知る。</p>
+</div>
+
 <h3 id="macro">値動きを左右する外の要因 — 金利・物価・ドル・中央銀行</h3>
 <p><span class="tag common">常識</span>チャートの外にも、価格を動かす大きな力があります。ここでは、金と暗号資産の両方に影響する、米国の金融政策を中心にまとめます。</p>
 <h4>米国の金利と FOMC</h4>
@@ -1458,6 +1533,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <li><span class="tag idea">考え方</span><strong>学べること:</strong>ひとつの原因で下がったのではありません。利上げ → 円高 → 借りたお金での取引の巻き戻し → 強制的な売り、と<strong>連鎖</strong>しました。この章の「強制決済(清算)の連鎖」と同じ形が、世界の市場をまたいで起きた例です。</li>
 </ul>
 
+<div class="try" data-id="aug2024">
+  <p class="try-h"><strong>チャートで試す</strong> 2024年8月の急落を、リプレイで追う</p>
+  <p class="open-chart"><a href="index.html?symbol=BTCUSDT&amp;interval=4h">BTC の4時間足を開く<span aria-hidden="true"> →</span></a></p>
+  <ol>
+    <li>チャートを左へ動かして、2024年8月1日のあたりを出します。</li>
+    <li>「ツール → リプレイ」を選び、8月1日の足をタップします。その先が隠れます。</li>
+    <li>「1本進む」で、8月5日まで進めます。どこで買いたくなりましたか。そこで買っていたら、どうなりましたか。</li>
+  </ol>
+  <p class="try-aim">ねらい:急落の最中は、どこが底か分からないことを体験する。</p>
+</div>
+
 <h4>実例2:2025年10〜11月 — BTC が最高値から 3割下がるまで</h4>
 <p><span class="tag fact">実測</span>BTC/USDT は、2025年10月6日に 126,200 の最高値をつけたあと、11月18日に 90,000 を割り、11月21日には 80,600 まで下がりました。最高値から 36% の下落です。<span class="tag fact">事実</span>当時、原因として挙げられていたのは、次のようなものです。<sup>[95]</sup></p>
 <ul>
@@ -1504,6 +1590,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <li><span class="tag idea">考え方</span>暗号資産でも、同じ見方ができます。BTC/USDT が下がっているとき、ETH/BTC も下がっているなら「ETH は BTC より弱い」、ETH/BTC が上がっているなら「ETH は BTC より強い」と読めます。このサイトでは、銘柄の一覧の「為替」に USD/JPY と EUR/USDT、「BTC 建て」に ETH/BTC と SOL/BTC があります。</li>
   <li><span class="tag idea">考え方</span>強さの比較は、「どれを取引するか」を選ぶ道具です。「いつ入るか」は、教えてくれません。</li>
 </ul>
+
+<div class="try" data-id="strength">
+  <p class="try-h"><strong>チャートで試す</strong> ドルが強いのか、円が弱いのかを分ける</p>
+  <p class="open-chart"><a href="index.html?symbol=USDJPY&amp;interval=1d">USD/JPY の日足を開く<span aria-hidden="true"> →</span></a></p>
+  <ol>
+    <li>直近1か月で、ドル円は上がっていますか、下がっていますか。</li>
+    <li>「ツール → 銘柄を重ねて比べる」で EUR/USDT を重ねます(銘柄を切りかえて見比べても構いません)。</li>
+    <li>ユーロも、ドルに対して同じ向きに動いていれば「ドルの動き」、ユーロは動いていなければ「円の動き」と読めます。</li>
+  </ol>
+  <p class="try-aim">ねらい:ひとつのチャートだけでは、どちらの通貨が動いたのかは分からない、と知る。</p>
+</div>
 
 <h4>よく聞く数字を、確かめる</h4>
 <p>暗号資産の講義や動画でよく出てくる数字を、データと公的な資料で確かめました。</p>
@@ -1647,6 +1744,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <p><span class="tag fact">実測</span>第5章の検証では、20日線と50日線の交差で売買した場合、勝率は 38〜52% でした。半分以上は負けます。それでも成績がプラスになった銘柄が多いのは、1回の勝ちが負けの3〜6倍大きかったためです。</p>
 </div>
 
+<div class="try" data-id="ma">
+  <p class="try-h"><strong>チャートで試す</strong> 200日線の上か下かを見る</p>
+  <p class="open-chart"><a href="index.html?symbol=BTCUSDT&amp;interval=1d&amp;ind=mas">BTC の日足(移動平均線つき)を開く<span aria-hidden="true"> →</span></a></p>
+  <ol>
+    <li>いちばん長い線(200日線)は、右上がりですか、右下がりですか。</li>
+    <li>いまの価格は、その線の上ですか、下ですか。</li>
+    <li>過去に、価格が200日線を上から下に抜けた場所を1つ探し、そのあとの動きを見ます。</li>
+  </ol>
+  <p class="try-aim">ねらい:移動平均線を「売買の合図」ではなく、「いまの大きな向き」を知る道具として使う。</p>
+</div>
+
 <div class="card" id="rsi">
   <h3>RSI</h3>
   <h4>何を見るか</h4>
@@ -1683,6 +1791,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
     <li><span class="tag common">常識</span>ダイバージェンスは、出てからも価格がしばらく上がり続けることがよくあります。それだけで売買する根拠にはなりません。</li>
   </ul>
   <p><span class="tag fact">実測</span>第5章の検証では、「RSI が 30 を下回ったら買い、50 を上回ったら売る」という単純な使い方は、金と BTC ではプラスでしたが、ETH では -75% の大きなマイナスでした。同じ使い方でも、銘柄と時期によって結果が正反対になります。</p>
+</div>
+
+<div class="try" data-id="rsi">
+  <p class="try-h"><strong>チャートで試す</strong> RSI の70と30を確かめる</p>
+  <p class="open-chart"><a href="index.html?symbol=BTCUSDT&amp;interval=1d&amp;ind=rsi">BTC の日足(RSI つき)を開く<span aria-hidden="true"> →</span></a></p>
+  <ol>
+    <li>RSI が70を超えた場所を3つ探します。</li>
+    <li>それぞれ、そのあとすぐに下がりましたか。それとも、70を超えたまま上がりつづけましたか。</li>
+    <li>同じことを、30を下回った場所でも確かめます。</li>
+  </ol>
+  <p class="try-aim">ねらい:「70を超えたら売り」が、強い流れの中では通用しないことを確かめる。</p>
 </div>
 
 <div class="card" id="macd">
@@ -1746,6 +1865,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
     <li><span class="tag common">常識</span><strong>買う金額</strong>:損切りの幅が広い銘柄ほど、買う金額を小さくします(第6章)。</li>
   </ul>
   <p><span class="tag idea">考え方</span>このサイトでは「インジケーター」から ATR を追加できます。第2章の表の「1日の高値と安値の差」も、ほぼ同じ意味の数字です。たとえば SOL は平均 6.03% なので、日足で損切りを 2% の位置に置くと、普通の値動きの中で簡単にかかってしまうことが分かります。</p>
+</div>
+
+<div class="try" data-id="atr">
+  <p class="try-h"><strong>チャートで試す</strong> ATR から損切りの幅を決める</p>
+  <p class="open-chart"><a href="index.html?symbol=ETHUSDT&amp;interval=1d&amp;ind=atr">ETH の日足(ATR つき)を開く<span aria-hidden="true"> →</span></a></p>
+  <ol>
+    <li>いまの ATR の値を読みます(凡例に出ます)。</li>
+    <li>いまの価格から、ATR の2倍を引きます。そこが、損切りの候補です。</li>
+    <li>価格の何%下ですか。失ってよい金額が資金の1%なら、いくら買えますか(第6章の計算)。</li>
+  </ol>
+  <p class="try-aim">ねらい:損切りの幅を、気分ではなく、その銘柄の値動きの大きさから決める。</p>
 </div>
 
 <div class="card" id="vol">
@@ -1877,7 +2007,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 
 <h3>そのほかの代表的なインジケーター(名前と役割だけ)</h3>
 <p>このサイトでは、ここに挙げたものを含めて74種類のインジケーターを「インジケーター」メニューから追加できます。名前で検索もできます。</p>
-<p>メニューの「＋ 自分で作る」からは、式を書いて自分だけのインジケーターも作れます。たとえば <code>ema(close, 12) - ema(close, 26)</code> と書くと、2本の平均線の差(MACD の線と同じもの)が出ます。<span class="tag idea">考え方</span>自分で式を書いてみると、「この指標は結局、価格と出来高をどう加工しているのか」が分かり、数字をうのみにしにくくなります。条件の式(たとえば <code>crossover(ema(close, 10), ema(close, 30))</code>)を書けば、成り立った足に ▲ や ▼ の合図を出すこともできます。ただし、合図はあくまで「条件が成り立った」という印で、その後に上がることを約束するものではありません。合図を作ったら、設定画面の「過去データで試す」で、合図どおりに売買していた場合の成績を必ず確かめてください。見るべき点は3つです。(1) 何もせず持ち続けた場合より良いか、(2) 売買の回数が30回以上あるか(少ないと偶然に左右されます)、(3) 別の銘柄や時間足でも同じ傾向が出るか。また、過去の値動きにぴったり合うように式をいじり続けると、これからの相場では役に立たない指標になりやすい点には注意してください(このあとの「過去に合わせすぎる(過剰最適化)」と同じ注意です)。</p>
+<p>メニューの「＋ 自分で作る」からは、式を書いて自分だけのインジケーターも作れます。作り方と、過去のデータでの試し方は、<a href="#build">第9章</a>で説明します。合図は「条件が成り立った」という印で、そのあとに上がることを約束するものではありません。</p>
 <dl>
   <dt>ストキャスティクス</dt><dd><span class="tag common">常識</span>直近の高値と安値の幅の中で、いまの終値がどの位置にあるかを 0〜100 で表します。RSI と似た使い方をしますが、反応がより速い分、だましも多くなります。</dd>
   <dt>VWAP(出来高加重平均価格)</dt><dd>この章の上の「VWAP と出来高プロファイル」でくわしく説明しています。</dd>
@@ -1971,6 +2101,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 </table></div>
 <p><span class="tag idea">考え方</span>時間が短いほど、売買の回数が増えて手数料がかさみます。たとえば手数料が片道 0.1% なら、買って売るだけで 0.2% かかります。<sup>[9]</sup> ねらう値幅が 0.5% の取引では、その4割が手数料で消える計算です。</p>
 
+<div class="try" data-id="regime">
+  <p class="try-h"><strong>チャートで試す</strong> いまは流れか、レンジか</p>
+  <p class="open-chart"><a href="index.html?symbol=SOLUSDT&amp;interval=1d&amp;ind=adx">SOL の日足(ADX つき)を開く<span aria-hidden="true"> →</span></a></p>
+  <ol>
+    <li>高値と安値は、切り上がっていますか、切り下がっていますか、横ばいですか。</li>
+    <li>ADX が25より上か下かを見ます(上なら流れが強い、下ならレンジの目安)。</li>
+    <li>2つの見方は、同じ答えになりましたか。</li>
+  </ol>
+  <p class="try-aim">ねらい:手法を選ぶ前に、相場の状態を見分ける。</p>
+</div>
+
 <div class="card" id="m1">
   <h3>手法1:流れに乗る(トレンドフォロー)</h3>
   <p><span class="tag common">常識</span>上向きの流れのときに買い、流れが続くかぎり持ち続ける方法です。「順張り」とも呼びます。流れの途中の一時的な下げ(押し目)で買うのが基本です。</p>
@@ -1997,7 +2138,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
     <li>利確は次のどちらかにする。①損切りまでの幅の2倍以上の位置に置く。②価格が移動平均線を終値で下に抜けたら決済する。</li>
   </ol>
   <h4>利益を伸ばす工夫:損切りを引き上げる</h4>
-  <p><span class="tag common">常識</span>価格が思った方向に進んだら、損切りの位置を、新しくできた押し目の安値の下へ順に引き上げていきます(トレーリングストップ)。こうすると、流れが続くかぎり利益を伸ばしつつ、反転したときには利益を残して終われます。損切りは<strong>有利な方向にだけ</strong>動かし、不利な方向には決して動かしません。</p>
+  <p><span class="tag common">常識</span>価格が思った方向に進んだら、損切りの位置を、新しくできた押し目の安値の下へ順に引き上げていきます(トレーリングストップ)。こうすると、流れが続くかぎり利益を伸ばしつつ、反転したときには利益を残して終われます。損切りは<strong>有利な方向にだけ</strong>動かし、不利な方向には決して動かしません。引き上げる幅を ATR で決める方法は、この章の<a href="#volcheck">「ATR を使った、追いかける損切り」</a>で試しています。</p>
   <h4>強みと弱み</h4>
   <ul>
     <li><span class="tag common">常識</span>強み:大きな流れが出たときに、大きな利益をねらえます。</li>
@@ -2379,12 +2520,23 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   </ul>
 </div>
 
+<div class="try" data-id="volume">
+  <p class="try-h"><strong>チャートで試す</strong> 大きな陽線の出来高を見くらべる</p>
+  <p class="open-chart"><a href="index.html?symbol=BTCUSDT&amp;interval=1d&amp;ind=volma">BTC の日足(出来高の平均つき)を開く<span aria-hidden="true"> →</span></a></p>
+  <ol>
+    <li>まわりより明らかに大きい陽線を、5つ探します。</li>
+    <li>その日の出来高の棒は、平均の線より上ですか、下ですか。</li>
+    <li>出来高が多かった陽線と、少なかった陽線で、そのあとの5日間の動きを比べます。</li>
+  </ol>
+  <p class="try-aim">ねらい:「出来高をともなう上昇は続きやすい」を、自分で数えてみる。</p>
+</div>
+
 <h4>値動き・出来高・インジケーターの3つがそろったときだけ入る</h4>
 <p><span class="tag idea">考え方</span>講義でよく教えられる考え方に、「三位一体」があります。①値動き(足の形と流れ)、②出来高、③インジケーターの3つを、同じ重さで見て、<strong>3つとも同じ向きを示したときだけ入る</strong>、というものです。ひとつでも違和感があれば、見送ります。</p>
 <ul>
   <li><span class="tag common">常識</span><strong>インジケーターは、補助です。</strong>RSI は 50 より上なら強気、下なら弱気、70 以上は買われすぎ、30 以下は売られすぎの目安ですが、RSI だけで逆向きに入ることはしません。</li>
   <li><span class="tag common">常識</span><strong>強い流れの中では、インジケーターは当てになりません。</strong>何か月も押し目を作らずに上がる相場では、RSI は「買われすぎ」を示しつづけます。</li>
-  <li><span class="tag common">常識</span><strong>レンジのまん中では、入りません。</strong>上にも下にも動く余地が同じだけあり、どちらに行くか分からないためです。</li>
+  <li><span class="tag common">常識</span><strong>レンジのまん中では、入りません。</strong>手法2で説明したとおり、上にも下にも動く余地が同じだけあり、どちらに行くか分からないためです。</li>
   <li><span class="tag idea">考え方</span><strong>抜けた直後ではなく、戻ってきたところを待つ、と教えられることが多いです。</strong>手法3の手順の後半と同じ考え方です。戻らずに行ってしまうこともあります。高値を抜けた瞬間に出来高が増えるのは、売っていた人の損切り(買い戻し)が巻きこまれるためでもあります。新しい買いが入りやすいのは、抜けたあとに一度戻ってきて、また上がりはじめるところです。</li>
   <li><span class="tag fact">実測</span>上の表のとおり、条件を重ねると成績は良くなる傾向がありました。その代わり、<strong>入れる回数は大きく減ります。</strong>「見送る」ことが、取引の大半になります。</li>
 </ul>
@@ -2447,6 +2599,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <li><span class="tag fact">実測</span><strong>「押し目買いのほうが勝ちやすい」は、この数え方では確かめられませんでした。</strong>成功は 33% で、でたらめに買ったときと変わりません。押し目買いは「どこまで下がったら押し目か」を人が判断する手法で、機械的に数えると、良さが出にくいのかもしれません。</li>
   <li><span class="tag idea">考え方</span><strong>4時間足では、差がほとんど消えます。</strong>+0.05R は、往復の手数料(約 0.1R 前後になることが多い)を引くと、残りません。短い足ほど、手数料の重さが効いてきます。</li>
 </ul>
+<div class="try" data-id="breakout">
+  <p class="try-h"><strong>チャートで試す</strong> ブレイクアウトを10回数える</p>
+  <p class="open-chart"><a href="index.html?symbol=ETHUSDT&amp;interval=1d&amp;ind=donchian">ETH の日足(高値・安値の帯つき)を開く<span aria-hidden="true"> →</span></a></p>
+  <ol>
+    <li>帯の上の線(直近の高値)を、終値で上に抜けた足を10個探します。</li>
+    <li>それぞれ、5本以内に帯の中へ戻りましたか(だまし)。</li>
+    <li>10回のうち、何回がだましでしたか。この節の数字(約半分)と比べます。</li>
+  </ol>
+  <p class="try-aim">ねらい:「だましが多い」ことを前提に、損切りを入れる理由を納得する。</p>
+</div>
+
 <h4>「長くもみ合ったあとほど、大きく動く」は本当か</h4>
 <p><span class="tag fact">実測</span>ブレイクアウトの前の20本の値幅を、狭い・中くらい・広いの3つに分け、そのあと20本でどこまで上がったかを比べました(日足)。</p>
 <div class="tbl-wrap"><table>
@@ -2495,6 +2658,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <p>⑤ 利確:買値から +8%(損切りの幅の2倍)。届く前に20日線を終値で割ったら決済</p>
   <p>⑥ 買う金額:資金 10,000 の 1%(100)を失う設定 → 100 ÷ 0.04 = 2,500 分</p>
   <p>⑦ 見送る条件:重要な経済指標の発表の直前、BTC の日足が下降の流れのとき</p>
+</div>
+
+<div class="try" data-id="plan">
+  <p class="try-h"><strong>チャートで試す</strong> 計画を書いてから、リプレイで1回売買する</p>
+  <p class="open-chart"><a href="index.html?symbol=BTCUSDT&amp;interval=4h">BTC の4時間足を開く<span aria-hidden="true"> →</span></a></p>
+  <ol>
+    <li>「ツール → リプレイ」で、好きな過去の足から始めます。</li>
+    <li>上の①〜⑦を、紙かメモに書きます(書けない項目があれば、その取引は見送りです)。</li>
+    <li>「1本進む」で進め、損切りか利確に届くまで見ます。計画どおりでしたか。</li>
+  </ol>
+  <p class="try-aim">ねらい:先の値動きを知らない状態で、計画どおりに動く練習をする。リプレイ中は注文できないので、損切りと利確の価格に水平線を引いて確かめます。</p>
 </div>
 
 <h4 id="check12">入る前の、12の確認</h4>
@@ -2704,6 +2878,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 </table></div>
 <p><span class="tag idea">考え方</span>同じ危険の大きさにそろえると、PEPE で買える金額は金の5分の1です。「どの銘柄も同じ金額で買う」のは、気づかないうちに、荒い銘柄で大きな賭けをしていることになります。</p>
 
+<div class="try" data-id="sizing">
+  <p class="try-h"><strong>チャートで試す</strong> 買う金額を、損切りから逆算する</p>
+  <p class="open-chart"><a href="index.html?symbol=BTCUSDT&amp;interval=1h">BTC の1時間足を開く<span aria-hidden="true"> →</span></a></p>
+  <ol>
+    <li>右のデモトレードの欄で、「損切り」に、いまの価格より2%下の価格を入れます。</li>
+    <li>その下に出る「1%」のボタンを押します(損切りになったときに、資金の1%を失う金額が自動で入ります)。</li>
+    <li>その金額は、資金の何%にあたりますか。損切りを4%下にすると、どう変わりますか。</li>
+  </ol>
+  <p class="try-aim">ねらい:買う金額は「いくら買いたいか」ではなく、「いくら失ってよいか」から決まる、と体で覚える。</p>
+</div>
+
 <h3 id="leverage">レバレッジと強制決済</h3>
 <p><span class="tag common">常識</span>レバレッジは、元手(証拠金)の何倍もの金額を取引するしくみです。利益も損失も、倍率の分だけ大きくなります。含み損が証拠金に近づくと、取引所が強制的に決済し(ロスカット)、証拠金のほとんどを失います。ふつうは証拠金の範囲で止まりますが、価格が一気に飛んだときは強制決済が間に合わず、取引所や商品によっては、証拠金より大きい損失を求められることがあります。このサイトのデモトレードでは、1〜100倍のレバレッジを試せます(損失は証拠金までで止まる設定で、強制決済の価格がチャートに出ます)。</p>
 <p><span class="tag fact">事実</span>手数料などを無視すると、証拠金がなくなる値動きの幅は、次のように計算できます。</p>
@@ -2719,6 +2904,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 <p class="formula">証拠金がなくなる値動き = 1 ÷ レバレッジ  例:10倍なら 1 ÷ 10 = 10%</p>
 <p><span class="tag fact">実測</span>第2章の表と見比べてください。BTC は1日で -14.0% 下げた日があり、10倍のレバレッジなら<strong>1日で</strong>証拠金がなくなっていました。PEPE は1日で -27.5% 下げた日があり、5倍でも同じことが起きていました。20倍(5%)の場合、SOL は6日に1日の割合で 5% 以上動いているので、買いでも売りでも、頻繁に届いてしまう値動きです。</p>
 <p><span class="tag idea">考え方</span>レバレッジの本当の危険は、「方向は合っていたのに、途中の一時的な逆行で強制決済される」ことです。初めのうちは、レバレッジを使わない取引で、期待値がプラスになることを確かめるのが先です。</p>
+
+<div class="try" data-id="lev">
+  <p class="try-h"><strong>チャートで試す</strong> レバレッジと、強制決済の価格を見る</p>
+  <p class="open-chart"><a href="index.html?symbol=BTCUSDT&amp;interval=1h">BTC の1時間足を開く<span aria-hidden="true"> →</span></a></p>
+  <ol>
+    <li>デモトレードの欄で、レバレッジを10倍にして、小さな金額で買います。</li>
+    <li>チャートに出る「強制決済」の線が、買値から何%下にあるかを見ます。</li>
+    <li>この1週間の値動きの中で、その幅を超える下げは何回ありましたか。確かめたら、ポジションは決済します。</li>
+  </ol>
+  <p class="try-aim">ねらい:倍率を上げると、ふつうの値動きで証拠金を失う距離まで近づくことを、自分の目で見る。</p>
+</div>
 
 <h3 id="diversify">分散 — 複数の銘柄を持つときの注意</h3>
 <p><span class="tag common">常識</span>別々の動きをする資産を組み合わせると、全体の値動きを小さくできます。これが分散の考え方です。</p>
@@ -3118,7 +3314,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 
 <h3>いちばん大事な注意:過去に合わせすぎない</h3>
 <div class="warn">
-  <p><span class="tag common">常識</span>期間や条件の数字を、成績が良くなるまで何度も変えると、<strong>過去の値動きにたまたま合っただけの設定</strong>ができあがります。これを「過剰最適化(カーブフィッティング)」と呼びます。過去の成績は立派でも、これからの相場では通用しないことが多くあります。</p>
+  <p><span class="tag common">常識</span>期間や条件の数字を、成績が良くなるまで何度も変えると、<strong>過去の値動きにたまたま合っただけの設定</strong>ができあがります。これを「過剰最適化(カーブフィッティング)」と呼びます。第5章の「データ・スヌーピング」と、同じ落とし穴です。過去の成績は立派でも、これからの相場では通用しないことが多くあります。</p>
 </div>
 <p><span class="tag idea">考え方</span>過剰最適化を避けるために、次のことを試してください。</p>
 <ul>

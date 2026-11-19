@@ -211,6 +211,23 @@
     if (old && old.n === qs.length) navMark(id, `${old.ok}/${old.n}`);
   });
 
+  // ---- 「チャートで試す」の課題:やってみた印を、この端末に覚えておく
+  const tries = [...document.querySelectorAll('.try[data-id]')], tryDone = prefs.tries && typeof prefs.tries === 'object' ? prefs.tries : {};
+  const tryCount = () => { const n = $('tryCount'); if (n && tries.length) n.textContent = ` いま ${tries.filter(t => tryDone[t.dataset.id]).length} / ${tries.length} 個。`; };
+  tries.forEach(t => {
+    const lab = document.createElement('label'), box = document.createElement('input');
+    lab.className = 'try-done'; box.type = 'checkbox'; box.checked = !!tryDone[t.dataset.id];
+    lab.appendChild(box); lab.appendChild(document.createTextNode('やってみた'));
+    t.classList.toggle('done', box.checked);
+    box.addEventListener('change', () => {
+      if (box.checked) tryDone[t.dataset.id] = 1; else delete tryDone[t.dataset.id];
+      t.classList.toggle('done', box.checked);
+      prefs.tries = tryDone; write(KEY, prefs); tryCount();
+    });
+    t.appendChild(lab);
+  });
+  tryCount();
+
   // ---- 言葉で探す(このページの中だけを探す。外には何も送らない)
   const bar = document.querySelector('.bar'), fsBtn = $('fsBtn');
   const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
