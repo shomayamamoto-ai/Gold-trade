@@ -211,6 +211,176 @@
     if (old && old.n === qs.length) navMark(id, `${old.ok}/${old.n}`);
   });
 
+  // ---- 言葉で探す(このページの中だけを探す。外には何も送らない)
+  const bar = document.querySelector('.bar'), fsBtn = $('fsBtn');
+  const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+  const norm = t => t.replace(/\s+/g, ' ').trim();
+  // ひらがな・カタカナ、全角・半角、大文字・小文字の違いを気にせず探せるようにそろえる
+  const fold = t => t.normalize('NFKC').toLowerCase().replace(/[ぁ-ゖ]/g, ch => String.fromCharCode(ch.charCodeAt(0) + 0x60));
+  let findIndex = null;
+  function buildIndex() {
+    findIndex = [];
+    let chap = '', sect = '';
+    document.querySelectorAll('main h2, main h3, main h4, main p, main li, main td, main dt, main dd, main figcaption').forEach(el => {
+      if (el.closest('.toc, .path')) return;
+      if (el.tagName === 'H2') { chap = norm(el.textContent); sect = ''; }
+      else if (el.tagName === 'H3') sect = norm(el.textContent).split(' — ')[0];
+      if ((el.tagName === 'LI' || el.tagName === 'DD' || el.tagName === 'TD') && el.querySelector('li, p, table')) return; // 中身を別に数えるので、外側は飛ばす
+      const text = norm(el.textContent);
+      if (text.length < 2) return;
+      findIndex.push({ el, text, key: fold(text), head: /^H[234]$/.test(el.tagName), where: sect && !/^H[23]$/.test(el.tagName) ? `${chap} › ${sect}` : chap });
+    });
+  }
+  const findBtn = mk('button'); findBtn.type = 'button'; findBtn.id = 'findBtn';
+  findBtn.setAttribute('aria-label', 'このページの中を言葉で探す'); findBtn.title = 'このページの中を言葉で探す( / キー)'; findBtn.setAttribute('aria-expanded', 'false');
+  const NS = 'http://www.w3.org/2000/svg', ico = document.createElementNS(NS, 'svg');
+  ico.setAttribute('viewBox', '0 0 16 16'); ico.setAttribute('width', '16'); ico.setAttribute('height', '16'); ico.setAttribute('aria-hidden', 'true');
+  [['circle', { cx: 7, cy: 7, r: 4.5, fill: 'none' }], ['path', { d: 'M10.5 10.5L14 14' }]].forEach(([n, at]) => { const e = document.createElementNS(NS, n); Object.keys(at).forEach(k => e.setAttribute(k, at[k])); e.setAttribute('stroke', 'currentColor'); e.setAttribute('stroke-width', '1.6'); e.setAttribute('stroke-linecap', 'round'); ico.appendChild(e); });
+  findBtn.appendChild(ico);
+  bar.insertBefore(findBtn, fsBtn);
+  const findBox = mk('div', 'find'); findBox.hidden = true; findBox.setAttribute('role', 'dialog'); findBox.setAttribute('aria-label', 'このページの中を探す');
+  const findIn = mk('input'); findIn.type = 'search'; findIn.placeholder = '言葉で探す(例:損切り 位置)'; findIn.setAttribute('aria-label', '探す言葉'); findIn.autocomplete = 'off'; findIn.enterKeyHint = 'search';
+  const findInfo = mk('p', 'find-info'); findInfo.setAttribute('role', 'status'); findInfo.setAttribute('aria-live', 'polite');
+  const findOut = mk('div', 'find-out');
+  findBox.appendChild(findIn); findBox.appendChild(findInfo); findBox.appendChild(findOut);
+  document.body.appendChild(findBox);
+  let hitTimer = 0, hitEl = null;
+  const jump = el => {
+    setFind(false);
+    // 表の中のセルなどは、行ごと目立たせる
+    const target = el.tagName === 'TD' ? el.parentNode : el;
+    target.scrollIntoView({ block: 'center' });
+    if (hitEl) hitEl.classList.remove('hit');
+    hitEl = target; target.classList.add('hit');
+    clearTimeout(hitTimer); hitTimer = setTimeout(() => target.classList.remove('hit'), 3000);
+  };
+  function runFind() {
+    const words = fold(findIn.value).split(' ').filter(Boolean);
+    findOut.textContent = '';
+    if (!words.length) { findInfo.textContent = 'スペースで区切ると、すべての言葉を含むところを探します。'; return; }
+    if (!findIndex) buildIndex();
+    const hits = findIndex.filter(it => words.every(w => it.key.includes(w)));
+    hits.sort((x, y) => (y.head - x.head)); // 見出しを先に。あとは本の順
+    findInfo.textContent = hits.length ? `${hits.length}件見つかりました` + (hits.length > 50 ? '(はじめの50件)' : '') : '見つかりませんでした。別の言葉や、短い言葉で試してください。';
+    hits.slice(0, 50).forEach(it => {
+      const b = mk('button', 'res'); b.type = 'button';
+      b.appendChild(mk('small', '', it.where));
+      // 最初に見つかった言葉のまわりを抜き出して、その言葉に印を付ける
+      const at = Math.max(0, it.key.indexOf(words[0])), from = Math.max(0, at - 24), cut = it.text.slice(from, from + 110), line = mk('span');
+      const kcut = fold(cut);
+      let pos = 0;
+      // 折りたたんだ文字と元の文字は長さが同じとは限らないので、長さが同じときだけ印を付ける
+      if (kcut.length === cut.length) {
+        const marks = [];
+        words.forEach(w => { for (let i = kcut.indexOf(w); i >= 0; i = kcut.indexOf(w, i + w.length)) marks.push([i, i + w.length]); });
+        marks.sort((p, q) => p[0] - q[0]);
+        marks.forEach(([p, q]) => { if (p < pos) return; if (p > pos) line.appendChild(document.createTextNode(cut.slice(pos, p))); line.appendChild(mk('mark', '', cut.slice(p, q))); pos = q; });
+      }
+      line.appendChild(document.createTextNode(cut.slice(pos)));
+      if (from > 0) line.insertBefore(document.createTextNode('…'), line.firstChild);
+      if (from + 110 < it.text.length) line.appendChild(document.createTextNode('…'));
+      b.appendChild(line);
+      b.addEventListener('click', () => jump(it.el));
+      findOut.appendChild(b);
+    });
+  }
+  let findTimer = 0;
+  findIn.addEventListener('input', () => { clearTimeout(findTimer); findTimer = setTimeout(runFind, 120); });
+  findIn.addEventListener('keydown', e => { if (e.key === 'Enter') { clearTimeout(findTimer); runFind(); const first = findOut.querySelector('.res'); if (first) first.click(); } });
+  function setFind(on) {
+    findBox.hidden = !on;
+    findBtn.setAttribute('aria-expanded', String(on));
+    if (on) { setDrawer(false); findBox.style.top = Math.round(bar.getBoundingClientRect().bottom + 6) + 'px'; runFind(); findIn.focus(); findIn.select(); }
+  }
+  findBtn.addEventListener('click', () => setFind(findBox.hidden));
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !findBox.hidden) { setFind(false); findBtn.focus(); }
+    else if (e.key === '/' && findBox.hidden && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '') && !e.ctrlKey && !e.metaKey) { e.preventDefault(); setFind(true); }
+  });
+  document.addEventListener('pointerdown', e => { if (!findBox.hidden && !findBox.contains(e.target) && !findBtn.contains(e.target)) setFind(false); });
+
+  // ---- 用語集にある言葉に印を付け、押すとその場で意味を出す(章ごとに、最初に出てきた1回だけ)
+  const gloss = $('glossary');
+  if (gloss) {
+    const terms = new Map(); // 言葉 → 用語集の見出し(dt)
+    let n = 0;
+    for (let el = gloss.nextElementSibling; el && el.tagName !== 'H2'; el = el.nextElementSibling) {
+      el.querySelectorAll('dt').forEach(dt => {
+        if (!dt.id) dt.id = 'term-' + (++n);
+        // 「A / B」「A(B)」のような見出しは、A と B のどちらでも引けるようにする
+        norm(dt.textContent).split(/\s*[\/／]\s*|[((]|[))]/).map(x => x.trim()).forEach(w => {
+          if (w.length < 2 || /^[ぁ-ゖー]+$/.test(w) || /^[→ ]/.test(w)) return; // 1文字と、読みがな(ひらがなだけ)は除く
+          if (!terms.has(w)) terms.set(w, dt);
+        });
+      });
+    }
+    const words = [...terms.keys()].sort((x, y) => y.length - x.length);
+    if (words.length) {
+      const re = new RegExp(words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+      const skip = 'a, button, h1, h2, h3, h4, sup, svg, code, .quiz, .toc, .path, .tag, .term, .formula, .open-chart, .try';
+      let used = new Set();
+      const walk = root => {
+        const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: t => t.nodeValue.length < 2 || t.parentNode.closest(skip) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+        const nodes = [];
+        for (let t = tw.nextNode(); t; t = tw.nextNode()) nodes.push(t);
+        nodes.forEach(t => {
+          let node = t;
+          for (let guard = 0; guard < 6 && node; guard++) {
+            re.lastIndex = 0;
+            let m, found = null;
+            while ((m = re.exec(node.nodeValue))) { const dt = terms.get(m[0]); if (!used.has(dt)) { found = m; break; } }
+            if (!found) return;
+            const dt = terms.get(found[0]); used.add(dt);
+            const rest = node.splitText(found.index); const after = rest.splitText(found[0].length);
+            const sp = mk('span', 'term', found[0]); sp.tabIndex = 0; sp.setAttribute('role', 'button'); sp.dataset.t = dt.id; sp.setAttribute('aria-label', `${found[0]}(言葉の説明を開く)`);
+            rest.parentNode.replaceChild(sp, rest);
+            node = after;
+          }
+        });
+      };
+      // 用語集そのものと、それより後ろ(出典)には印を付けない
+      let stop = false;
+      for (let el = document.querySelector('main').firstElementChild; el && !stop; el = el.nextElementSibling) {
+        if (el.tagName === 'H2') { used = new Set(); if (el === gloss) stop = true; continue; }
+        if (el.tagName === 'FOOTER') break;
+        walk(el);
+      }
+      const pop = mk('div', 'termpop'); pop.hidden = true; pop.setAttribute('role', 'dialog');
+      document.body.appendChild(pop);
+      let popFor = null;
+      const closePop = () => { pop.hidden = true; if (popFor) popFor.setAttribute('aria-expanded', 'false'); popFor = null; };
+      const openPop = sp => {
+        if (popFor === sp) { closePop(); return; }
+        closePop();
+        const dt = document.getElementById(sp.dataset.t), dd = dt && dt.nextElementSibling;
+        if (!dd) return;
+        pop.textContent = '';
+        pop.appendChild(mk('b', '', norm(dt.textContent)));
+        pop.appendChild(mk('p', '', norm(dd.textContent)));
+        const more = mk('a', '', '用語集で見る'); more.href = '#' + dt.id;
+        more.addEventListener('click', e => { e.preventDefault(); closePop(); jump(dt); });
+        pop.appendChild(more);
+        pop.hidden = false; popFor = sp; sp.setAttribute('aria-expanded', 'true');
+        // 言葉のすぐ下に出す。画面からはみ出すときは、左右と上下を調整する
+        const r = sp.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+        const left = Math.max(8, Math.min(r.left, innerWidth - w - 8));
+        const below = r.bottom + 6 + h < innerHeight || r.top < h + 12;
+        pop.style.left = Math.round(left + scrollX) + 'px';
+        pop.style.top = Math.round((below ? r.bottom + 6 : r.top - h - 6) + scrollY) + 'px';
+      };
+      document.addEventListener('click', e => {
+        const sp = e.target.closest && e.target.closest('.term');
+        if (sp) { openPop(sp); return; }
+        if (!pop.hidden && !pop.contains(e.target)) closePop();
+      });
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && !pop.hidden) { const f = popFor; closePop(); if (f) f.focus(); }
+        else if ((e.key === 'Enter' || e.key === ' ') && document.activeElement && document.activeElement.classList.contains('term')) { e.preventDefault(); openPop(document.activeElement); }
+      });
+      addEventListener('resize', closePop);
+    }
+  }
+
   markTables();
   onScroll();
 })();
