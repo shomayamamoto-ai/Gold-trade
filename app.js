@@ -15,8 +15,8 @@ if (window.top !== window.self && /\.github\.io$/.test(location.hostname)) {
  * 2026年11月に、時価総額の順位(CoinMarketCap)と、Binance の24時間の出来高を調べて選んだ。
  * base は、取引所につながらないときに見本の値動きを作るための、だいたいの価格 */
 const SYMBOL_CATS = [
-  ['pop', '人気の銘柄'], ['gold', '金(ゴールド)'], ['major', '主要な暗号資産'], ['meme', '話題の銘柄(値動きがとても大きい)'],
-  ['stock', '米国株・ETF(トークン化 bStocks)'], ['jpy', '円建て'], ['fx', '為替・BTC 建て'],
+  ['fx', '為替'], ['pop', '人気の銘柄'], ['gold', '金(ゴールド)'], ['major', '主要な暗号資産'], ['meme', '話題の銘柄(値動きがとても大きい)'],
+  ['stock', '米国株・ETF(トークン化 bStocks)'], ['jpy', '円建て'], ['btc', 'BTC 建て'],
 ];
 // long は銘柄の一覧に出す名前(日本語の名前つき)。label は、凡例・履歴・お知らせなどに使う短い名前
 const sym = (id, long, base, cat, quote) => {
@@ -27,6 +27,8 @@ const sym = (id, long, base, cat, quote) => {
  * リストは米ドル建て(BTCUSD など)だが、このサイトは Binance のデータを使うので、同じ銘柄の USDT 建てを載せている。
  * Binance で取引されていない銘柄(TRIA、FLUID、FLR、LIGHTER、GFI、VVV)と、指数・先物(DVOL など)は載せていない */
 const SYMBOLS = [
+  sym('USDJPY', 'USD/JPY ドル円(計算値)', 155, 'fx', 'JPY'),
+  sym('EURUSDT', 'EUR/USDT ユーロ/ドル', 1.1, 'fx'),
   sym('BTCUSDT', 'BTC/USDT ビットコイン', 65000, 'pop'),
   sym('ETHUSDT', 'ETH/USDT イーサリアム', 1800, 'pop'),
   sym('SOLUSDT', 'SOL/USDT ソラナ', 71, 'pop'),
@@ -100,10 +102,13 @@ const SYMBOLS = [
   sym('BNBJPY', 'BNB/JPY', 94000, 'jpy', 'JPY'),
   sym('DOGEJPY', 'DOGE/JPY ドージコイン', 9.6, 'jpy', 'JPY'),
   sym('ADAJPY', 'ADA/JPY カルダノ', 24.6, 'jpy', 'JPY'),
-  sym('EURUSDT', 'EUR/USDT ユーロ', 1.1, 'fx'),
-  sym('ETHBTC', 'ETH/BTC イーサリアム(BTC 建て)', 0.028, 'fx', 'BTC'),
-  sym('SOLBTC', 'SOL/BTC ソラナ(BTC 建て)', 0.0011, 'fx', 'BTC'),
+  sym('ETHBTC', 'ETH/BTC イーサリアム(BTC 建て)', 0.028, 'btc', 'BTC'),
+  sym('SOLBTC', 'SOL/BTC ソラナ(BTC 建て)', 0.0011, 'btc', 'BTC'),
 ];
+/* 取引所にない銘柄を、2つの銘柄の割り算で作る(計算値)。
+ * ドル円は Binance で取引されていないので、「BTC の円価格 ÷ BTC のドル(USDT)価格」で求める。
+ * 本物の為替レートとは少しずれ、土日も動く。出来高は、円側の取引をドルに直した参考値 */
+const SYNTH = { USDJPY: { num: 'BTCJPY', den: 'BTCUSDT' } };
 const BUILTIN = SYMBOLS.length; // これより後ろは、利用者が追加した銘柄
 // 'DOGEUSDT' → 'DOGE/USDT' のように、読みやすい名前にする
 function prettySymbol(id) {
@@ -609,6 +614,22 @@ function groupBars(raw, group, ms) {
   return out;
 }
 async function fetchKlines(symbol, api, limit, endTime, startTime) {
+  const sy = SYNTH[symbol];
+  if (!sy) return fetchKlinesRaw(symbol, api, limit, endTime, startTime);
+  // 計算値の銘柄:2つの足を同じ時刻どうしで割る。高値・安値は、足の中の割り算の値からの目安
+  const [a, b] = await Promise.all([fetchKlinesRaw(sy.num, api, limit, endTime, startTime), fetchKlinesRaw(sy.den, api, limit, endTime, startTime)]);
+  const den = new Map(b.map(x => [x.t, x]));
+  const out = [];
+  for (const x of a) {
+    const y = den.get(x.t);
+    if (!y || !(y.o > 0) || !(y.c > 0) || !(y.h > 0) || !(y.l > 0)) continue;
+    const o = x.o / y.o, c = x.c / y.c, p = x.h / y.h, q = x.l / y.l;
+    out.push({ t: x.t, o, h: Math.max(o, c, p, q), l: Math.min(o, c, p, q), c, v: x.v * y.c });
+  }
+  if (!out.length) throw new Error('empty');
+  return out;
+}
+async function fetchKlinesRaw(symbol, api, limit, endTime, startTime) {
   let lastErr;
   for (const host of HOSTS) {
     const ac = new AbortController();
@@ -870,8 +891,10 @@ function openStream() {
   // bookTicker は、いちばん良い買い注文・売り注文の価格が変わるたびに届く(気配値をすぐに反映する)
   // depth5 は 0.1 秒ごとに必ず届くので、取引がない間も「つながっている」ことが分かる
   // ポジションや指値注文があるほかの銘柄も、約定を受け取ってすぐに損益と利確・損切りへ反映する(10銘柄まで)
-  const others = [...new Set(Object.keys(T.positions).concat(T.orders.map(o => o.sym)))].filter(x => x !== state.symbol && /^[A-Z0-9]{5,20}$/.test(x)).slice(0, 10);
-  const name = `${sym}@kline_${curInterval().api}/${sym}@aggTrade/${sym}@bookTicker/${sym}@depth5@100ms` + others.map(x => `/${x.toLowerCase()}@aggTrade`).join('');
+  const others = [...new Set(Object.keys(T.positions).concat(T.orders.map(o => o.sym)))].filter(x => x !== state.symbol && !SYNTH[x] && /^[A-Z0-9]{5,20}$/.test(x)).slice(0, 10);
+  const syn = SYNTH[state.symbol];
+  const leg = { n: NaN, d: NaN, nb: NaN, na: NaN, db: NaN, da: NaN }; // 計算値の銘柄:2つの銘柄の気配値
+  const name = syn ? `${syn.num.toLowerCase()}@bookTicker/${syn.den.toLowerCase()}@bookTicker` : `${sym}@kline_${curInterval().api}/${sym}@aggTrade/${sym}@bookTicker/${sym}@depth5@100ms` + others.map(x => `/${x.toLowerCase()}@aggTrade`).join('');
   const pend = {}; let pendTimer = 0;
   const flushOthers = () => {
     pendTimer = 0;
@@ -917,6 +940,19 @@ function openStream() {
         // 取引所の時計とのずれを覚えておく(端末の時計を変えても、記録の時刻が狂わないようにする)
         if (typeof d.E === 'number' && isFinite(d.E)) { clockOffset = d.E - Date.now(); clockReady = true; }
         feed.msgs++;
+        if (syn && d.s && d.b !== undefined && d.a !== undefined && (d.s === syn.num || d.s === syn.den)) {
+          // 計算値の銘柄:気配値の中間どうしを割って、いまの価格にする。買い・売りの気配は、不利な側どうしで割る
+          const bb = +d.b, aa = +d.a;
+          if (!(bb > 0) || !(aa > 0)) return;
+          if (d.s === syn.num) { leg.nb = bb; leg.na = aa; } else { leg.db = bb; leg.da = aa; }
+          if (!(leg.nb > 0) || !(leg.db > 0)) return;
+          const p = (leg.nb + leg.na) / (leg.db + leg.da);
+          quoteIn(leg.nb / leg.da, leg.na / leg.db);
+          feed.tick = { t: tnow(), p };
+          feed.lo = Math.min(feed.lo, p); feed.hi = Math.max(feed.hi, p);
+          queueTick();
+          return;
+        }
         if (d.e === 'aggTrade' && d.s && d.s !== streamSym) {
           // ほかの銘柄の約定:高値・安値を覚えておき、0.25 秒ごとにまとめて反映する
           if (!others.includes(d.s) || !(+d.p > 0)) return;
@@ -2300,7 +2336,7 @@ function buildTopbar() {
         SYMBOLS.splice(SYMBOLS.indexOf(s), 1);
         delete state.drawings[s.id];
         const wasCurrent = state.symbol === s.id;
-        if (wasCurrent) state.symbol = SYMBOLS[0].id;
+        if (wasCurrent) state.symbol = 'BTCUSDT';
         fillSymbols(); fillCustom(); save();
         if (wasCurrent) { state.sel = null; setTool(null); loadData(); }
       });
@@ -2340,7 +2376,7 @@ function buildTopbar() {
     sel.dispatchEvent(new Event('symbolpicked'));
   };
   // 人気の順:最初から選べる銘柄の並び(上ほど人気)を使い、そこにないものは後ろへ
-  const POP = {}; SYMBOLS.slice(0, BUILTIN).forEach((s, i) => { const b = s.id.slice(0, -s.quote.length); if (!(b in POP)) POP[b] = i; });
+  const POP = {}; SYMBOLS.slice(0, BUILTIN).filter(s => s.cat !== 'fx').forEach((s, i) => { const b = s.id.slice(0, -s.quote.length); if (!(b in POP)) POP[b] = i; });
   const pop = b => (b in POP ? POP[b] : 9999);
   const searchUniverse = () => {
     if (!universe) return [];
@@ -2912,6 +2948,7 @@ const dead = {};       // 取引所から「存在しない」と返ってきた
 // 価格が取れなかった銘柄が、取引所の「取引中の一覧」に載っていなければ、上場廃止などで消えたものとみなす
 // (通信が切れているだけの場合は、一覧に載っているので、消えた扱いにはならない)
 function markDeadIfUnlisted(sym) {
+  if (SYNTH[sym]) return; // 計算値の銘柄は、取引所の一覧にはない
   loadUniverse().then(list => {
     if (list.some(x => x.id === sym)) return;
     dead[sym] = true;
@@ -3025,6 +3062,7 @@ const reconciled = {}; // sym -> true: 確認済み / 'busy': 確認中 / なし
 const recRetryAt = {};
 // ある時間帯の約定を取り寄せて、その間の最初の価格・安値・高値を返す(1分足より細かい端数を調べるため)
 async function tradeRange(sym, from, to) {
+  if (SYNTH[sym]) return null; // 計算値の銘柄には約定の記録がないので、分の端数は調べない
   let lo = Infinity, hi = -Infinity, first = NaN, cur = from;
   for (let page = 0; page < 30 && cur < to; page++) {
     let rows = null, lastErr = null;
