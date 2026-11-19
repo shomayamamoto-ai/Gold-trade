@@ -259,6 +259,21 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 .try .try-done input { width: 18px; height: 18px; accent-color: var(--accent); }
 .try.done { border-style: solid; }
 @media print { .try .try-done { display: none; } }
+.learn { margin: 0 0 18px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; }
+.learn-row { display: grid; grid-template-columns: 8.5em 1fr auto; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 14px; }
+.learn-bar { height: 8px; border-radius: 4px; background: var(--panel); overflow: hidden; }
+.learn-bar span { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+.learn-n { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.learn-ch { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.learn-ch a { padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12.5px; text-decoration: none; font-variant-numeric: tabular-nums; }
+.learn-ch a.seen { border-color: var(--accent); color: var(--text); }
+.exam { margin: 0 0 16px; }
+.exam-info { color: var(--muted); font-size: 14px; }
+.exam-btn { min-height: 44px; margin: 0 6px 6px 0; padding: 8px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; cursor: pointer; }
+.exam-btn.primary { border-color: var(--text); background: var(--text); color: var(--bg); font-weight: 700; }
+.exam-btn:disabled { opacity: .5; cursor: default; }
+@media (max-width: 520px) { .learn-row { grid-template-columns: 7em 1fr; } .learn-n { grid-column: 1 / -1; margin-top: -4px; } }
+@media print { .exam, .learn { display: none; } }
 </style>
 </head>
 <body>
@@ -356,11 +371,16 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
       <li><a href="#mind2">「勝ち続ける思考」を読む</a></li>
       <li><a href="#platform-risk">チャートに出ない危険</a></li>
       <li><a href="#mistakes">よくある失敗</a></li>
+      <li><a href="#exam">総合テスト</a></li>
     </ol>
   </div>
 </div>
 <p>第1章から第10章の終わりには、<strong>確認問題</strong>があります。選ぶと、その場で答えと解説が出ます。読んだだけで終わらせず、身についたかを確かめるのに使ってください。結果は、この端末に覚えておき、左のもくじに「4/5」のように出ます。</p>
 <p>本文のあちこちに、<strong>「チャートで試す」</strong>の課題が17個あります。ボタンを押すと、その課題に合った銘柄とインジケーターでチャートが開きます。読むだけでなく、手を動かすと身につきます。<span id="tryCount"></span></p>
+<h3 id="progress">学習の進み具合</h3>
+<p>この端末で読んだ章、確認問題、課題の進み具合です。下の章の名前を押すと、その章へ移動します。最後に<a href="#exam">総合テスト</a>で、身についたかを確かめられます。</p>
+<div id="learn" class="learn"></div>
+<noscript><p>進み具合の表示と確認問題には、JavaScript が必要です。</p></noscript>
 
 <nav class="toc" aria-label="もくじ">
   <ol>
@@ -380,6 +400,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
     <li><a href="#practice">デモトレードでの練習のしかた</a></li>
     <li><a href="#build">自分で作って、試す</a></li>
     <li><a href="#mistakes">よくある失敗</a></li>
+    <li><a href="#exam">総合テスト</a></li>
     <li><a href="#glossary">用語集</a></li>
     <li><a href="#sources">出典</a></li>
   </ol>
@@ -2802,7 +2823,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 </div>
 <p><span class="tag fact">事実</span>手数料を無視すると、損益がちょうどゼロになる勝率は、次の式で計算できます。</p>
 <div class="tbl-wrap"><table>
-  <thead><tr><th>損失 対 利益</th><th>トントンになる勝率</th><th>意味</th></tr></thead>
+  <thead><tr><th>損益比(損失 対 利益)</th><th>トントンになる勝率</th><th>意味</th></tr></thead>
   <tbody>
     <tr><td>1 対 0.5</td><td class="num">約 67%</td><td>3回に2回勝っても、やっとゼロ</td></tr>
     <tr><td>1 対 1</td><td class="num">50%</td><td>半分勝てばゼロ</td></tr>
@@ -2810,7 +2831,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
     <tr><td>1 対 3</td><td class="num">25%</td><td>4回に1回勝てばゼロ</td></tr>
   </tbody>
 </table></div>
-<p class="formula">トントンの勝率 = 1 ÷ (1 + 利益の倍率)  例:1 対 2 なら 1 ÷ 3 = 約 33%</p>
+<p class="formula">トントンの勝率 = 1 ÷ (1 + 損益比)  例:1 対 2 なら 1 ÷ 3 = 約 33%</p>
 <p><span class="tag idea">考え方</span>このサイトの「成績を分析」に出る「平均利益 / 平均損失」と「勝率」を、上の式に入れてみてください。自分の取引の期待値がプラスかマイナスかが分かります。</p>
 
 <h3 id="ruin">破産の確率 — 期待値がプラスでも、張りすぎれば負ける</h3>
@@ -2837,11 +2858,11 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 
 <h3 id="kelly">ケリー基準 — 「最も増える賭け方」と、その危うさ</h3>
 <p><span class="tag fact">事実</span>ケリー基準は、1956年にベル研究所のケリーが示した、資金を長い目で最も速く増やす賭けの割合を求める式です。<sup>[67]</sup></p>
-<p class="formula">賭ける割合 = 勝率 − 負ける確率 ÷ 利益の倍率</p>
-<p class="formula">勝率 40%、利益の倍率 2(損 1 に対して利益 2)なら、0.4 − 0.6 ÷ 2 = 0.1 → 資金の 10%</p>
+<p class="formula">賭ける割合 = 勝率 − 負ける確率 ÷ 損益比</p>
+<p class="formula">勝率 40%、損益比 2(損 1 に対して利益 2)なら、0.4 − 0.6 ÷ 2 = 0.1 → 資金の 10%</p>
 <p><span class="tag fact">事実</span>ところが、上の「破産の確率」の表のとおり、1回 10% を賭けると、10回に9回は資金が半分以下になる時期を通ります。ケリー基準は「最も増える」割合であって、「落ち込みが小さい」割合ではありません。</p>
 <h4>勝率を見誤ると、マイナスになる</h4>
-<p><span class="tag fact">事実</span>ケリー基準は、勝率と利益の倍率が正確に分かっていることが前提です。<sup>[67]</sup> 上の例で、本当の勝率が 40% ではなく 35% だったとすると、計算は次のようになります(手数料なし、100回の取引の場合の目安)。</p>
+<p><span class="tag fact">事実</span>ケリー基準は、勝率と損益比が正確に分かっていることが前提です。<sup>[67]</sup> 上の例で、本当の勝率が 40% ではなく 35% だったとすると、計算は次のようになります(手数料なし、100回の取引の場合の目安)。</p>
 <div class="tbl-wrap"><table>
   <thead><tr><th>1回に賭ける割合</th><th>本当の勝率 40% のとき</th><th>本当の勝率 35% のとき</th></tr></thead>
   <tbody>
@@ -3023,7 +3044,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <thead><tr><th>用語</th><th>もとの意味</th><th>取引での使いどころと、注意</th></tr></thead>
   <tbody>
     <tr><td>プロスペクト理論</td><td><span class="tag fact">事実</span>人は、同じ金額でも、損の痛みを得の喜びより強く感じる<sup>[17]</sup></td><td><span class="tag idea">考え方</span>損切りが遅れ、利確が早くなる原因。この章の最初で説明したとおり、使いどころの大きい考え方です</td></tr>
-    <tr><td>期待値</td><td><span class="tag common">常識</span>勝率 × 平均の利益 − 負ける率 × 平均の損失</td><td><span class="tag idea">考え方</span>勝率ではなく、この値がプラスかどうかで手法を評価する。第6章の<a href="#expect">「期待値」</a>で計算しています</td></tr>
+    <tr><td>期待値</td><td><span class="tag common">常識</span>勝率 × 平均の利益 − 負ける確率 × 平均の損失</td><td><span class="tag idea">考え方</span>勝率ではなく、この値がプラスかどうかで手法を評価する。第6章の<a href="#expect">「期待値」</a>で計算しています</td></tr>
     <tr><td>ランダムウォーク</td><td><span class="tag common">常識</span>値動きは、過去の値動きからは予測できない、という仮説</td><td><span class="tag idea">考え方</span>図では「だから確率で勝つ」と続くことがありますが、もとの仮説は<strong>「予測で儲け続けることはできない」</strong>という意味です。第5章の「テクニカル分析はどこまで当てになるか」のとおり、完全にランダムとも言い切れませんが、第5章の実測でも、多くの合図は50%前後でした</td></tr>
     <tr><td>サンクコスト</td><td><span class="tag fact">事実</span>すでに払って戻らない費用にこだわり、やめられなくなること<sup>[82]</sup></td><td><span class="tag idea">考え方</span>含み損への執着。上で説明したとおりです</td></tr>
     <tr><td>パレートの法則(80:20)</td><td><span class="tag common">常識</span>結果の大部分は、一部の原因から生まれる、という経験則</td><td><span class="tag fact">実測</span>第5章の検証でも、流れに乗る手法の利益は、数回の大きな勝ちに集中していました。ただし「どの2割が効くか」は、あとからしか分かりません。「勝てる形だけを選べば、無駄な取引を減らせる」と言うのは簡単ですが、前もって選べるなら、誰も苦労しません</td></tr>
@@ -3137,13 +3158,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 
 <h3>記録の付け方</h3>
 <p><span class="tag idea">考え方</span>このサイトは、取引の履歴を CSV で保存できます。数字は自動で残るので、<strong>数字に残らないこと</strong>を1行ずつ書き添えてください。注文画面の「メモ」に書いた内容は、履歴と CSV に一緒に残ります。</p>
-<div class="plan">
-  <p><strong>記録に書き添えること</strong></p>
-  <p>・なぜ入ったか(どの条件がそろったか)</p>
-  <p>・計画どおりに決済したか。変えたなら、なぜ変えたか</p>
-  <p>・そのときの気持ち(焦っていた、取り返したかった、など)</p>
-  <p>・次に同じ場面が来たら、どうするか</p>
-</div>
+<p><span class="tag idea">考え方</span>書き添える項目は、次の<a href="#journal2">「記録表のひな形」</a>にまとめました。特に大事なのは、「なぜ入ったか」「計画どおりに決済したか」「そのときの気持ち」の3つです。</p>
 <p><span class="tag idea">考え方</span>10回分たまったら読み返します。「計画を変えた取引」と「計画どおりの取引」の成績を分けて比べると、自分の心のくせがはっきり見えます。</p>
 
 <h3 id="journal2">記録表のひな形</h3>
@@ -3435,6 +3450,19 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 <p class="qres" role="status" aria-live="polite"></p>
 <button type="button" class="qagain" hidden>もう一度やる</button>
 </section>
+
+<!-- ============================================================ しあげ -->
+<h2 id="exam"><small>しあげ</small>総合テスト</h2>
+<p>第1章から第10章の確認問題の中から、<strong>各章1問ずつ、合わせて10問</strong>を出します。出る問題と選択肢の順番は、毎回変わります。8割(8問)正解できれば、この教科書の要点は身についています。</p>
+<div id="examBox" class="exam" hidden>
+  <p id="examInfo" class="exam-info" role="status"></p>
+  <p><button id="examStart" type="button" class="exam-btn primary">総合テストを始める(10問)</button> <button id="examWrong" type="button" class="exam-btn">まちがえた問題だけ解き直す</button></p>
+  <div id="examQuiz"></div>
+</div>
+<ul>
+  <li><span class="tag idea">考え方</span>点数は、知識の確認にすぎません。<strong>テストで満点を取れても、取引で勝てるわけではありません。</strong>決めたことを守れるかどうかは、第8章のデモトレードで、30回の記録を付けて確かめてください。</li>
+  <li><span class="tag idea">考え方</span>まちがえた問題は、解説のリンクから本文に戻って読み直すのが、いちばんの近道です。</li>
+</ul>
 
 <!-- ============================================================ 9 -->
 <h2 id="glossary"><small>第11章</small>用語集</h2>

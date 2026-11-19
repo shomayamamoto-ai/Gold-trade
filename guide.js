@@ -168,6 +168,7 @@
     a.after(m);
   });
 
+  const mk2 = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
   // ---- 確認問題(選ぶと、その場で答えと解説が出る。結果はこの端末に覚えておく)
   const quizSaved = prefs.quiz && typeof prefs.quiz === 'object' ? prefs.quiz : {};
   const navMark = (id, text) => {
@@ -177,10 +178,29 @@
     if (!m) { m = document.createElement('span'); m.className = 'mins'; it.a.appendChild(m); }
     m.textContent = text;
   };
-  document.querySelectorAll('.quiz').forEach(qz => {
+  // 1問ごとの結果も覚えておく(まちがえた問題だけ解き直す・進み具合の表示に使う)。鍵は「確認問題の id:何問目」
+  const qlog = prefs.qlog && typeof prefs.qlog === 'object' ? prefs.qlog : {};
+  // 1問を動くようにする。answered(正解か) は、答えたときに1回だけ呼ばれる
+  const wireQ = (q, answered) => {
+    const ans = Number(q.dataset.a), opts = [...q.querySelectorAll('.opt')];
+    opts.forEach((b, k) => b.addEventListener('click', () => {
+      if (q.classList.contains('done')) return;
+      q.classList.add('done');
+      opts.forEach((o, j) => { o.disabled = true; if (j === ans) o.classList.add('ok'); });
+      if (k !== ans) b.classList.add('ng');
+      b.setAttribute('aria-pressed', 'true');
+      if (q.dataset.key) { qlog[q.dataset.key] = k === ans ? 1 : 0; prefs.qlog = qlog; write(KEY, prefs); }
+      answered(k === ans);
+      renderLearn(); renderExamInfo();
+    }));
+  };
+  const resetQ = q => { q.classList.remove('done'); q.querySelectorAll('.opt').forEach(o => { o.disabled = false; o.classList.remove('ok', 'ng'); o.removeAttribute('aria-pressed'); }); };
+  const chapterQuizzes = [...document.querySelectorAll('.quiz')].filter(qz => qz.querySelector('h3[id]'));
+  chapterQuizzes.forEach(qz => {
     qz.classList.add('js');
-    const head = qz.querySelector('h3[id]'), id = head ? head.id : '';
+    const head = qz.querySelector('h3[id]'), id = head.id;
     const qs = [...qz.querySelectorAll('.q')], res = qz.querySelector('.qres'), again = qz.querySelector('.qagain');
+    qs.forEach((q, i) => { q.dataset.key = `${id}:${i}`; });
     let right = 0, done = 0;
     const report = () => {
       if (done < qs.length) { res.textContent = done ? `${qs.length}問中 ${done}問まで答えました` : ''; again.hidden = true; return; }
@@ -189,27 +209,98 @@
       quizSaved[id] = { n: qs.length, ok: right }; prefs.quiz = quizSaved; write(KEY, prefs);
       navMark(id, `${right}/${qs.length}`);
     };
-    qs.forEach(q => {
-      const ans = Number(q.dataset.a), opts = [...q.querySelectorAll('.opt')];
-      opts.forEach((b, k) => b.addEventListener('click', () => {
-        if (q.classList.contains('done')) return;
-        q.classList.add('done');
-        opts.forEach((o, j) => { o.disabled = true; if (j === ans) o.classList.add('ok'); });
-        if (k !== ans) b.classList.add('ng'); else right++;
-        b.setAttribute('aria-pressed', 'true');
-        done++;
-        report();
-      }));
-    });
-    again.addEventListener('click', () => {
-      right = 0; done = 0;
-      qs.forEach(q => { q.classList.remove('done'); q.querySelectorAll('.opt').forEach(o => { o.disabled = false; o.classList.remove('ok', 'ng'); o.removeAttribute('aria-pressed'); }); });
-      report();
-      head.scrollIntoView();
-    });
+    qs.forEach(q => wireQ(q, ok => { if (ok) right++; done++; report(); }));
+    again.addEventListener('click', () => { right = 0; done = 0; qs.forEach(resetQ); report(); head.scrollIntoView(); });
     const old = quizSaved[id];
     if (old && old.n === qs.length) navMark(id, `${old.ok}/${old.n}`);
   });
+
+  // ---- 総合テスト:各章から1問ずつ出す。まちがえた問題だけを解き直すこともできる
+  const examBox = $('examQuiz');
+  const allQ = () => chapterQuizzes.flatMap(qz => [...qz.querySelectorAll('.q')]);
+  const wrongKeys = () => allQ().filter(q => qlog[q.dataset.key] === 0);
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+  function startExam(list, title) {
+    examBox.textContent = '';
+    const wrap = mk2('section', 'quiz js'), res = mk2('p', 'qres'), head = mk2('h3', '', title);
+    res.setAttribute('role', 'status'); res.setAttribute('aria-live', 'polite');
+    wrap.appendChild(head);
+    let right = 0, done = 0;
+    list.forEach((src, i) => {
+      const q = src.cloneNode(true);
+      resetQ(q);
+      // 選択肢の順番を入れかえる(位置で覚えてしまわないように)
+      const opts = [...q.querySelectorAll('.opt')], ans = opts[Number(q.dataset.a)];
+      for (let k = opts.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [opts[k], opts[j]] = [opts[j], opts[k]]; }
+      const ex = q.querySelector('.ex');
+      opts.forEach(o => q.insertBefore(o, ex));
+      q.dataset.a = String(opts.indexOf(ans));
+      const qt = q.querySelector('.qt'); qt.textContent = qt.textContent.replace(/^問\d+\.\s*/, `問${i + 1}. `);
+      wireQ(q, ok => {
+        if (ok) right++; done++;
+        if (done < list.length) { res.textContent = `${list.length}問中 ${done}問まで答えました`; return; }
+        const pct = Math.round(right / list.length * 100);
+        res.textContent = `${list.length}問中 ${right}問 正解(${pct}%)。` + (right === list.length ? '全問正解です。' : 'まちがえた問題は、解説のリンクから本文を読み直してください。');
+        if (title.indexOf('総合') === 0) { const best = prefs.exam && prefs.exam.best > pct ? prefs.exam.best : pct; prefs.exam = { last: pct, best, n: ((prefs.exam && prefs.exam.n) || 0) + 1 }; write(KEY, prefs); }
+        renderExamInfo(); renderLearn();
+      });
+      wrap.appendChild(q);
+    });
+    wrap.appendChild(res);
+    examBox.appendChild(wrap);
+    head.tabIndex = -1; head.focus({ preventScroll: true }); head.scrollIntoView();
+  }
+  function renderExamInfo() {
+    const info = $('examInfo'), wrongBtn = $('examWrong');
+    if (!info) return;
+    const w = wrongKeys().length, e = prefs.exam;
+    info.textContent = (e ? `これまでに ${e.n} 回。前回 ${e.last}%、いちばん良かった回 ${e.best}%。` : 'まだ受けていません。') + (w ? ` まちがえたままの問題が ${w} 問あります。` : '');
+    wrongBtn.disabled = !w; wrongBtn.textContent = w ? `まちがえた問題だけ解き直す(${w}問)` : 'まちがえた問題はありません';
+  }
+  if (examBox) {
+    $('examStart').addEventListener('click', () => startExam(chapterQuizzes.map(qz => pick([...qz.querySelectorAll('.q')])), '総合テスト'));
+    $('examWrong').addEventListener('click', () => { const w = wrongKeys(); if (w.length) startExam(w, 'まちがえた問題の解き直し'); });
+    $('examBox').hidden = false;
+    renderExamInfo();
+  }
+
+  // ---- 学習の進み具合(読んだ章・確認問題・課題を、ひと目で)
+  const seen = prefs.seen && typeof prefs.seen === 'object' ? prefs.seen : {};
+  function renderLearn() {
+    const box = $('learn');
+    if (!box) return;
+    const qs = allQ(), okN = qs.filter(q => qlog[q.dataset.key] === 1).length, ansN = qs.filter(q => q.dataset.key in qlog).length;
+    const trs = [...document.querySelectorAll('.try[data-id]')], tdone = prefs.tries && typeof prefs.tries === 'object' ? prefs.tries : {};
+    const chs = chapters.filter(it => document.getElementById('q-' + it.el.id));
+    box.textContent = '';
+    const row = (label, n, total, note) => {
+      const r = mk2('div', 'learn-row'), bar = mk2('div', 'learn-bar'), fill = mk2('span');
+      fill.style.width = (total ? Math.round(n / total * 100) : 0) + '%';
+      bar.appendChild(fill);
+      r.appendChild(mk2('b', '', label)); r.appendChild(bar); r.appendChild(mk2('span', 'learn-n', `${n} / ${total}${note || ''}`));
+      return r;
+    };
+    box.appendChild(row('読んだ章', chs.filter(it => seen[it.el.id]).length, chs.length));
+    box.appendChild(row('確認問題の正解', okN, qs.length, ansN > okN ? `(まちがい ${ansN - okN})` : ''));
+    box.appendChild(row('チャートで試す', trs.filter(t => tdone[t.dataset.id]).length, trs.length));
+    const list = mk2('div', 'learn-ch');
+    chs.forEach(it => {
+      const cq = [...document.querySelectorAll(`#q-${it.el.id} ~ .q`)], ok = cq.filter(q => qlog[q.dataset.key] === 1).length;
+      const a = mk2('a', seen[it.el.id] ? 'seen' : '', `${it.label.split(' ')[0]} ${ok}/${cq.length}`);
+      a.href = '#' + it.el.id; a.title = it.label + (seen[it.el.id] ? '(読んだ)' : '(まだ)');
+      list.appendChild(a);
+    });
+    box.appendChild(list);
+  }
+  // 章の確認問題まで読み進めたら、その章を「読んだ」ことにする
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver(es => es.forEach(e => {
+      if (!e.isIntersecting) return;
+      const ch = e.target.id.slice(2);
+      if (!seen[ch]) { seen[ch] = 1; prefs.seen = seen; write(KEY, prefs); renderLearn(); }
+    }), { threshold: 0.6 });
+    chapterQuizzes.forEach(qz => io.observe(qz.querySelector('h3[id]')));
+  }
 
   // ---- 「チャートで試す」の課題:やってみた印を、この端末に覚えておく
   const tries = [...document.querySelectorAll('.try[data-id]')], tryDone = prefs.tries && typeof prefs.tries === 'object' ? prefs.tries : {};
@@ -222,11 +313,12 @@
     box.addEventListener('change', () => {
       if (box.checked) tryDone[t.dataset.id] = 1; else delete tryDone[t.dataset.id];
       t.classList.toggle('done', box.checked);
-      prefs.tries = tryDone; write(KEY, prefs); tryCount();
+      prefs.tries = tryDone; write(KEY, prefs); tryCount(); renderLearn();
     });
     t.appendChild(lab);
   });
   tryCount();
+  renderLearn();
 
   // ---- 言葉で探す(このページの中だけを探す。外には何も送らない)
   const bar = document.querySelector('.bar'), fsBtn = $('fsBtn');
@@ -234,6 +326,9 @@
   const norm = t => t.replace(/\s+/g, ' ').trim();
   // ひらがな・カタカナ、全角・半角、大文字・小文字の違いを気にせず探せるようにそろえる
   const fold = t => t.normalize('NFKC').toLowerCase().replace(/[ぁ-ゖ]/g, ch => String.fromCharCode(ch.charCodeAt(0) + 0x60));
+  // 漢字の言葉を、よみがなでも探せるようにする(よみ → 本文での書き方)
+  const YOMI = [['そんぎり', '損切り'], ['りかく', '利確'], ['できだか', '出来高'], ['いどうへいきん', '移動平均'], ['きたいち', '期待値'], ['しょうりつ', '勝率'], ['そんえきひ', '損益比'], ['しきんかんり', '資金管理'], ['てすうりょう', '手数料'], ['おしめ', '押し目'], ['もどり', '戻り'], ['たかね', '高値'], ['やすね', '安値'], ['おわりね', '終値'], ['はじめね', '始値'], ['ようせん', '陽線'], ['いんせん', '陰線'], ['きんり', '金利'], ['えんだか', '円高'], ['えんやす', '円安'], ['かわせ', '為替'], ['ぜいきん', '税金'], ['かくていしんこく', '確定申告'], ['れんぱい', '連敗'], ['ぶんさん', '分散'], ['あんごうしさん', '暗号資産'], ['かそうつうか', '暗号資産'], ['さきもの', '先物'], ['げんぶつ', '現物'], ['まど', '窓'], ['いた', '板'], ['なりゆき', '成行'], ['さしね', '指値'], ['ぎゃくさしね', '逆指値'], ['ふくみえき', '含み益'], ['ふくみぞん', '含み損'], ['けっさい', '決済'], ['じゅんばり', '順張り'], ['ぎゃくばり', '逆張り'], ['しょうこきん', '証拠金'], ['きょうせいけっさい', '強制決済'], ['せいさん', '清算'], ['はんげんき', '半減期'], ['りゅうどうせい', '流動性'], ['じっしつきんり', '実質金利'], ['たてね', '建値'], ['そうかん', '相関'], ['れんどう', '連動'], ['あんぜんしさん', '安全資産'], ['つうかきょうじゃく', '通貨強弱'], ['はさん', '破産'], ['しんり', '心理'], ['きろく', '記録'], ['しっぱい', '失敗'], ['きん', '金'], ['かぶ', '株'], ['ひげ', 'ヒゲ'], ['じったい', '実体'], ['へいきんあし', '平均足'], ['いちもくきんこうひょう', '一目均衡表'], ['くも', '雲'], ['たいすう', '対数'], ['ひかく', '比較'], ['しゅうまつ', '週末'], ['かちょく', '価格'], ['かかく', '価格'], ['ねうごき', '値動き'], ['ねはば', '値幅'], ['だまし', 'だまし'], ['そうごうてすと', '総合テスト'], ['ようごしゅう', '用語集'], ['しゅってん', '出典']].map(([y, w]) => [fold(y), fold(w)]);
+  const variants = w => { const out = [w]; if (w.length >= 2) YOMI.forEach(([y, k]) => { if (y === w || (w.length >= 3 && y.startsWith(w))) out.push(k); }); return out; };
   let findIndex = null;
   function buildIndex() {
     findIndex = [];
@@ -276,20 +371,22 @@
     findOut.textContent = '';
     if (!words.length) { findInfo.textContent = 'スペースで区切ると、すべての言葉を含むところを探します。'; return; }
     if (!findIndex) buildIndex();
-    const hits = findIndex.filter(it => words.every(w => it.key.includes(w)));
+    const alts = words.map(variants); // それぞれの言葉について、よみがなから直した書き方も候補にする
+    const hits = findIndex.filter(it => alts.every(c => c.some(w => it.key.includes(w))));
     hits.sort((x, y) => (y.head - x.head)); // 見出しを先に。あとは本の順
     findInfo.textContent = hits.length ? `${hits.length}件見つかりました` + (hits.length > 50 ? '(はじめの50件)' : '') : '見つかりませんでした。別の言葉や、短い言葉で試してください。';
     hits.slice(0, 50).forEach(it => {
       const b = mk('button', 'res'); b.type = 'button';
       b.appendChild(mk('small', '', it.where));
       // 最初に見つかった言葉のまわりを抜き出して、その言葉に印を付ける
-      const at = Math.max(0, it.key.indexOf(words[0])), from = Math.max(0, at - 24), cut = it.text.slice(from, from + 110), line = mk('span');
+      const shown = alts.map(c => c.find(w => it.key.includes(w)) || c[0]);
+      const at = Math.max(0, it.key.indexOf(shown[0])), from = Math.max(0, at - 24), cut = it.text.slice(from, from + 110), line = mk('span');
       const kcut = fold(cut);
       let pos = 0;
       // 折りたたんだ文字と元の文字は長さが同じとは限らないので、長さが同じときだけ印を付ける
       if (kcut.length === cut.length) {
         const marks = [];
-        words.forEach(w => { for (let i = kcut.indexOf(w); i >= 0; i = kcut.indexOf(w, i + w.length)) marks.push([i, i + w.length]); });
+        shown.forEach(w => { for (let i = kcut.indexOf(w); i >= 0; i = kcut.indexOf(w, i + w.length)) marks.push([i, i + w.length]); });
         marks.sort((p, q) => p[0] - q[0]);
         marks.forEach(([p, q]) => { if (p < pos) return; if (p > pos) line.appendChild(document.createTextNode(cut.slice(pos, p))); line.appendChild(mk('mark', '', cut.slice(p, q))); pos = q; });
       }
