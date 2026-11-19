@@ -161,7 +161,8 @@
     if (!head || a.dataset.nomin !== undefined) return;
     const stop = head.tagName === 'H2' ? ['H2'] : head.tagName === 'H3' ? ['H2', 'H3'] : ['H2', 'H3', 'H4'];
     let n = 0;
-    for (let el = head.nextElementSibling; el && !stop.includes(el.tagName) && el.tagName !== 'FOOTER'; el = el.nextElementSibling) n += el.textContent.replace(/\s+/g, '').length;
+    if (!/^H[234]$/.test(head.tagName)) n = head.textContent.replace(/\s+/g, '').length; // カード(枠)は、その中身の長さ
+    else for (let el = head.nextElementSibling; el && !stop.includes(el.tagName) && el.tagName !== 'FOOTER'; el = el.nextElementSibling) n += el.textContent.replace(/\s+/g, '').length;
     const m = document.createElement('span');
     m.className = 'mins'; m.textContent = `約${Math.max(1, Math.round(n / 500))}分`;
     a.after(m);

@@ -155,7 +155,8 @@ html[data-fs="2"] body { font-size: 20px; }
   padding: 8px 8px 8px 14px; border-radius: 10px; background: var(--text); color: var(--bg);
   box-shadow: 0 4px 18px rgba(0, 0, 0, .3); font-size: 13px; line-height: 1.5;
 }
-.resume span { min-width: 0; }
+.resume span { flex: 1 1 auto; min-width: 0; }
+.resume { width: max-content; max-width: calc(100vw - 24px); }
 .resume button { flex: 0 0 auto; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; font: inherit; cursor: pointer; white-space: nowrap; }
 #resumeGo { background: var(--bg); color: var(--text); font-weight: 700; }
 #resumeNo { background: transparent; color: var(--bg); font-size: 18px; }
@@ -197,6 +198,33 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .side { transition: none; } }
 @media print { .progress, .side, .scrim, .resume, .to-top, .open-chart { display: none !important; } .layout { display: block; } }
 .mins { margin-left: 6px; color: var(--muted); font-size: 12px; font-weight: 400; white-space: nowrap; }
+.path { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 0 0 18px; }
+.path > div { padding: 10px 14px 4px; border: 1px solid var(--line); border-radius: 10px; }
+.path h3 { margin: 0 0 2px; font-size: 16px; }
+.path p { margin: 0 0 6px; color: var(--muted); font-size: 13.5px; }
+.path ol { padding-left: 1.3em; margin-bottom: 8px; }
+.path li { margin-bottom: 3px; }
+.quiz { margin: 30px 0 18px; padding: 2px 16px 12px; border: 1px solid var(--accent); border-radius: 10px; background: var(--panel); }
+.quiz h3 { margin-top: 14px; }
+.quiz .q { margin: 0 0 18px; }
+.quiz .qt { margin: 0 0 8px; font-weight: 700; }
+.quiz .opt {
+  display: block; width: 100%; min-height: 44px; margin: 0 0 6px; padding: 9px 12px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.quiz .opt:hover:not(:disabled), .quiz .opt:focus-visible { border-color: var(--accent); }
+.quiz .opt:disabled { cursor: default; color: var(--text); opacity: 1; }
+.quiz .opt.ok { border-color: var(--up); box-shadow: inset 0 0 0 1px var(--up); }
+.quiz .opt.ok::before { content: "正解 "; color: var(--up); font-weight: 700; }
+.quiz .opt.ng { border-color: var(--down); }
+.quiz .opt.ng::before { content: "選んだ答え "; color: var(--down); font-weight: 700; }
+.quiz .ex { margin: 8px 0 0; padding: 8px 12px; border-left: 3px solid var(--accent); font-size: .95em; }
+.quiz.js .ex { display: none; }
+.quiz.js .q.done .ex { display: block; }
+.quiz .qres { margin: 0 0 8px; font-weight: 700; min-height: 1.5em; }
+.quiz .qagain { padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; cursor: pointer; }
+@media print { .quiz.js .ex { display: block; } .quiz .qagain { display: none; } }
 </style>
 </head>
 <body>
@@ -243,13 +271,61 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 <div class="note">
   <p><strong>この教科書の読み方</strong> — それぞれの説明に、次の4つの印を付けています。</p>
   <p>
-    <span class="tag fact">事実</span>出典で確認できる内容です(出典は最後の章)。<br>
+    <span class="tag fact">事実</span>出典で確認できる内容です(出典は最後の章)。計算すれば確かめられることと、このサイトの仕様の説明にも、この印を使っています。<br>
     <span class="tag fact">実測</span>このサイトと同じ Binance の日足データから、筆者が計算した数字です。<br>
     <span class="tag common">常識</span>相場の世界で広く知られている、一般的な知識です。<br>
     <span class="tag idea">考え方</span>筆者の整理や推測です。正しいとは限りません。
   </p>
-  <p>「実測」の数字は、2026年11月12日までのデータで計算しました。過去の結果であり、これからも同じになるとは限りません。</p>
+  <p>「実測」の数字は、2026年11月12日〜18日までのデータで計算しました(表ごとに、下の注に期間を書いています)。過去の結果であり、これからも同じになるとは限りません。</p>
 </div>
+
+<h2 id="start" style="margin-top:36px"><small>はじめに</small>最初に読む道すじ</h2>
+<p>この教科書は、全部を読むと数時間かかります。最初から順に読む必要はありません。目的に合わせて、次の3つの道すじから選んでください。それぞれの行の右に、読むのにかかる時間の目安を出しています。</p>
+<div class="path">
+  <div>
+    <h3>A. まったく初めての人</h3>
+    <p>まず、大きく負けないための土台だけを読みます。</p>
+    <ol>
+      <li><a href="#candle">ローソク足</a></li>
+      <li><a href="#structure">相場の構造</a></li>
+      <li><a href="#sr">サポートとレジスタンス</a></li>
+      <li><a href="#orders">注文のしくみ</a></li>
+      <li><a href="#loss">損失は取り戻しにくい</a></li>
+      <li><a href="#risk1">1回の損失は 1〜2%</a></li>
+      <li><a href="#mind">心理</a></li>
+      <li><a href="#practice">デモでの練習</a></li>
+    </ol>
+  </div>
+  <div>
+    <h3>B. 自分の手法を作りたい人</h3>
+    <p>A を読んだあとに。決まりを作り、試すまで。</p>
+    <ol>
+      <li><a href="#mtf">複数の時間足</a></li>
+      <li><a href="#ma">移動平均線</a></li>
+      <li><a href="#regime">相場の状態を見分ける</a></li>
+      <li><a href="#m1">流れに乗る手法</a></li>
+      <li><a href="#volcheck">出来高で確かめる</a></li>
+      <li><a href="#breakcheck">ブレイクアウトを確かめる</a></li>
+      <li><a href="#plan">取引計画</a></li>
+      <li><a href="#sizing">買う金額の決め方</a></li>
+      <li><a href="#build">自分で作って、試す</a></li>
+    </ol>
+  </div>
+  <div>
+    <h3>C. 情報にだまされたくない人</h3>
+    <p>SNS や動画の話を、自分で確かめられるようになる。</p>
+    <ol>
+      <li><a href="#evidence">テクニカル分析は当てになるか</a></li>
+      <li><a href="#sns">SNS の図を確かめる</a></li>
+      <li><a href="#smc">スマートマネーの考え方</a></li>
+      <li><a href="#world">世界の出来事と価格</a></li>
+      <li><a href="#mind2">「勝ち続ける思考」を読む</a></li>
+      <li><a href="#platform-risk">チャートに出ない危険</a></li>
+      <li><a href="#mistakes">よくある失敗</a></li>
+    </ol>
+  </div>
+</div>
+<p>第1章から第9章の終わりには、<strong>確認問題</strong>があります。選ぶと、その場で答えと解説が出ます。読んだだけで終わらせず、身についたかを確かめるのに使ってください。結果は、この端末に覚えておき、左のもくじに「4/5」のように出ます。</p>
 
 <nav class="toc" aria-label="もくじ">
   <ol>
@@ -260,7 +336,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
     <li><a href="#indicators">インジケーター</a>
       <ol><li><a href="#ma">移動平均線</a></li><li><a href="#rsi">RSI</a></li><li><a href="#macd">MACD</a></li><li><a href="#bb">ボリンジャーバンド</a></li><li><a href="#atr">ATR</a></li><li><a href="#vol">出来高</a></li><li><a href="#combine">組み合わせ方</a></li></ol></li>
     <li><a href="#methods">トレードの手法</a>
-      <ol><li><a href="#m1">流れに乗る</a></li><li><a href="#m2">レンジ取引</a></li><li><a href="#m3">ブレイクアウト</a></li><li><a href="#backtest">過去データでの検証</a></li><li><a href="#sns">SNS の図を確かめる</a></li><li><a href="#volcheck">出来高の決まりを試す</a></li><li><a href="#plan">取引計画</a></li></ol></li>
+      <ol><li><a href="#m1">流れに乗る</a></li><li><a href="#m2">レンジ取引</a></li><li><a href="#m3">ブレイクアウト</a></li><li><a href="#backtest">過去データでの検証</a></li><li><a href="#sns">SNS の図を確かめる</a></li><li><a href="#volcheck">出来高の決まりを試す</a></li><li><a href="#breakcheck">ブレイクアウトを確かめる</a></li><li><a href="#plan">取引計画</a></li></ol></li>
     <li><a href="#money">資金管理 — いちばん大事な章</a>
       <ol><li><a href="#expect">期待値</a></li><li><a href="#sizing">買う金額の決め方</a></li><li><a href="#leverage">レバレッジ</a></li><li><a href="#diversify">分散</a></li></ol></li>
     <li><a href="#mind">心理 — なぜルールを守れないのか</a></li>
@@ -395,11 +471,11 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 <h4 id="sr2">線ではなく「帯」で見る。根拠の重なりを見る</h4>
 <ul>
   <li><span class="tag common">常識</span><strong>サポートやレジスタンスは、1本の線ではなく、幅のある帯として見ます。</strong>価格は、線ぴったりでは止まりません。少し手前で止まることも、少し行きすぎてから戻ることもあります。帯で見ておくと、「線を少し抜けただけ」の動き(だまし)にあわてにくくなります。</li>
-  <li><span class="tag common">常識</span><strong>線を引くときは、ひげの先ではなく終値を目安にします。</strong>その時間の取引が、最終的にいくらで決着したかを表すのが終値だからです。ニュースで伝えられる価格も、ふつうは終値です。最低2回、できれば3回以上止まった場所を選びます。</li>
+  <li><span class="tag common">常識</span><strong>線を引くときは、ヒゲの先ではなく終値を目安にします。</strong>その時間の取引が、最終的にいくらで決着したかを表すのが終値だからです。ニュースで伝えられる価格も、ふつうは終値です。最低2回、できれば3回以上止まった場所を選びます。</li>
   <li><span class="tag common">常識</span><strong>切りのよい数字は、意識されやすい場所です。</strong>BTC の 100,000 ドル、ドル円の 150 円のような数字には、注文が集まりやすくなります。</li>
   <li><span class="tag common">常識</span><strong>根拠が重なる場所ほど、多くの人が見ています。</strong>たとえば「過去に何度も止まった価格」と「200日移動平均線」と「フィボナッチの 61.8%」が同じあたりにあれば、別々の方法で見ている人たちが、同じ場所に注目していることになります。</li>
   <li><span class="tag common">常識</span><strong>長い時間足の線ほど、重く扱います。</strong>週足・日足で見つけた帯のほうが、15分足で見つけた帯より、多くの人に見られています。</li>
-  <li><span class="tag idea">考え方</span><strong>帯に届いても、すぐには入りません。</strong>そこではね返るのか、抜けるのかは、届いた時点では分かりません。はね返す足(長いひげ、包み足)と出来高の増加を見てから入る、抜けたならいったん戻ってくるのを待つ、というように、「確かめてから」入るのが基本です。</li>
+  <li><span class="tag idea">考え方</span><strong>帯に届いても、すぐには入りません。</strong>そこではね返るのか、抜けるのかは、届いた時点では分かりません。はね返す足(長いヒゲ、包み足)と出来高の増加を見てから入る、抜けたならいったん戻ってくるのを待つ、というように、「確かめてから」入るのが基本です。</li>
 </ul>
 
 <h3 id="dow">ダウ理論 — テクニカル分析の土台になった6つの考え方</h3>
@@ -424,17 +500,18 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 <ol class="steps">
   <li><strong>はっきりした谷(山)を2つ選んで結ぶ。</strong>その間のローソク足が線を大きく突き抜けていないことを確かめます。</li>
   <li><strong>3つ目の谷(山)で線に触れて反発したら、信頼度が上がる。</strong>2点だけなら、どんな2点でも線は引けます。3点目が「みんなが意識している線」かどうかの確認になります。</li>
-  <li><strong>ひげで引くか実体で引くかは、どちらかにそろえる。</strong>迷ったら、多くの足が触れているほうを選びます。</li>
+  <li><strong>ヒゲで引くか実体で引くかは、どちらかにそろえる。</strong>迷ったら、多くの足が触れているほうを選びます。</li>
   <li><strong>反対側に平行な線を引くと「チャネル」になる。</strong>価格がその帯の中を行き来しているうちは、流れが続いているとみなします。</li>
 </ol>
 <ul>
-  <li><span class="tag common">常識</span><strong>傾きが急すぎる線</strong>(45度よりずっと急)は、長く続かず、割れやすいとされます。</li>
+  <li><span class="tag common">常識</span><strong>傾きが急すぎる線</strong>(それまでの上昇と比べて、明らかに角度が立ってきた線)は、長く続かず、割れやすいとされます。</li>
   <li><span class="tag common">常識</span><strong>線を割っても、すぐに流れが反転するとは限りません。</strong>横ばいに変わるだけのことも多くあります。割れたあとに、元の線まで戻って跳ね返される(役割の入れ替わり)のを確かめてから判断する、という使い方が一般的です。</li>
   <li><span class="tag idea">考え方</span>トレンドラインは、引く人によって位置が変わります。水平線ほど客観的ではありません。自分で引いた線を信じすぎないことが大切です。</li>
 </ul>
 <p>このサイトでは「ツール → トレンドライン」で引けます。チャネルは、同じ傾きのトレンドラインをもう1本引いて作ります。</p>
 
 <h3 id="candles2">2本・3本の足の組み合わせ</h3>
+<p><span class="tag common">常識</span>日本の古い呼び名では、陽線を「赤」、陰線を「黒」と呼びます(赤三兵は、陽線が3本)。このサイトの色(上がった足が緑、下がった足が赤)とは違うので、注意してください。</p>
 <p><span class="tag common">常識</span>上の「1本の形」に加えて、続けて出る足の組み合わせにも名前が付いています。代表的なものです(上昇への転換の形を示します。下降への転換は、上下を逆にした形です)。</p>
 <div class="tbl-wrap"><table>
   <thead><tr><th>名前</th><th>形</th><th>どう読まれるか</th></tr></thead>
@@ -443,7 +520,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
     <tr><td>はらみ足</td><td>大きな陰線のあと、その実体の中に収まる小さな足</td><td>売りの勢いが止まり、迷いが出ている。単独では弱い合図</td></tr>
     <tr><td>明けの明星(上昇)/宵の明星(下降)</td><td>大きな陰線 → 小さな足(十字線など)→ 大きな陽線、の3本</td><td>下げ → 迷い → 反転、という流れの変化が3本で表れている</td></tr>
     <tr><td>赤三兵(上昇)/黒三兵(下降)</td><td>陽線が3本続き、終値が切り上がっていく</td><td>買いが続いている。ただし、上ヒゲが長くなっていくと勢いの衰え</td></tr>
-    <tr><td>ピンバー(ハンマー・流れ星)</td><td>実体が小さく、片方のひげが実体の2倍以上ある足</td><td>長いひげの方向へ動いたが押し戻された。押し戻した側が優勢</td></tr>
+    <tr><td>ピンバー(ハンマー・流れ星)</td><td>実体が小さく、片方のヒゲが実体の2倍以上ある足</td><td>長いヒゲの方向へ動いたが押し戻された。押し戻した側が優勢</td></tr>
   </tbody>
 </table></div>
 <div class="warn">
@@ -456,20 +533,38 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 <div class="tbl-wrap"><table>
   <thead><tr><th>名前</th><th>形</th><th>どう読まれるか</th></tr></thead>
   <tbody>
-    <tr><td>丸坊主(陽・陰)</td><td>ひげがほとんどない、大きな陽線または陰線</td><td>始めから終わりまで、一方的に買われた(売られた)</td></tr>
-    <tr><td>たくり線</td><td>下げが続いたあとの、下ひげがとても長い足</td><td>大きく売られたが買い戻された。底打ちの候補</td></tr>
-    <tr><td>首吊り線</td><td>上げが続いたあとの高値圏に出る、下ひげの長い足</td><td>形はたくり線と同じでも、出る場所が逆。天井の候補</td></tr>
-    <tr><td>トンカチ(逆ハンマー・流れ星)</td><td>上ひげが長く、実体が小さい足</td><td>上へ動いたが押し戻された。高値圏では売りの合図とされる</td></tr>
+    <tr><td>丸坊主(陽・陰)</td><td>ヒゲがほとんどない、大きな陽線または陰線</td><td>始めから終わりまで、一方的に買われた(売られた)</td></tr>
+    <tr><td>たくり線</td><td>下げが続いたあとの、下ヒゲがとても長い足</td><td>大きく売られたが買い戻された。底打ちの候補</td></tr>
+    <tr><td>首吊り線</td><td>上げが続いたあとの高値圏に出る、下ヒゲの長い足</td><td>形はたくり線と同じでも、出る場所が逆。天井の候補</td></tr>
+    <tr><td>トンカチ(逆ハンマー・流れ星)</td><td>上ヒゲが長く、実体が小さい足</td><td>上へ動いたが押し戻された。高値圏では売りの合図とされる</td></tr>
     <tr><td>切り込み線</td><td>大きな陰線の次に、安く始まって、陰線の実体の半分より上で終わる陽線</td><td>売りの勢いを半分以上押し返した。買いの合図とされる</td></tr>
     <tr><td>かぶせ線</td><td>大きな陽線の次に、高く始まって、陽線の実体の半分より下で終わる陰線</td><td>切り込み線の逆。売りの合図とされる</td></tr>
     <tr><td>三空(さんくう)</td><td>窓(前の足との間のすき間)を3回続けて空けて、同じ向きに進む</td><td>行きすぎ。下げの三空(叩き込み)は買い、上げの三空(踏み上げ)は売りの合図とされる</td></tr>
     <tr><td>上げ三法/下げ三法</td><td>大きな陽線のあと、その値幅の中で小さな陰線が3本ほど続き、次の大きな陽線で高値を抜く(下げ三法は逆)</td><td>一休みしたあと、元の流れが続く</td></tr>
     <tr><td>並び赤</td><td>窓を空けて上に放れたあと、同じくらいの陽線が2本並ぶ</td><td>上昇が続く合図とされる</td></tr>
-    <tr><td>赤三兵の先詰まり</td><td>赤三兵の3本目が、上ひげの長い足や小さな足になる</td><td>買いの勢いが弱っている。上昇の終わりの候補</td></tr>
+    <tr><td>赤三兵の先詰まり</td><td>赤三兵の3本目が、上ヒゲの長い足や小さな足になる</td><td>買いの勢いが弱っている。上昇の終わりの候補</td></tr>
   </tbody>
 </table></div>
+<figure>
+  <svg viewBox="0 0 560 262" role="img" aria-label="足の形の図。左から、たくり線、首吊り線、切り込み線、かぶせ線">
+    <g font-size="13" fill="currentColor" font-family="inherit">
+      <line x1="28" y1="45.6" x2="28" y2="74.4" stroke="#e0463f" stroke-width="2"/><rect x="21.0" y="48.8" width="14" height="22.4" fill="#e0463f"/><line x1="52" y1="68.0" x2="52" y2="96.8" stroke="#e0463f" stroke-width="2"/><rect x="45.0" y="71.2" width="14" height="22.4" fill="#e0463f"/><line x1="76" y1="90.4" x2="76" y2="119.2" stroke="#e0463f" stroke-width="2"/><rect x="69.0" y="93.6" width="14" height="22.4" fill="#e0463f"/><line x1="104" y1="122.4" x2="104" y2="180.0" stroke="#e0463f" stroke-width="2"/><rect x="97.0" y="125.6" width="14" height="4.8" fill="#e0463f"/>
+      <line x1="168" y1="138.4" x2="168" y2="167.2" stroke="#1f9d8f" stroke-width="2"/><rect x="161.0" y="141.6" width="14" height="22.4" fill="#1f9d8f"/><line x1="192" y1="116.0" x2="192" y2="144.8" stroke="#1f9d8f" stroke-width="2"/><rect x="185.0" y="119.2" width="14" height="22.4" fill="#1f9d8f"/><line x1="216" y1="93.6" x2="216" y2="122.4" stroke="#1f9d8f" stroke-width="2"/><rect x="209.0" y="96.8" width="14" height="22.4" fill="#1f9d8f"/><line x1="244" y1="71.2" x2="244" y2="122.4" stroke="#e0463f" stroke-width="2"/><rect x="237.0" y="74.4" width="14" height="4.8" fill="#e0463f"/>
+      <line x1="322" y1="55.2" x2="322" y2="135.2" stroke="#e0463f" stroke-width="2"/><rect x="313.0" y="58.4" width="18" height="73.6" fill="#e0463f"/><line x1="352" y1="80.8" x2="352" y2="148.0" stroke="#1f9d8f" stroke-width="2"/><rect x="343.0" y="84.0" width="18" height="57.6" fill="#1f9d8f"/><line x1="306" y1="95.2" x2="372" y2="95.2" stroke="currentColor" stroke-width="1" stroke-dasharray="4 3" opacity=".6"/>
+      <line x1="462" y1="64.8" x2="462" y2="151.2" stroke="#1f9d8f" stroke-width="2"/><rect x="453.0" y="68.0" width="18" height="80.0" fill="#1f9d8f"/><line x1="492" y1="52.0" x2="492" y2="128.8" stroke="#e0463f" stroke-width="2"/><rect x="483.0" y="58.4" width="18" height="67.2" fill="#e0463f"/><line x1="446" y1="108.0" x2="512" y2="108.0" stroke="currentColor" stroke-width="1" stroke-dasharray="4 3" opacity=".6"/>
+      <g stroke="currentColor" stroke-width="1" opacity=".25"><line x1="140" y1="20" x2="140" y2="250"/><line x1="280" y1="20" x2="280" y2="250"/><line x1="420" y1="20" x2="420" y2="250"/></g>
+      <g text-anchor="middle">
+        <text x="70" y="226" font-weight="700">たくり線</text><text x="70" y="246" opacity=".75">下げたあとの安値で</text>
+        <text x="210" y="226" font-weight="700">首吊り線</text><text x="210" y="246" opacity=".75">上げたあとの高値で</text>
+        <text x="350" y="226" font-weight="700">切り込み線</text><text x="350" y="246" opacity=".75">半分より上で終わる</text>
+        <text x="490" y="226" font-weight="700">かぶせ線</text><text x="490" y="246" opacity=".75">半分より下で終わる</text>
+      </g>
+    </g>
+  </svg>
+  <figcaption>たくり線と首吊り線は、足の形は同じです。違うのは、出る場所だけです。点線は、前の足の実体のまん中を表します。</figcaption>
+</figure>
 <ul>
-  <li><span class="tag common">常識</span><strong>同じ形でも、出る場所で意味が逆になります。</strong>下ひげの長い足は、安値圏なら「たくり線」(買い)、高値圏なら「首吊り線」(売り)です。形だけを暗記しても使えないのは、このためです。</li>
+  <li><span class="tag common">常識</span><strong>同じ形でも、出る場所で意味が逆になります。</strong>下ヒゲの長い足は、安値圏なら「たくり線」(買い)、高値圏なら「首吊り線」(売り)です。形だけを暗記しても使えないのは、このためです。</li>
   <li><span class="tag idea">考え方</span><strong>暗号資産では、窓がほとんど空きません。</strong>24時間取引が続くので、前の足の終値と次の足の始値がほぼ同じになるためです。三空・並び赤・切り込み線・かぶせ線のように「窓」を前提にした形は、株式のために作られたもので、暗号資産のチャートでは、定義どおりの形はめったに出ません。</li>
   <li><span class="tag idea">考え方</span>「陽の二つ星」「陰の三つ星」のように、図によっては、一般的な定義を確認できない名前も使われています。名前がもっともらしくても、定義が書かれていない形は、検証のしようがありません。</li>
 </ul>
@@ -541,12 +636,56 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 </ul>
 <p><span class="tag idea">考え方</span>デモトレードにはこの2つがありません。そのため、短い時間で何度も売買する手法ほど、デモの成績は実際より良く見えます。</p>
 
+<section class="quiz">
+<h3 id="q-basics">第1章の確認問題</h3>
+<p>答えを選ぶと、その場で正解と解説が出ます。</p>
+<div class="q" data-a="1">
+  <p class="qt">問1. 「陽線」とは、どんな足ですか。</p>
+  <button type="button" class="opt">高値が、前の足の高値より高い足</button>
+  <button type="button" class="opt">終値が、始値より高い足</button>
+  <button type="button" class="opt">出来高が、前の足より多い足</button>
+  <p class="ex"><strong>答え:終値が、始値より高い足</strong><br>ローソク足の色は、その足の中で上がったか下がったか(始値と終値の関係)で決まります。前の足との比較ではありません。(→ <a href="#candle">ローソク足</a>)</p>
+</div>
+<div class="q" data-a="0">
+  <p class="qt">問2. 「上昇の流れ(上昇トレンド)」の定義として、正しいものはどれですか。</p>
+  <button type="button" class="opt">高値も安値も、切り上がっている</button>
+  <button type="button" class="opt">陽線が3本以上続いている</button>
+  <button type="button" class="opt">価格が移動平均線より上にある</button>
+  <p class="ex"><strong>答え:高値も安値も、切り上がっている</strong><br>流れは、高値と安値の並び方で決めます。陽線が続いていても、安値が切り下がっていれば、上昇の流れとは言えません。(→ <a href="#structure">相場の構造</a>)</p>
+</div>
+<div class="q" data-a="2">
+  <p class="qt">問3. 下ヒゲの長い足が出ました。この足の読み方として、正しいものはどれですか。</p>
+  <button type="button" class="opt">どこで出ても、買いの合図になる</button>
+  <button type="button" class="opt">下ヒゲが長いほど、必ず上がる</button>
+  <button type="button" class="opt">安値圏で出たか、高値圏で出たかで、意味が逆になる</button>
+  <p class="ex"><strong>答え:安値圏で出たか、高値圏で出たかで、意味が逆になる</strong><br>下げたあとの安値で出れば「たくり線」(底打ちの候補)、上げたあとの高値で出れば「首吊り線」(天井の候補)です。形だけでなく、出た場所を見ます。(→ <a href="#candles3">そのほかの足の名前</a>)</p>
+</div>
+<div class="q" data-a="1">
+  <p class="qt">問4. ダブルトップが「確定した」と言えるのは、いつですか。</p>
+  <button type="button" class="opt">同じ高さの山が2つできたとき</button>
+  <button type="button" class="opt">2つの山の間の谷(ネックライン)を割ったとき</button>
+  <button type="button" class="opt">2つ目の山で、陰線が出たとき</button>
+  <p class="ex"><strong>答え:2つの山の間の谷(ネックライン)を割ったとき</strong><br>山が2つできただけでは、まだダブルトップではありません。確定する前に先回りすると、そのまま上に抜けていく失敗が多くなります。(→ <a href="#patterns">チャートパターン</a>)</p>
+</div>
+<div class="q" data-a="2">
+  <p class="qt">問5. サポートやレジスタンスの見方として、この教科書がすすめているのはどれですか。</p>
+  <button type="button" class="opt">ヒゲの先にぴったり合わせた、1本の細い線として見る</button>
+  <button type="button" class="opt">1回でも止まった価格は、すべて同じ重さで扱う</button>
+  <button type="button" class="opt">終値を目安に、幅のある帯として見る</button>
+  <p class="ex"><strong>答え:終値を目安に、幅のある帯として見る</strong><br>価格は、線ぴったりでは止まりません。帯で見ておくと、少し抜けただけの動き(だまし)にあわてにくくなります。(→ <a href="#sr2">線ではなく帯で見る</a>)</p>
+</div>
+<p class="qres" role="status" aria-live="polite"></p>
+<button type="button" class="qagain" hidden>もう一度やる</button>
+</section>
+
 <!-- ============================================================ 2 -->
 <h2 id="symbols"><small>第2章</small>銘柄の特徴</h2>
 <div class="kp"><strong>この章の要点</strong><ul>
-  <li>銘柄によって、1日に動く幅は5倍近く違う。同じ金額を買っても、危険の大きさはまったく違う。</li>
+  <li>銘柄によって、1日に動く幅は何倍も違う(金と PEPE で約5倍)。同じ金額を買っても、危険の大きさはまったく違う。</li>
   <li>暗号資産の多くは BTC と同じ方向に動く。別々の銘柄を持っても、分散にはなりにくい。</li>
   <li>金(PAXG)も、暗号資産の中では穏やかというだけで、大きく下がることがある。</li>
+  <li>価格は、金利・ドル・ETF の資金・先物の強制決済といった「外の要因」でも動く。遠い国の出来事が、順番に伝わってくる。</li>
+  <li>よく聞く数字や「安全資産」という言葉は、いつの、誰の調査かを確かめる。</li>
 </ul></div>
 
 <h3 id="measured">値動きの大きさを、実際のデータで比べる</h3>
@@ -574,11 +713,11 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 </div></details>
 <h4>この表から分かること</h4>
 <ul>
-  <li><span class="tag fact">実測</span><strong>値動きの大きさは銘柄で5倍近く違います。</strong>PEPE の1日の平均的な値動き(4.01%)は、金(0.85%)の約4.7倍です。</li>
+  <li><span class="tag fact">実測</span><strong>この表の7銘柄で、値動きの大きさは5倍近く違います。</strong>PEPE の1日の平均的な値動き(4.01%)は、金(0.85%)の約4.7倍です。</li>
   <li><span class="tag fact">実測</span><strong>PEPE は、4日に1日は 5% 以上動きました</strong>(730日中187日)。金は2年で5日だけです。</li>
-  <li><span class="tag fact">実測</span><strong>BTC 以外の暗号資産は、高値から3分の2以上を失った時期があります。</strong>ETH で -67.6%、DOGE で -85.7%、PEPE で -91.2% です。</li>
+  <li><span class="tag fact">実測</span><strong>この表の BTC 以外の暗号資産は、どれも高値から3分の2以上を失った時期があります。</strong>ETH で -67.6%、DOGE で -85.7%、PEPE で -91.2% です。</li>
   <li><span class="tag fact">実測</span><strong>金も安全ではありません。</strong>2026年1月30日に1日で -10.1% 下げ、同年1月28日の高値から11月までに -29.9% 下げています。</li>
-  <li><span class="tag fact">実測</span><strong>暗号資産どうしは強く連動しています。</strong>ETH・SOL・DOGE は 0.8 前後で、BTC が下がる日はほぼ一緒に下がります。金だけが 0.28 と低く、別の動きをします。</li>
+  <li><span class="tag fact">実測</span><strong>暗号資産どうしは強く連動しています。</strong>ETH・SOL・DOGE は 0.8 前後で、BTC が下がる日はほぼ一緒に下がります。この表では金だけが 0.28 と低く、別の動きをしました(連動の強さは、期間で変わります。下の「そのほかの銘柄」の表のあとを見てください)。</li>
 </ul>
 <p><span class="tag idea">考え方</span>ここから導ける実用的な結論は2つです。1つ目は、<strong>値動きの大きい銘柄ほど、買う金額を小さくする</strong>こと(第5章で計算方法を説明します)。2つ目は、<strong>暗号資産を何種類も買っても、危険はあまり減らない</strong>ことです。</p>
 
@@ -592,7 +731,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <ul>
     <li><span class="tag fact">事実</span><strong>実質金利</strong>:金は持っていても利息が付きません。そのため、金利(物価上昇を差し引いた実質の金利)が上がると、利息の付く資産に比べて魅力が下がり、売られやすくなります。<sup>[10]</sup></li>
     <li><span class="tag fact">事実</span><strong>米ドルの強さ</strong>:金はドル建てで値付けされるため、ドルが強くなると、ほかの通貨の人にとって割高になり、売られやすくなります。<sup>[10]</sup></li>
-    <li><span class="tag fact">事実</span><strong>各国の中央銀行の買い</strong>:中央銀行による金の購入量は、3年続けて年間1,000トンを超えたと報告されています。<sup>[10]</sup></li>
+    <li><span class="tag fact">事実</span><strong>各国の中央銀行の買い</strong>:中央銀行による金の購入量は、2022〜2024年に3年続けて年間1,000トンを超えました。2025年は863トンに減りましたが、それ以前の平均を大きく上回っています(この章の「実質金利と金」)。<sup>[10]</sup><sup>[57]</sup></li>
     <li><span class="tag fact">事実</span><strong>不安の高まり</strong>:戦争や金融不安のときに買われやすい傾向があります。危機のときは、金とドルがそろって上がることもあります。<sup>[10]</sup></li>
   </ul>
   <p><span class="tag fact">事実</span>ただし、金利と金の関係は近年弱まっているという見方と、関係は続いているという見方があり、専門家の間でも意見が分かれています。<sup>[10]</sup></p>
@@ -607,7 +746,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <ul>
     <li><span class="tag idea">考え方</span>PAXG の価格は金の現物価格そのものではなく、わずかにずれることがあります。</li>
     <li><span class="tag idea">考え方</span>金そのものではなく「発行会社が金と引き換える約束をしたトークン」なので、発行会社を信用することが前提になります。</li>
-    <li><span class="tag idea">考え方</span>週末は金の現物市場が閉まっていますが、PAXG は24時間取引されます。週末は参加者が少なく、値動きが不規則になることがあります。</li>
+    <li><span class="tag idea">考え方</span>週末は金の現物市場が閉まっていますが、PAXG は24時間取引されます。週末の値動きは、小さくなるのがふつうです。ただし参加者が少ないので、まとまった注文が出ると価格が飛ぶことがあります。</li>
   </ul>
 </div>
 
@@ -668,7 +807,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   </ul>
   <h4>取引するときのポイント</h4>
   <ul>
-    <li><span class="tag fact">実測</span>2年間で最も大きく上げた日は +34.1% でした。この表の中で、PEPE に次ぐ大きさです。ニュースで一気に動く性質が数字に表れています。</li>
+    <li><span class="tag fact">実測</span>2年間で最も大きく上げた日は +34.1% でした。最初の表の7銘柄の中では、PEPE に次ぐ大きさです。ニュースで一気に動く性質が数字に表れています。</li>
     <li><span class="tag fact">実測</span>BTC との連動は 0.72 と、主要な銘柄の中ではやや低めです。XRP 独自の材料で動く日があることを示しています。</li>
     <li><span class="tag common">常識</span>日本でも取引する人が多い銘柄で、円建て(XRP/JPY)でも取引されています。</li>
   </ul>
@@ -734,7 +873,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   </ul>
 </div>
 
-<h3 id="measured2">新しく加わった銘柄の値動き</h3>
+<h3 id="measured2">そのほかの銘柄の値動き</h3>
 <p><span class="tag fact">実測</span>上の表と同じ計算で、ほかの銘柄も比べました。期間は2024年11月13日〜2026年11月12日です。Binance での取引開始が遅い銘柄は、開始日からの数字で、短い期間の数字ほど当てになりません。</p>
 <div class="tbl-wrap"><table>
   <thead><tr><th>銘柄(期間)</th><th>1日の平均的な値動き / 高値と安値の差</th><th>高値からの最大の下落 / BTC との連動</th></tr></thead>
@@ -925,7 +1064,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <ul>
     <li><span class="tag fact">実測</span>6銘柄とも1日の平均的な値動きは 3〜4% で、BTC の約2〜2.5倍でした。高値からの最大の下落は、XLM(-74.4%)を除いて -83% 以上でした。</li>
     <li><span class="tag idea">考え方</span><strong>ロック解除の予定</strong>を確かめる習慣をつけてください。SUI のように、まだ多くの枚数がロックされている銘柄は、決まった日に新しい売りが出る可能性があります。</li>
-    <li><span class="tag idea">考え方</span>このグループは、第2章の最初の表の SOL や XRP と同じく「BTC と同じ方向に、より大きく動く」と考えるのが基本です。何種類も持っても、分散にはなりにくい点は同じです。</li>
+    <li><span class="tag idea">考え方</span>このグループは、この章の最初の表の SOL や XRP と同じく「BTC と同じ方向に、より大きく動く」と考えるのが基本です。何種類も持っても、分散にはなりにくい点は同じです。</li>
   </ul>
 </div>
 
@@ -953,7 +1092,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <ul>
     <li><span class="tag fact">実測</span>1日の平均的な値動きは 3.83%、5%以上動いた日は730日中190日でした。</li>
     <li><span class="tag idea">考え方</span>「AI」という話題で買われやすい銘柄です。話題で上がった銘柄は、話題が移ると大きく下げやすい点は、ミームコインと同じです。</li>
-    <li><span class="tag idea">考え方</span>半減期の前には「発行が減るので上がる」という予想が多く出ました。<sup>[45]</sup> ビットコインの半減期と同じく、予想が先に価格に織り込まれている可能性があります(この章の「半減期の周期」も見てください)。</li>
+    <li><span class="tag idea">考え方</span>半減期の前には「発行が減るので上がる」という予想が多く出ました。<sup>[45]</sup> ビットコインの半減期と同じく、予想が先に価格に織り込まれている可能性があります(この章の「ビットコインの『4年周期』は本当か」も見てください)。</li>
   </ul>
 </div>
 
@@ -962,7 +1101,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <div class="tbl-wrap"><table>
     <thead><tr><th>銘柄</th><th>成り立ち</th><th>実測(1日の平均的な値動き / 最大の下落)</th></tr></thead>
     <tbody>
-      <tr><td>SHIB<br><small>柴犬コイン</small></td><td><span class="tag fact">事実</span>2020年8月、匿名の「Ryoshi」が1京(1,000兆)枚で開始。半分がイーサリアム共同創業者ブテリン氏のアドレスに一方的に送られ、同氏はその大半(約410兆枚)を焼却した<sup>[46]</sup></td><td class="num">2.76% / -87.5%</td></tr>
+      <tr><td>SHIB<br><small>柴犬コイン</small></td><td><span class="tag fact">事実</span>2020年8月、匿名の「Ryoshi」が 1,000兆枚で開始。半分がイーサリアム共同創業者ブテリン氏のアドレスに一方的に送られ、同氏はその大半(約410兆枚)を焼却した<sup>[46]</sup></td><td class="num">2.76% / -87.5%</td></tr>
       <tr><td>BONK</td><td><span class="tag fact">事実</span>2022年12月に始まったソラナ上の犬のミームコイン。総量100兆枚の半分が、ソラナの利用者に無償で配られた<sup>[47]</sup></td><td class="num">4.40% / -95.8%</td></tr>
       <tr><td>WIF<br><small>dogwifhat</small></td><td><span class="tag fact">事実</span>2023年11月に始まったソラナ上のミームコイン。総量は約9億9,900万枚で、追加発行はできない。使い道はない<sup>[48]</sup></td><td class="num">4.51% / -96.7%</td></tr>
       <tr><td>PENGU</td><td><span class="tag fact">事実</span>NFT「Pudgy Penguins」の関連で、2024年12月17日にソラナ上で開始。総量は約888億枚で、その25.9%が関係者に配られた<sup>[47]</sup></td><td class="num">4.95% / -91.0%</td></tr>
@@ -970,7 +1109,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
     </tbody>
   </table></div>
   <ul>
-    <li><span class="tag fact">実測</span><strong>5銘柄とも、高値から 87% 以上下げています。</strong>TRUMP は取引開始の直前の高値から -97.6%、つまり100が2.4になる下げでした。</li>
+    <li><span class="tag fact">実測</span><strong>5銘柄とも、高値から 87% 以上下げています。</strong>TRUMP は取引開始の直後につけた高値から -97.6%、つまり100が2.4になる下げでした。</li>
     <li><span class="tag fact">実測</span>PENGU の1日の高値と安値の差は平均 13.39% で、この教科書で扱う銘柄の中で最大です。1日の中で、それだけ上下に振られるということです。</li>
     <li><span class="tag idea">考え方</span><strong>「誰がどれだけ持っているか」と「いつロック解除されるか」</strong>が、ミームコインの最大の材料です。TRUMP のように大半を特定の関係者が持つ銘柄は、解除のたびに売りが出る可能性を考えておきます。</li>
     <li><span class="tag idea">考え方</span>PEPE のカードと同じく、同じ金額を買うと、1日の平均的な値動きで比べて BTC の約1.7〜3倍の危険を取ることになります。練習でも、買う金額は第5章の方法で小さく計算してください。</li>
@@ -1008,7 +1147,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <h4>注意点</h4>
   <ul>
     <li><span class="tag fact">事実</span>米国の SEC の委員は、2025年7月の声明で「トークンにした証券も証券である」と述べ、第三者が発行するトークンには、その発行者の信用(カウンターパーティー)の危険など、独自の危険があり得ると指摘しています。<sup>[52]</sup></li>
-    <li><span class="tag idea">考え方</span>日本の居住者が実際に買えるかどうかは、この資料では確かめられませんでした。実際の取引の前に、取引所の利用条件と日本の法律を確かめてください。このサイトでは、価格のデータを使ったデモとして練習できます。</li>
+    <li><span class="tag idea">考え方</span>日本の居住者が実際に買えるかどうかは、筆者が調べた範囲では確かめられませんでした。実際の取引の前に、取引所の利用条件と日本の法律を確かめてください。このサイトでは、価格のデータを使ったデモとして練習できます。</li>
   </ul>
 </div>
 
@@ -1045,12 +1184,12 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 <h3>ステーブルコインと決済通貨</h3>
 <p><span class="tag common">常識</span>「BTC/USDT」は、左の通貨(BTC)を、右の通貨(USDT)でいくらで買えるかを表します。右側を「決済通貨」と呼びます。USDT や USDC は、価格が米ドルとほぼ同じになるよう設計された暗号資産で、「ステーブルコイン」と呼ばれます。</p>
 <ul>
-  <li><span class="tag common">常識</span>ステーブルコインは、常に1ドルちょうどである保証はありません。過去には、大きく1ドルを割り込んで元に戻らなかったものもあります。</li>
+  <li><span class="tag common">常識</span>ステーブルコインは、常に1ドルちょうどである保証はありません。2022年5月には、テラ USD(UST)というステーブルコインが1ドルを大きく割り込み、元に戻りませんでした(第5章の「チャートに出ない危険」)。</li>
   <li><span class="tag idea">考え方</span>円建て(〜/JPY)の銘柄は、その通貨自体の値動きに加えて、ドルと円の為替の動きも価格に含まれます。BTC/USDT が動いていなくても、円安が進めば BTC/JPY は上がります。</li>
 </ul>
 
 <h3 id="hours">24時間動く市場の「時間帯」</h3>
-<p><span class="tag common">常識</span>暗号資産は土日も含めて24時間取引されますが、参加者の多い時間帯と少ない時間帯があります。欧州と米国の市場が開いている時間帯(日本時間の夕方〜深夜)は売買が増え、大きく動きやすくなります。米国の経済指標の発表(雇用統計、物価、金利の発表など)の直後は、特に急な動きが出やすい時間です。</p>
+<p><span class="tag common">常識</span>暗号資産は土日も含めて24時間取引されますが、参加者の多い時間帯と少ない時間帯があります。欧州と米国の市場が開いている時間帯(日本時間の夕方〜深夜)に売買が増える、とされます。実際に多い時間は、下の実測で確かめます。米国の経済指標の発表(雇用統計、物価、金利の発表など)の直後は、特に急な動きが出やすい時間です。</p>
 <p><span class="tag fact">実測</span>BTC/USDT の過去2年分で、日本時間の1時間ごとの売買代金を比べました(全体の平均を1とした倍率)。いちばん多いのは <strong>23時台(1.79倍)と0時台(1.76倍)</strong>、次が22時台(1.39倍)と1時台(1.38倍)です。米国の株式市場が開く時間と重なります。少ないのは <strong>13〜15時台(0.74〜0.78倍)</strong>と、6〜8時台(0.77〜0.81倍)でした。「夜8〜10時がいちばん活発」と教えられることがありますが、20時台は 0.78倍と、むしろ少ない時間でした。増えはじめるのは22時からです。</p>
 <p><span class="tag idea">考え方</span>初めのうちは、重要な発表の直前直後には新しく入らない、と決めておくと、理由の分からない急な動きに巻き込まれにくくなります。</p>
 
@@ -1091,13 +1230,13 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 <h3 id="halving2">ビットコインの「4年周期」は本当か</h3>
 <p><span class="tag common">常識</span>BTC には「半減期のあと1〜1年半で大きく上がり、その後大きく下がる」という4年ごとの周期があるとよく言われます。</p>
 <ul>
-  <li><span class="tag fact">事実</span>半減期のあとの上昇の大きさは、回を追うごとに小さくなってきたと報告されています。半減期後12か月の上昇は、2012年の後が約7,000%、2016年の後が 291%、2020年の後が 541% でした。<sup>[59]</sup></li>
+  <li><span class="tag fact">事実</span>半減期のあとの上昇は、1回目に比べて、2回目以降ははるかに小さくなったと報告されています。半減期後12か月の上昇は、2012年の後が約7,000%、2016年の後が 291%、2020年の後が 541% でした。<sup>[59]</sup></li>
   <li><span class="tag fact">事実</span>2024年の4回目は、半減期の1か月前の2024年3月に、すでに当時の最高値を付けていました。この周期は過去の周期より「劇的に弱い」と評価する分析者もいます。<sup>[59]</sup></li>
   <li><span class="tag idea">考え方</span>過去に4回しかない出来事から「周期」を読み取るのは、統計としては非常に弱い根拠です。また、外れるたびに周期の数え方を変えれば、どんな値動きも説明できてしまいます。<sup>[59]</sup> 周期の話は「多くの人がそう信じている」という市場の心理の材料としてだけ扱うのが無難です。</li>
 </ul>
 
 <h3 id="perp">先物の市場が、現物の価格を動かす — 無期限先物と資金調達率</h3>
-<p><span class="tag idea">考え方</span>このサイトのデモは現物の売買だけですが、暗号資産の売買の多くは「先物」で行われています。先物の市場で起きることは、現物の価格にも直接響きます。現物しか取引しない人も、しくみを知っておく価値があります。</p>
+<p><span class="tag idea">考え方</span>このサイトのデモは、現物の価格を使って売買しますが、暗号資産の売買の多くは「先物」で行われています。先物の市場で起きることは、現物の価格にも直接響きます。現物しか取引しない人も、しくみを知っておく価値があります。</p>
 <h4>無期限先物(パーペチュアル)</h4>
 <p><span class="tag common">常識</span>ふつうの先物には「いつ決済するか」の期限がありますが、暗号資産の取引所では、期限のない「無期限先物」が主流です。レバレッジをかけて、買いでも売りでも入れます。</p>
 <h4>資金調達率(ファンディングレート)</h4>
@@ -1141,7 +1280,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <div><h4>板が厚い</h4><p>各価格に大きな注文が並んでいる。大きな売りが出ても、少し下がるだけで吸収される。</p></div>
   <div><h4>板が薄い</h4><p>注文が少ない。大きな売りが出ると、注文の少ない価格帯を一気に食い進み、価格が飛ぶ。</p></div>
 </div>
-<p><span class="tag idea">考え方</span>上の EUR/USDT の 1.06 や、PAXG の -10% の下ヒゲは、本物の為替や金の値段が動いたのではなく、取引所の板が一時的に薄くなったことで起きたと考えられます。売買代金の少ない銘柄(第2章の各カード)ほど、この「価格が飛ぶ」危険が大きくなります。</p>
+<p><span class="tag idea">考え方</span>上の EUR/USDT の 1.06 や、PAXG の -10% の下ヒゲは、本物の為替や金の値段が動いたのではなく、取引所の板が一時的に薄くなったことで起きたと考えられます。売買代金の少ない銘柄(この章の各カード)ほど、この「価格が飛ぶ」危険が大きくなります。</p>
 
 <h3 id="weekend">週末と祝日の、薄い市場</h3>
 <ul>
@@ -1188,8 +1327,32 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   </ol>
 </div>
 
+<h3 id="markets">株・為替(FX)・暗号資産の違い</h3>
+<p>このサイトでは、暗号資産のほかに、為替(USD/JPY、EUR/USDT)や、米国株のトークンも見られます。もとになる市場は、しくみが大きく違います。日本に住む個人が、国内の業者で取引する場合の違いです。</p>
+<div class="tbl-wrap"><table>
+  <thead><tr><th></th><th>日本の株式</th><th>為替(FX)</th><th>暗号資産</th></tr></thead>
+  <tbody>
+    <tr><td>取引できる時間</td><td><span class="tag fact">事実</span>平日の 9:00〜11:30 と 12:30〜15:30(2024年11月5日から、終わりが30分のびた)<sup>[97]</sup></td><td><span class="tag common">常識</span>平日はほぼ24時間。土日は休み</td><td><span class="tag common">常識</span>土日も含めて24時間</td></tr>
+    <tr><td>レバレッジの上限</td><td><span class="tag common">常識</span>現物はなし。信用取引で約3.3倍</td><td><span class="tag fact">事実</span>25倍(2011年8月から。それまでは50倍)<sup>[97]</sup></td><td><span class="tag fact">事実</span>2倍<sup>[97]</sup></td></tr>
+    <tr><td>値動きのほかの収入</td><td><span class="tag common">常識</span>配当、株主優待</td><td><span class="tag common">常識</span>2つの通貨の金利の差(スワップポイント)。支払う側になることもある</td><td><span class="tag common">常識</span>ふつうはなし(預けて報酬を得るしくみは、別の危険がある)</td></tr>
+    <tr><td>価格を動かすもの</td><td><span class="tag common">常識</span>会社の業績、景気、金利</td><td><span class="tag common">常識</span>各国の金利と、その見通し。経済指標、国際情勢</td><td><span class="tag common">常識</span>金利とドル、ETF の資金、規制、先物の強制決済</td></tr>
+    <tr><td>「本来の価値」の測り方</td><td><span class="tag common">常識</span>利益や資産から計算する方法がある</td><td><span class="tag common">常識</span>金利や物価の差から考える</td><td><span class="tag common">常識</span>利益も配当も生まないので、同じ方法は使えない</td></tr>
+  </tbody>
+</table></div>
+<ul>
+  <li><span class="tag idea">考え方</span><strong>レバレッジの上限が低いほど、値動きの大きい市場です。</strong>暗号資産の上限が2倍なのは、値動きがそれだけ激しいためです。海外の業者では100倍も使えますが、第5章のとおり、わずかな逆行で証拠金を失います。</li>
+  <li><span class="tag idea">考え方</span><strong>株には、利益や資産という「ものさし」があります。</strong>暗号資産には、それがありません。「割安」「割高」を決める方法がないので、値動きそのものと、資金管理に頼ることになります。</li>
+  <li><span class="tag idea">考え方</span>このサイトの USD/JPY は計算値、米国株はトークンです。もとの市場が閉まっている時間も動き、価格は少しずれます。</li>
+</ul>
+
 <h3 id="world">世界の出来事は、どう価格に伝わるか — 実例で見る</h3>
 <p>「金利」「ドル」「戦争」といった外の出来事が、チャートにどう表れるのかを、実際にあった2つの急落でたどります。出来事そのものより、<strong>伝わっていく順番</strong>に注目してください。</p>
+<div class="kp"><strong>この節の要点</strong><ul>
+  <li>急落は、ひとつの原因ではなく、利上げ → 円高 → 借りたお金での取引の巻き戻し → 強制的な売り、というように連鎖して起きる。</li>
+  <li>暗号資産と関係のない出来事でも、BTC は株といっしょに大きく下がった。「安全資産」の金も、いったんは下がった。</li>
+  <li>サポートは「止まりやすい場所」であって、「止まる場所」ではない。予想よりも、先に決めた決まりのほうが役に立つ。</li>
+  <li>よく聞く数字には、古いもの、言いすぎのものが混ざっている。</li>
+</ul></div>
 
 <h4>実例1:2024年8月5日 — 日本の利上げから、世界の株と暗号資産へ</h4>
 <ol class="steps">
@@ -1200,6 +1363,16 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <li><span class="tag common">常識</span><strong>借金(レバレッジ)をかけていた人には、追加の担保の請求が来ます。</strong>払えなければ、価格に関係なく強制的に売られます。売りが売りを呼びました。</li>
   <li><span class="tag fact">事実</span><strong>8月5日、日経平均は 12.4% 下がりました。</strong>1987年のブラックマンデー以来の下げです。<sup>[92]</sup> 米国株の値動きの大きさを表す VIX 指数(恐怖指数)は、取引時間中に 65 まで上がったと報じられています。<sup>[92]</sup></li>
 </ol>
+<figure>
+  <svg viewBox="0 0 560 290" role="img" aria-label="急落が伝わる順番の図。利上げ、円高、円を借りていた取引の巻き戻し、株と暗号資産の売り、強制的な売りの順に進み、強制的な売りがさらに売りを呼ぶ">
+    <g font-size="13" fill="currentColor" font-family="inherit">
+      <rect x="110" y="14" width="300" height="36" rx="8" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".55"/><text x="260" y="37" text-anchor="middle">日本銀行が利上げ(7月31日)</text><path d="M260 52 V66 M254 60 L260 67 L266 60" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="110" y="70" width="300" height="36" rx="8" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".55"/><text x="260" y="93" text-anchor="middle">円高が進む</text><path d="M260 108 V122 M254 116 L260 123 L266 116" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="110" y="126" width="300" height="36" rx="8" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".55"/><text x="260" y="149" text-anchor="middle">円を借りていた取引の巻き戻し</text><path d="M260 164 V178 M254 172 L260 179 L266 172" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="110" y="182" width="300" height="36" rx="8" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".55"/><text x="260" y="205" text-anchor="middle">株・暗号資産が売られる</text><path d="M260 220 V234 M254 228 L260 235 L266 228" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="110" y="238" width="300" height="36" rx="8" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".55"/><text x="260" y="261" text-anchor="middle">担保が足りなくなり、強制的に売られる</text>
+      <path d="M412 256 H470 V200 H420 M428 194 L419 200 L428 206" fill="none" stroke="#e0463f" stroke-width="2"/>
+      <text x="478" y="222" fill="#e0463f" font-weight="700">売りが</text><text x="478" y="240" fill="#e0463f" font-weight="700">売りを呼ぶ</text>
+    </g>
+  </svg>
+  <figcaption>ひとつの原因ではなく、順番に伝わっていきました。最後の2つは、たがいに強め合います。</figcaption>
+</figure>
 <div class="tbl-wrap"><table>
   <thead><tr><th>このサイトのデータ</th><th>8月2日の終値 → 8月5日の安値</th><th>8月5日の終値まで</th><th>8月末まで</th></tr></thead>
   <tbody>
@@ -1212,21 +1385,21 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <li><span class="tag fact">実測</span><strong>暗号資産の出来事ではないのに、BTC は3日で一時 20% 下がりました。</strong>土日をはさんで、株式市場が開く前から下げはじめています。24時間開いている市場は、ほかの市場が閉まっている間の「売れるもの」になりやすい、と言われます。</li>
   <li><span class="tag fact">実測</span><strong>「安全資産」の金も、いったんは下がりました</strong>(一時 -4.8%)。現金が急に必要になった人は、値上がりしているもの、すぐ売れるものから売るためです。金は、月末にはプラスに戻りました。</li>
   <li><span class="tag fact">事実</span><strong>戻りも速いものでした。</strong>8月7日に日本銀行の副総裁が、市場が不安定なうちは利上げをしない考えを示すと、市場は落ち着きを取り戻しました。<sup>[92]</sup></li>
-  <li><span class="tag idea">考え方</span><strong>学べること:</strong>ひとつの原因で下がったのではありません。利上げ → 円高 → 借りたお金での取引の巻き戻し → 強制的な売り、と<strong>連鎖</strong>しました。第2章の「強制決済(清算)の連鎖」と同じ形が、世界の市場をまたいで起きた例です。</li>
+  <li><span class="tag idea">考え方</span><strong>学べること:</strong>ひとつの原因で下がったのではありません。利上げ → 円高 → 借りたお金での取引の巻き戻し → 強制的な売り、と<strong>連鎖</strong>しました。この章の「強制決済(清算)の連鎖」と同じ形が、世界の市場をまたいで起きた例です。</li>
 </ul>
 
 <h4>実例2:2025年10〜11月 — BTC が最高値から 3割下がるまで</h4>
 <p><span class="tag fact">実測</span>BTC/USDT は、2025年10月6日に 126,200 の最高値をつけたあと、11月18日に 90,000 を割り、11月21日には 80,600 まで下がりました。最高値から 36% の下落です。<span class="tag fact">事実</span>当時、原因として挙げられていたのは、次のようなものです。<sup>[95]</sup></p>
 <ul>
-  <li><span class="tag fact">事実</span><strong>米国の利下げの見方が後退した。</strong><span class="tag common">常識</span>利下げが遠のくと、ドルが買われ、金利のつかない資産(暗号資産や金)には逆風になりやすい、とされます。</li>
-  <li><span class="tag fact">事実</span><strong>米国の現物 ETF から、資金が出ていった。</strong>11月だけで約26億〜30億ドルと報じられています。ETF は、2024年からの上昇を支えた買い手でした。</li>
-  <li><span class="tag fact">事実</span><strong>レバレッジ取引の強制決済が連鎖した。</strong>1日で約20億ドル分が清算された日があった、と報じられています。<span class="tag fact">実測</span>このサイトのデータでも、10月10日は1日のうちに 122,550 から 102,000 まで下がっています。</li>
-  <li><span class="tag fact">事実</span><strong>株式市場も、同じ時期に不安定だった。</strong><span class="tag common">常識</span>リスクを取りにくい空気(リスクオフ)になると、株も暗号資産も、いっしょに売られやすくなります。</li>
+  <li><span class="tag fact">事実</span><strong>米国の利下げの見方が後退した。</strong><sup>[95]</sup> <span class="tag common">常識</span>利下げが遠のくと、ドルが買われ、金利のつかない資産(暗号資産や金)には逆風になりやすい、とされます。</li>
+  <li><span class="tag fact">事実</span><strong>米国の現物 ETF から、資金が出ていった。</strong>11月だけで約26億〜30億ドルと報じられています。<sup>[95]</sup>ETF は、2024年からの上昇を支えた買い手でした。</li>
+  <li><span class="tag fact">事実</span><strong>レバレッジ取引の強制決済が連鎖した。</strong>10月10日には、1日で190億ドル以上が強制決済されました(この章の「強制決済(清算)の連鎖」)。11月にも、1日で約20億ドル分が清算された日があったと報じられています。<sup>[95]</sup><span class="tag fact">実測</span>このサイトのデータでも、10月10日は1日のうちに 122,550 から 102,000 まで下がっています。</li>
+  <li><span class="tag fact">事実</span><strong>株式市場も、同じ時期に不安定だった。</strong><sup>[95]</sup> <span class="tag common">常識</span>リスクを取りにくい空気(リスクオフ)になると、株も暗号資産も、いっしょに売られやすくなります。</li>
 </ul>
 <p><span class="tag fact">事実</span>株と暗号資産がいっしょに動く傾向は、数字でも確かめられています。国際通貨基金(IMF)の分析では、ビットコインと米国株(S&amp;P 500)の値動きの連動の強さ(相関)は、2017〜19年の 0.01 から、2020〜21年には 0.36 に上がりました。「株が下がるときの逃げ場」としての働きは、限られている、という指摘です。<sup>[94]</sup></p>
 
 <h4>当時の「見通し」を、あとから読み返す</h4>
-<p><span class="tag fact">実測</span>この下落のあいだに書かれた、ある相場の見通しの記録(4本)を、実際の値動きと並べました。チャートの読み方としては、どれも筋の通ったものです。</p>
+<p><span class="tag fact">実測</span>この下落のあいだに、個人の投資家が書きとめていた相場の見通し(4本)を、実際の値動きと並べました。チャートの読み方としては、どれも筋の通ったものです。</p>
 <div class="tbl-wrap"><table>
   <thead><tr><th>書かれた日(その日の終値)</th><th>見通し</th><th>そのあと実際に起きたこと</th></tr></thead>
   <tbody>
@@ -1249,7 +1422,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <li><span class="tag fact">事実</span><strong>金の「安全」は、短いあいだの話です。</strong>米国・英国・ドイツの株と金の関係を調べた研究では、金は、株が大きく下がった直後には値を保ちやすいものの、その働きは <strong>約15営業日</strong>しか続かなかった、と報告されています。<sup>[93]</sup> また、先進国の株に対しては逃避先になったが、新興国の株に対してはならなかった、という研究もあります。<sup>[93]</sup></li>
   <li><span class="tag fact">実測</span><strong>いつも上がるわけではありません。</strong>上の2024年8月の例では、金も一時 4.8% 下がりました。2026年2月末からの中東の衝突のあとは、60日間で 15% 下がっています(第4章の<a href="#sns">「SNS でよく見る図を、データで確かめる」</a>)。</li>
   <li><span class="tag common">常識</span><strong>金は、利子も配当も生みません。</strong>持っているだけでは増えないので、金利が高いときには、相対的に不利になります。</li>
-  <li><span class="tag idea">考え方</span><strong>ビットコインは「デジタルの金」と呼ばれますが、値動きは金と大きく違います。</strong>下の表のとおり、1日の値動きは金の3〜4倍あり、上の2つの実例では、株といっしょに大きく下がりました。発行枚数に上限(2,100万枚)があるという「希少さ」は金と似ていますが、「不安なときに値を保つ」という働きは、いまのところ確かめられていません。</li>
+  <li><span class="tag idea">考え方</span><strong>ビットコインは「デジタルの金」と呼ばれますが、値動きは金と大きく違います。</strong>下の表のとおり、1日の値動きは金の2〜4倍あり(測り方で変わります)、上の2つの実例では、株といっしょに大きく下がりました。発行枚数に上限(2,100万枚)があるという「希少さ」は金と似ていますが、「不安なときに値を保つ」という働きは、いまのところ確かめられていません。</li>
 </ul>
 
 <h4>「通貨の強さ」を分けて見る</h4>
@@ -1267,7 +1440,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 <div class="tbl-wrap"><table>
   <thead><tr><th>よく聞く話</th><th>確かめた結果</th></tr></thead>
   <tbody>
-    <tr><td>「暗号資産は1日に 5〜10% 動く。株の約5倍」</td><td><span class="tag fact">実測</span>ふつうの日の値動き(始値から終値まで。まん中の値)は、BTC 1.47%、ETH 2.04%、SOL 2.92%、PEPE 3.36% でした。1日に 5% 以上動いた日は、BTC で 11.7%、PEPE で 32.1% です。「5〜10%」は、ふつうの日ではなく、<strong>荒れた日の数字</strong>です</td></tr>
+    <tr><td>「暗号資産は1日に 5〜10% 動く。株の約5倍」</td><td><span class="tag fact">実測</span>ふつうの日の値動き(始値から終値まで。まん中の値)は、BTC 1.47%、ETH 2.04%、SOL 2.92%、PEPE 3.36% でした。1日に 5% 以上動いた日は、BTC で 11.7%、PEPE で 32.1% です。「5〜10%」は、ふつうの日ではなく、<strong>荒れた日の数字</strong>です。株との比較では、S&amp;P 500 の ETF のトークン(SPYB)が 0.49%、BTC が 1.59% で、約3倍でした(この章の最初の表と同じ測り方)</td></tr>
     <tr><td>「夜8〜10時がいちばん活発」</td><td><span class="tag fact">実測</span>BTC の売買がいちばん多いのは、日本時間の23時〜1時でした。20時台は、むしろ少ない時間です(この章の<a href="#hours">「時間帯」の実測</a>)</td></tr>
     <tr><td>「アフリカでは 66% の人が銀行口座を持っていない」</td><td><span class="tag fact">事実</span>世界銀行の調査では、サハラ以南のアフリカで、金融機関や携帯電話の口座を持つ大人は、2021年の 49% から、2024年には <strong>58%</strong> に増えました。持っていない人は約 42% です。携帯電話を使った送金サービスが広がったためです<sup>[89]</sup></td></tr>
     <tr><td>「暗号資産は約25,000種あり、9割以上は消える」</td><td><span class="tag fact">事実</span>価格情報サイト CoinGecko の調査では、2014年以降に掲載した24,000種あまりのうち、<strong>14,039種</strong>がすでに取引されなくなっていました(2024年の調査)。2021年7月〜2025年末に取引所以外で生まれた約2,020万種では、<strong>53.2%</strong> が消えています。<sup>[90]</sup> 「9割」という数字は確認できませんでしたが、<strong>半分以上が消える</strong>のは事実です</td></tr>
@@ -1279,7 +1452,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <li><span class="tag idea">考え方</span><strong>数字は、古くなります。</strong>口座を持たない人の割合のように、数年で大きく変わる数字もあります。聞いた数字は、いつの、誰の調査かを確かめる習慣をつけてください。</li>
 </ul>
 
-<h4>1日の値動きと、「売り」の危うさ</h4>
+<h4 id="daymove">1日の値動きと、「売り」の危うさ</h4>
 <div class="tbl-wrap"><table>
   <thead><tr><th>銘柄</th><th>ふつうの日の値動き</th><th>5%以上動いた日</th><th>1日でいちばん上がった日</th><th>1日でいちばん下がった日</th><th>+10%以上の日/-10%以下の日</th></tr></thead>
   <tbody>
@@ -1291,12 +1464,54 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
     <tr><td>金(PAXG)</td><td class="num">0.41%</td><td class="num">0.3%</td><td class="num up">+7%</td><td class="num down">-10%</td><td class="num">0日/1日</td></tr>
   </tbody>
 </table></div>
-<p class="src">Binance の日足(UTC の1日)、各銘柄の取引開始から2026年11月18日まで。値動きは、始値から終値までの変化率。「ふつうの日」は、大きさの順に並べたまん中の値。</p>
+<p class="src">Binance の日足(UTC の1日)、各銘柄の取引開始から2026年11月18日まで。値動きは、始値から終値までの変化率。「ふつうの日」は、大きさの順に並べたまん中の値。この章の最初の表とは、測り方が違います(あちらは直近2年間の、前の日の終値からの変化の平均)。そのため、数字は一致しません。</p>
 <ul>
   <li><span class="tag fact">実測</span><strong>1日で 10% 以上「上がった」日は、「下がった」日より多くありました。</strong>PEPE は1日で +89%、XRP は +78% 上がった日があります。</li>
   <li><span class="tag idea">考え方</span><strong>「売り(ショート)」は、急に上がったときの損が大きくなります。</strong>買いの損は、最悪でも買った金額までです。売りは、価格が2倍になれば、売った金額と同じだけ損をします。売買の少ない銘柄は、まとまった買いで急に跳ね上がります。「暗号資産では売りから入らない」と決めている人が多いのは、このためです。</li>
   <li><span class="tag idea">考え方</span>このサイトのデモトレードでは、売りも練習できます。試すなら、まず BTC のような売買の多い銘柄で、必ず損切りを入れてください。</li>
 </ul>
+
+<section class="quiz">
+<h3 id="q-symbols">第2章の確認問題</h3>
+<p>答えを選ぶと、その場で正解と解説が出ます。</p>
+<div class="q" data-a="1">
+  <p class="qt">問1. BTC と PEPE を、同じ10万円分ずつ買いました。危険の大きさについて、正しいものはどれですか。</p>
+  <button type="button" class="opt">金額が同じなので、危険も同じ</button>
+  <button type="button" class="opt">値動きの幅が違うので、危険の大きさは違う</button>
+  <button type="button" class="opt">価格の安い PEPE のほうが、危険は小さい</button>
+  <p class="ex"><strong>答え:値動きの幅が違うので、危険の大きさは違う</strong><br>ふつうの日の値動きは、BTC が約1.5%、PEPE が約3.4%でした。同じ金額でも、値動きの大きい銘柄のほうが、大きく損をする可能性があります。(→ <a href="#world">1日の値動きの表</a>)</p>
+</div>
+<div class="q" data-a="0">
+  <p class="qt">問2. アルトコインを5種類に分けて買いました。「分散」について、正しいものはどれですか。</p>
+  <button type="button" class="opt">暗号資産の多くは BTC と同じ向きに動くので、分散にはなりにくい</button>
+  <button type="button" class="opt">5種類あれば、十分に分散できている</button>
+  <button type="button" class="opt">種類を増やすほど、必ず危険は小さくなる</button>
+  <p class="ex"><strong>答え:暗号資産の多くは BTC と同じ向きに動くので、分散にはなりにくい</strong><br>市場全体が下がるときは、ほとんどの暗号資産が同時に下がります。銘柄の数ではなく、値動きの似かたを見ます。(→ <a href="#diversify">分散</a>)</p>
+</div>
+<div class="q" data-a="2">
+  <p class="qt">問3. 2024年8月5日の急落のとき、「安全資産」と呼ばれる金(PAXG)はどう動きましたか。</p>
+  <button type="button" class="opt">大きく上がった</button>
+  <button type="button" class="opt">まったく動かなかった</button>
+  <button type="button" class="opt">いったん下がり、月末にはプラスに戻った</button>
+  <p class="ex"><strong>答え:いったん下がり、月末にはプラスに戻った</strong><br>金も、一時 4.8% 下がりました。急に現金が必要になった人は、すぐ売れるものから売るためです。「安全資産」は、いつも上がるという意味ではありません。(→ <a href="#world">世界の出来事と価格</a>)</p>
+</div>
+<div class="q" data-a="2">
+  <p class="qt">問4. BTC/USDT の売買がいちばん多いのは、日本時間の何時ごろでしたか(実測)。</p>
+  <button type="button" class="opt">午後1時〜3時ごろ</button>
+  <button type="button" class="opt">午後8時〜9時ごろ</button>
+  <button type="button" class="opt">午後11時〜午前1時ごろ</button>
+  <p class="ex"><strong>答え:午後11時〜午前1時ごろ</strong><br>米国の株式市場が開く時間と重なります。「夜8〜10時がいちばん活発」と言われることがありますが、20時台はむしろ少ない時間でした。(→ <a href="#hours">時間帯</a>)</p>
+</div>
+<div class="q" data-a="0">
+  <p class="qt">問5. 「窓は9割埋まる」という話を、実測から考えると、どう言えますか。</p>
+  <button type="button" class="opt">小さな値動きは、窓でなくても、ほとんど元の価格に戻る</button>
+  <button type="button" class="opt">窓には、価格を引き戻す特別な力がある</button>
+  <button type="button" class="opt">窓ができたら、逆向きに入れば必ず勝てる</button>
+  <p class="ex"><strong>答え:小さな値動きは、窓でなくても、ほとんど元の価格に戻る</strong><br>1%未満の値動きは、平日でも約9割が5日以内に元の価格へ戻りました。「よく戻る」のは、窓だからではなく、値動きが小さいからです。(→ <a href="#gap">CME の窓</a>)</p>
+</div>
+<p class="qres" role="status" aria-live="polite"></p>
+<button type="button" class="qagain" hidden>もう一度やる</button>
+</section>
 
 <!-- ============================================================ 3 -->
 <h2 id="indicators"><small>第3章</small>インジケーター</h2>
@@ -1341,9 +1556,9 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <div class="tbl-wrap"><table>
     <thead><tr><th>期間</th><th>日足での意味</th><th>使われ方</th></tr></thead>
     <tbody>
-      <tr><td class="num">20</td><td>約1か月(株式市場の営業日で数えた場合)</td><td>短期の流れ。押し目の目安</td></tr>
-      <tr><td class="num">50</td><td>約2か月半</td><td>中期の流れ</td></tr>
-      <tr><td class="num">200</td><td>約10か月</td><td>長期の流れ。上にあれば強気、下にあれば弱気とされる</td></tr>
+      <tr><td class="num">20</td><td>約3週間(株式市場では約1か月)</td><td>短期の流れ。押し目の目安</td></tr>
+      <tr><td class="num">50</td><td>約7週間(株式市場では約2か月半)</td><td>中期の流れ</td></tr>
+      <tr><td class="num">200</td><td>約6か月半(株式市場では約10か月)</td><td>長期の流れ。上にあれば強気、下にあれば弱気とされる</td></tr>
     </tbody>
   </table></div>
   <p><span class="tag idea">考え方</span>「正解の期間」はありません。多くの人が同じ期間を見ているほど、その線が意識されやすくなる、という程度に考えてください。暗号資産は土日も動くので、20本は約3週間にあたります。</p>
@@ -1441,7 +1656,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 <div class="card" id="atr">
   <h3>ATR</h3>
   <h4>何を見るか</h4>
-  <p><span class="tag common">常識</span>1本の足が平均してどれだけ動くかを、価格の単位で表した数字です。RSI と同じワイルダー氏の考案とされます。売買の合図ではなく、<strong>損切りの幅や買う金額を決めるための物差し</strong>として使います。</p>
+  <p><span class="tag common">常識</span>1本の足が平均してどれだけ動くかを、価格の単位で表した数字です。RSI を考えたワイルダー氏が、同じ1978年の本で発表しました。<sup>[8]</sup>売買の合図ではなく、<strong>損切りの幅や買う金額を決めるための物差し</strong>として使います。</p>
   <details><summary>計算のしかた</summary><div>
     <p>まず、1本ごとの「真の値幅」を出します。次の3つのうち、いちばん大きいものです。</p>
     <p class="formula">① 高値 − 安値 ② 高値 − 前の終値 ③ 前の終値 − 安値</p>
@@ -1489,7 +1704,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <h4>読み方</h4>
   <ul>
     <li>0 より上 → 買いに出来高が集まっている。0 より下 → 売りに集まっている。</li>
-    <li>薄い色 → 自分の平均より上(勢いが増している)。濃い色 → 平均より下(勢いが弱まっている)。</li>
+    <li>薄い色 → 自分の平均より上(勢いが増している)。濃い色 → 平均より下(勢いが弱まっている)。MACD の棒とは、濃い・薄いの意味が逆なので注意してください。</li>
     <li>丸印は、山や谷(前後より高い・低い点)です。</li>
     <li>価格は高値を更新しているのに、この指標の山が低くなっている → 上昇に出来高がついてきていない(ダイバージェンス)。</li>
   </ul>
@@ -1523,7 +1738,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 <ol class="steps">
   <li>はっきりした上昇の始まり(安値)と終わり(高値)を選びます。</li>
   <li>このサイトでは「ツール → フィボナッチ」で、始まりと終わりの2点をタップします。各割合の線と価格が表示されます。</li>
-  <li>38.2%〜61.8% のあたりで、下げ止まりの足(下ひげ、包み足など)が出るかを見ます。</li>
+  <li>38.2%〜61.8% のあたりで、下げ止まりの足(下ヒゲ、包み足など)が出るかを見ます。</li>
   <li>サポートや移動平均線と、フィボナッチの線が重なる場所ほど、多くの人が意識すると考えます。</li>
 </ol>
 <ul>
@@ -1549,7 +1764,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 <ul>
   <li><span class="tag fact">事実</span><strong>POC(ポイント・オブ・コントロール)</strong>:いちばん多く売買された価格。<strong>バリューエリア</strong>:出来高全体の約 70% が集まる価格帯。70% は慣習で決まった数字です。<sup>[65]</sup></li>
   <li><span class="tag idea">考え方</span>出来高の多い価格帯は、多くの人が売買した「記憶のある価格」なので、止まりやすい場所(サポート・レジスタンス)になりやすいと考えられます。逆に、出来高の少ない価格帯は、通り過ぎるのが速い傾向があるとされます。</li>
-  <li><span class="tag idea">考え方</span>このサイトの出来高は Binance の分だけです(第3章の「出来高」)。ほかの取引所の売買を含まないので、価格帯ごとの出来高も、市場全体とは少し違います。</li>
+  <li><span class="tag idea">考え方</span>このサイトの出来高は Binance の分だけです(この章の「出来高」と同じ注意です)。ほかの取引所の売買を含まないので、価格帯ごとの出来高も、市場全体とは少し違います。</li>
 </ul>
 
 <div class="card" id="ichimoku">
@@ -1605,6 +1820,48 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <li><span class="tag idea">考え方</span><strong>合図がそろうまで待ちすぎる</strong>:指標を増やして全部がそろうのを待つと、入るころには値動きの大半が終わっています。</li>
 </ul>
 
+<section class="quiz">
+<h3 id="q-indicators">第3章の確認問題</h3>
+<p>答えを選ぶと、その場で正解と解説が出ます。</p>
+<div class="q" data-a="1">
+  <p class="qt">問1. インジケーターについて、正しいものはどれですか。</p>
+  <button type="button" class="opt">これから価格がどう動くかを、先に教えてくれる</button>
+  <button type="button" class="opt">過去の価格や出来高を計算し直して、見やすくしたもの</button>
+  <button type="button" class="opt">数を増やすほど、予想が正確になる</button>
+  <p class="ex"><strong>答え:過去の価格や出来高を計算し直して、見やすくしたもの</strong><br>インジケーターは、過去のデータの計算結果です。未来は分かりません。数を増やしても、同じデータを別の形で見ているだけです。(→ <a href="#indicators">第3章のはじめ</a>)</p>
+</div>
+<div class="q" data-a="2">
+  <p class="qt">問2. 強い上昇が続いているときに、RSI が 70 を超えました。正しい扱いはどれですか。</p>
+  <button type="button" class="opt">「買われすぎ」なので、すぐに売りから入る</button>
+  <button type="button" class="opt">70 を超えたら、必ず下がるので利確する</button>
+  <button type="button" class="opt">強い流れの中では 70 以上が続くことがあるので、それだけで逆向きには入らない</button>
+  <p class="ex"><strong>答え:強い流れの中では 70 以上が続くことがあるので、それだけで逆向きには入らない</strong><br>RSI は、行き来する相場(レンジ)で使いやすい道具です。流れが強いときは、「買われすぎ」のまま上がりつづけます。(→ <a href="#rsi">RSI</a>)</p>
+</div>
+<div class="q" data-a="1">
+  <p class="qt">問3. ATR が表しているのは、何ですか。</p>
+  <button type="button" class="opt">価格が上がるか下がるかの向き</button>
+  <button type="button" class="opt">1本の足が動く幅の、平均の大きさ</button>
+  <button type="button" class="opt">買われすぎ・売られすぎの度合い</button>
+  <p class="ex"><strong>答え:1本の足が動く幅の、平均の大きさ</strong><br>ATR は「どのくらい動くか」を表し、「どちらに動くか」は表しません。損切りを置く幅を決めるときに使います。(→ <a href="#atr">ATR</a>)</p>
+</div>
+<div class="q" data-a="1">
+  <p class="qt">問4. 移動平均線・MACD・RSI・ストキャスティクス・ボリンジャーバンドを、全部いっしょに表示しました。この使い方について、正しいものはどれですか。</p>
+  <button type="button" class="opt">多いほど安全なので、良い使い方</button>
+  <button type="button" class="opt">同じ価格から計算しているので、数を増やしても精度は上がらない</button>
+  <button type="button" class="opt">すべてが同じ合図を出したときは、必ず当たる</button>
+  <p class="ex"><strong>答え:同じ価格から計算しているので、数を増やしても精度は上がらない</strong><br>役割の違うもの(流れを見るもの、勢いを見るもの、値動きの幅を見るもの)を、2〜3個選べば十分です。(→ <a href="#combine">組み合わせ方と、落とし穴</a>)</p>
+</div>
+<div class="q" data-a="0">
+  <p class="qt">問5. 価格は高値を更新したのに、RSI は前の山より低くなりました。これを何と呼びますか。</p>
+  <button type="button" class="opt">ダイバージェンス</button>
+  <button type="button" class="opt">ゴールデンクロス</button>
+  <button type="button" class="opt">ブレイクアウト</button>
+  <p class="ex"><strong>答え:ダイバージェンス</strong><br>価格とインジケーターの向きが食いちがうことです。上昇の勢いが弱まっている可能性を示しますが、すぐに下がるとは限りません。(→ <a href="#divergence">ダイバージェンス</a>)</p>
+</div>
+<p class="qres" role="status" aria-live="polite"></p>
+<button type="button" class="qagain" hidden>もう一度やる</button>
+</section>
+
 <!-- ============================================================ 4 -->
 <h2 id="methods"><small>第4章</small>トレードの手法</h2>
 <div class="kp"><strong>この章の要点</strong><ul>
@@ -1613,7 +1870,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <li>実データで試すと、流れに乗る手法は勝率4〜5割でも、勝ちが大きいのでプラスになることが多かった。</li>
 </ul></div>
 
-<h3>まず、相場の状態を見分ける</h3>
+<h3 id="regime">まず、相場の状態を見分ける</h3>
 <div class="tbl-wrap"><table>
   <thead><tr><th>確かめること</th><th>トレンド(一方向)</th><th>レンジ(行き来)</th></tr></thead>
   <tbody>
@@ -1739,7 +1996,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   </tbody>
 </table></div>
 <ul>
-  <li><span class="tag idea">考え方</span><strong>「大口がわざと損切りを狩っている」という説明は、確かめようがありません。</strong>多くの人が同じ場所に逆指値を置けば、それが一度に約定して価格が飛ぶのは、上の「板の厚さ」で説明した仕組みだけでも起き得ます。誰かの意図を想定する必要はありません。</li>
+  <li><span class="tag idea">考え方</span><strong>「大口がわざと損切りを狩っている」という説明は、確かめようがありません。</strong>多くの人が同じ場所に逆指値を置けば、それが一度に約定して価格が飛ぶのは、第2章の「板の厚さと、価格が飛ぶしくみ」で説明した仕組みだけでも起き得ます。誰かの意図を想定する必要はありません。</li>
   <li><span class="tag fact">事実</span>これらの考え方を、査読のある研究できちんと検証したものは見つかっていない、とする解説があります。<sup>[66]</sup> 個人が公開した検証では、オーダーブロックの価格帯と、ランダムに選んだ同じような価格帯を31通りの条件で比べ、はっきりした差は見つからなかったと報告されています。<sup>[66]</sup></li>
   <li><span class="tag fact">事実</span>過去のデータでこうした手法を試すときは、「あとから見て初めて分かる山や谷」を、その時点で分かっていたかのように使ってしまう誤りが起きやすいと指摘されています。<sup>[66]</sup></li>
   <li><span class="tag idea">考え方</span>使うなら、第8章の手順で条件をはっきり決めて、過去のデータで試し、ランダムに選んだ場所と比べてみてください。用語が新しくても、<strong>損切り・利確・買う金額を先に決める</strong>という基本は変わりません。</li>
@@ -1751,7 +2008,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <thead><tr><th>研究</th><th>調べたこと</th><th>分かったこと</th></tr></thead>
   <tbody>
     <tr><td>Brock・Lakonishok・LeBaron(1992年)<sup>[18]</sup></td><td>移動平均線の交差と、レンジの上抜けという単純な規則を、ダウ平均の約90年分(1897〜1986年)で試した</td><td><span class="tag fact">事実</span>規則が「買い」を示した期間は、「売り」を示した期間より成績がよく、値動きも穏やかだった</td></tr>
-    <tr><td>Sullivan・Timmermann・White(1999年)<sup>[19]</sup></td><td>上の研究の規則を広げて、「たくさんの規則を試せば、偶然よく見えるものが必ず出てくる」という偏り(データ・スヌーピング)を差し引く方法で調べ直した。1987年以降の新しいデータでも試した</td><td><span class="tag fact">事実</span>偏りを差し引いて調べる方法を示した。後の研究では、この方法で調べると、ダウ平均などで統計的に意味のある利益を出す規則は見つからなかった、と要約されている</td></tr>
+    <tr><td>Sullivan・Timmermann・White(1999年)<sup>[19]</sup></td><td>上の研究の規則を広げて、「たくさんの規則を試せば、偶然よく見えるものが必ず出てくる」という偏り(データ・スヌーピング)を差し引く方法で調べ直した。1987年以降の新しいデータでも試した</td><td><span class="tag fact">事実</span>偏りを差し引いて調べる方法を示した。もとの約90年分(1897〜1986年)では、偏りを差し引いても、いちばん良い規則の成績は偶然とは言えなかった。けれども、その後の10年(1987〜1996年)では、同じ規則に意味のある利益は見つからなかった</td></tr>
     <tr><td>Park・Irwin(2007年)<sup>[20]</sup></td><td>それまでのテクニカル分析の研究を、まとめて見直した</td><td><span class="tag fact">事実</span>古い研究では、為替や先物では利益が出たが、株式では出なかった。新しい研究では、少なくとも1990年代の初めまでは、いくつかの市場で利益が出ていた。ただし多くの研究に、データ・スヌーピングや、手数料・リスクの見積もりの問題がある</td></tr>
     <tr><td>Lo・Mamaysky・Wang(2000年)<sup>[21]</sup></td><td>米国株(1962〜1996年)で、チャートパターンをコンピューターで自動的に見つけて調べた</td><td><span class="tag fact">事実</span>いくつかのパターンには、その後の値動きについての追加の情報があり、実際に役立つ可能性がある</td></tr>
     <tr><td>Marshall・Young・Rose(2006年)<sup>[22]</sup></td><td>ローソク足のパターンどおりに売買した結果を、米国の大型株(1992〜2002年)で調べた</td><td><span class="tag fact">事実</span>パターンに価値は認められなかった</td></tr>
@@ -1797,10 +2054,10 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
     <tr><td><em>買って持ち続けた場合</em></td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num up">+96%</td><td class="num down">-30%</td></tr>
   </tbody>
 </table></div>
-<p class="src">期間はいずれも、Binance でその銘柄の取引が始まった日から2026年11月12日まで。「累計の損益」は、毎回、全資金で売買を続けた場合の増減です。「最大の下落」は、資金がいちばん多かった時点からの最大の減少率です。</p>
+<p class="src">期間はいずれも、Binance でその銘柄の取引が始まった日から2026年11月12日まで。「累計の損益」は、毎回、全資金で売買を続けた場合の増減です。「最大の下落」は、資金がいちばん多かった時点からの最大の減少率です。この表は、合図が出た日の終値で売買できたと仮定しています。第8章の「過去データで試す」は、次の足の始値で売買するので、同じルールでも数字は一致しません。</p>
 <h4>この結果から分かること</h4>
 <ul>
-  <li><span class="tag fact">実測</span><strong>流れに乗るルールは、勝率が半分以下でもプラスになりました。</strong>平均線の交差と高値の更新は、勝率 37〜52% です。それでもすべてプラスだったのは、平均の勝ちが平均の負けの約3〜6倍あったためです。</li>
+  <li><span class="tag fact">実測</span><strong>流れに乗るルールは、勝率が半分前後か、それ以下でもプラスになりました。</strong>平均線の交差と高値の更新は、勝率 37〜52% です。それでもすべてプラスだったのは、平均の勝ちが平均の負けの約3〜6倍あったためです。</li>
   <li><span class="tag fact">実測</span><strong>勝率の高さと成績は一致しません。</strong>金の RSI の逆張りは勝率 75% ですが、累計は +17% にとどまりました。勝ちの幅(+1.9%)が小さいためです。</li>
   <li><span class="tag fact">実測</span><strong>同じルールでも、銘柄で結果が正反対になります。</strong>RSI の逆張りは、BTC で +155%、ETH で -75% でした。</li>
   <li><span class="tag fact">実測</span><strong>どのルールでも、途中で資金が大きく減る時期がありました。</strong>暗号資産では、最大の下落が -47% 〜 -78% です。成績がプラスのルールでも、資金が半分になる時期を耐える必要がありました。</li>
@@ -1836,7 +2093,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <tbody>
     <tr><td colspan="5"><strong>買いの合図</strong>(何もしないとき、5本後に上がっていた割合:日足 50.7%、4時間足 50.3%)</td></tr>
     <tr><td>包み足(陰線を包む陽線)</td><td class="num">49.5%</td><td class="num">1,180</td><td class="num">49.3%</td><td class="num">7,347</td></tr>
-    <tr><td>ハンマー・下ひげのピンバー</td><td class="num">50.8%</td><td class="num">185</td><td class="num">50.7%</td><td class="num">1,388</td></tr>
+    <tr><td>ハンマー・下ヒゲのピンバー</td><td class="num">50.8%</td><td class="num">185</td><td class="num">50.7%</td><td class="num">1,388</td></tr>
     <tr><td>赤三兵</td><td class="num">56.7%</td><td class="num">201</td><td class="num">51.0%</td><td class="num">1,343</td></tr>
     <tr><td>明けの明星</td><td class="num">50.0%</td><td class="num">196</td><td class="num">49.6%</td><td class="num">1,229</td></tr>
     <tr><td>はらみ足(陰線のあとの小さな陽線)</td><td class="num">47.1%</td><td class="num">635</td><td class="num">53.7%</td><td class="num">3,726</td></tr>
@@ -1849,7 +2106,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
     <tr><td>RSI が 50 を上に抜けた</td><td class="num">48.4%</td><td class="num">692</td><td class="num">49.7%</td><td class="num">4,619</td></tr>
     <tr><td colspan="5"><strong>売りの合図</strong>(何もしないとき、5本後に下がっていた割合:日足 49.3%、4時間足 49.7%)</td></tr>
     <tr><td>包み足(陽線を包む陰線)</td><td class="num">47.3%</td><td class="num">1,230</td><td class="num">47.7%</td><td class="num">7,611</td></tr>
-    <tr><td>流れ星・上ひげのピンバー</td><td class="num">43.8%</td><td class="num">137</td><td class="num">52.8%</td><td class="num">974</td></tr>
+    <tr><td>流れ星・上ヒゲのピンバー</td><td class="num">43.8%</td><td class="num">137</td><td class="num">52.8%</td><td class="num">974</td></tr>
     <tr><td>黒三兵(三羽烏)</td><td class="num">51.1%</td><td class="num">188</td><td class="num">45.0%</td><td class="num">1,221</td></tr>
     <tr><td>宵の明星</td><td class="num">51.1%</td><td class="num">221</td><td class="num">48.3%</td><td class="num">1,277</td></tr>
     <tr><td>はらみ足(陽線のあとの小さな陰線)</td><td class="num">47.0%</td><td class="num">642</td><td class="num">51.6%</td><td class="num">3,720</td></tr>
@@ -1936,7 +2193,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
     <li><span class="tag fact">実測</span>ユーロ(EUR/USDT)は、日本時間の 9〜12時に上がった日が 56.8%(平均 +0.021%)、15〜20時に上がった日は 44.0%(平均 -0.039%)でした(2020年1月〜、約1,700日)。</li>
     <li><span class="tag fact">実測</span>ドル円(このサイトの計算値)は、9〜12時に上がった日が 64.4%(平均 +0.070%)でした(2024年3月〜、702日)。</li>
     <li><span class="tag fact">事実</span>これは、為替の研究で知られている性質と合っています。通貨は、その国の取引時間のあいだは値下がりしやすい(ユーロは欧州の時間に、円は東京の時間に売られやすい)、という報告です。その国の人たちが、自分の取引時間に外貨を買うためと説明されています。<sup>[79]</sup> 東京では、銀行がその日の基準の為替レート(仲値)を決める 9時55分に向けて、ドルが買われやすいとも言われます(<span class="tag common">常識</span>)。</li>
-    <li><span class="tag idea">考え方</span><strong>ただし、小さすぎて利益になりません。</strong>偏りの大きさは 0.02〜0.07% です。このサイトのデモトレードの手数料は片道 0.1% なので、往復で 0.2% かかります。偏りの3倍以上です。「本当にある」ことと「儲かる」ことは、別の話です。</li>
+    <li><span class="tag idea">考え方</span><strong>ただし、小さすぎて利益になりません。</strong>偏りの大きさは 0.01〜0.07% です。このサイトのデモトレードの手数料は片道 0.1% なので、往復で 0.2% かかります。いちばん大きい偏りと比べても、約3倍です。「本当にある」ことと「儲かる」ことは、別の話です。</li>
     <li><span class="tag idea">考え方</span>ここで使ったのは、暗号資産の取引所の価格です。本物の為替市場の価格とは少し違い、特にドル円は計算で作った値なので、参考としてください。</li>
   </ul>
 </div>
@@ -1977,7 +2234,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 <h4>6. 図によく出てくる「理論」の名前</h4>
 <dl>
   <dt>グランビルの法則</dt><dd><span class="tag fact">事実</span>米国のジョセフ・グランビルが1960年代に広めた、<strong>価格と移動平均線(もとは200日線)の位置関係</strong>から、4つの買い場と4つの売り場を読む考え方です。<sup>[85]</sup> <span class="tag common">常識</span>たとえば「横ばいか上向きの平均線を、価格が下から上に抜けたら買い」「上向きの平均線まで価格が下がってきて、はね返ったら買い(押し目買い)」「平均線から大きく離れすぎたら、戻りを狙う」といった内容です。<span class="tag idea">考え方</span>第4章の「流れに乗る」手法の、平均線を使った入り方を、8つに整理したものと考えると分かりやすくなります。上の表のとおり、平均線の交差だけでは、合う割合は50%前後です。</dd>
-  <dt>エリオット波動</dt><dd><span class="tag fact">事実</span>米国のラルフ・エリオットが1930年代に発表した、「相場は、上昇5波・下降3波の合わせて8つの波をくり返す」という考え方です。<sup>[86]</sup> <span class="tag fact">事実</span>いちばん多い批判は、<strong>波の数え方が人によって違う</strong>ことです。同じチャートを見ても数え方が分かれ、外れたときは「もっと大きな波の途中だった」と、あとから数え直せてしまいます。実証的に正しいかどうかは、いまも議論が続いている、とされています。<sup>[86]</sup> <span class="tag idea">考え方</span>「いまは第3波だから伸びる」と言われたら、「では、どうなったらその数え方は間違いだったことになるのか」を確かめてください。その答えがない予想は、検証できません。</dd>
+  <dt>エリオット波動</dt><dd><span class="tag fact">事実</span>米国のラルフ・エリオットが1930年代に発表した、「相場は、上昇5波・下降3波の合わせて8つの波をくり返す」という考え方です。<sup>[86]</sup> <span class="tag common">常識</span>よく挙げられる批判は、<strong>波の数え方が人によって違う</strong>ことです。同じチャートを見ても数え方が分かれ、外れたときは「もっと大きな波の途中だった」と、あとから数え直せてしまいます。実証的に正しいかどうかは、いまも議論が続いている、とされています。<sup>[86]</sup> <span class="tag idea">考え方</span>「いまは第3波だから伸びる」と言われたら、「では、どうなったらその数え方は間違いだったことになるのか」を確かめてください。その答えがない予想は、検証できません。</dd>
   <dt>ファン理論</dt><dd><span class="tag common">常識</span>下降の起点の高値から、戻りの高値へ向けて、角度の違う3本のトレンドラインを扇(ファン)のように引き、<strong>3本目を上に抜けたら、流れが変わった</strong>と見る考え方です(上昇からの転換は、その逆)。<span class="tag idea">考え方</span>図には「転換の精度は60%を超える」と書かれていることがありますが、筆者が調べた範囲では、その数字の出典は見つかりませんでした。線の引き方に人の判断が入るので、機械的に確かめるのも難しい手法です。</dd>
   <dt>サポレジ転換(レジサポ転換)</dt><dd><span class="tag common">常識</span>抜かれたレジスタンスが、今度はサポートとして働くこと(と、その逆)です。この教科書では、第1章の<a href="#sr">「サポートとレジスタンス」</a>で説明しています。</dd>
 </dl>
@@ -1990,7 +2247,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <li><strong>手数料を引いても残るか。</strong>勝率が55%でも、1回の利益が手数料より小さければ、続けるほど減ります。</li>
   <li><strong>作った人は、何を売っているか。</strong>図の最後に、有料の講座・サロン・口座開設の案内がないかを見ます。</li>
 </ol>
-<p><span class="tag idea">考え方</span>いちばん確かなのは、<strong>自分で数えてみること</strong>です。このサイトでは、「インジケーター → 新しく作る」で条件を式にして、過去のデータでの結果をその場で見られます(第8章)。「勝率85%」が本当なら、自分で数えても85%前後になるはずです。</p>
+<p><span class="tag idea">考え方</span>いちばん確かなのは、<strong>自分で数えてみること</strong>です。このサイトでは、「インジケーター」メニューのいちばん下の「＋ 自分で作る」で条件を式にして、過去のデータでの結果をその場で見られます(第8章)。「勝率85%」が本当なら、自分で数えても85%前後になるはずです。</p>
 
 <h3 id="volcheck">出来高で「本気度」を確かめる — よく教えられる決まりを、データで試す</h3>
 <p><span class="tag common">常識</span>ローソク足は、買いと売りの「結果」です。陽線なら買いが勝ち、陰線なら売りが勝ちました。けれども、その勝ちが<strong>どれだけ本気だったか</strong>は、足の形だけでは分かりません。それを表すのが出来高です。大きな注文を出した人も、取引が成立した量は隠せないからです。</p>
@@ -2026,12 +2283,12 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
     <tr><td>陰線で出た</td><td class="num">50.0%</td><td class="num down">-0.62%</td><td class="num">222</td></tr>
   </tbody>
 </table></div>
-<p class="src">BTC・ETH・XRP・SOL・PEPE・金(PAXG)の日足を合わせた数字。各銘柄の取引開始から2026年11月18日まで。条件がそろった日の翌日の始値で買い、5日後の終値で比べています。手数料は入れていません。「大きな足」は実体が14日平均の1.5倍以上、「出来高が多い」は平均の1.5倍以上、「少ない」は平均以下。週足の向きは、25日線と100日線(5週・20週に相当)で代用しました。</p>
+<p class="src">BTC・ETH・XRP・SOL・PEPE・金(PAXG)の日足を合わせた数字。各銘柄の取引開始から2026年11月18日まで。条件がそろった日の翌日の始値で買い、5日後の終値で比べています。手数料は入れていません。「大きな足」は実体が14日平均の1.5倍以上、「出来高が多い」は平均の1.5倍以上、「少ない」は平均以下。週足の向きは、25日線と100日線という、長めの日足の平均線で代用しました。</p>
 <ul>
   <li><span class="tag fact">実測</span><strong>「出来高をともなう上昇は続きやすい」は、データでも確かめられました。</strong>大きな陽線のあとの5日間は、出来高が多いと平均 +3.38%、少ないと +1.27% でした。高値の更新でも、出来高が多いほうが成績が上です。</li>
   <li><span class="tag fact">実測</span><strong>「ゴールデンクロスだけで入るのは危ない」も、そのとおりでした。</strong>5日線と20日線の交差だけでは、上がった割合 50.6%、平均 +0.79% で、何もしないときと変わりません。出来高の条件を足すと 62.0% になりましたが、71回しかないので、まだ確かとは言えません。</li>
   <li><span class="tag fact">実測</span><strong>「日足と週足の向きがそろったときに入る」には、少しだけ効果がありました</strong>(54.3%、平均 +2.62%)。ただし、週足が下向きのとき(52.6%、+1.96%)との差は、わずかです。</li>
-  <li><span class="tag fact">実測</span><strong>「実体も出来高も2倍」の合図は、陽線では目立って良い数字でした</strong>(60.5%、平均 +6.41%)。銘柄ごとでは、BTC 67.4%(43回)、ETH 63.3%(49回)、SOL 71.7%(46回)、PEPE 58.1%(43回)です。「いくつかの銘柄で利益が出た」という話と合います。</li>
+  <li><span class="tag fact">実測</span><strong>「実体も出来高も2倍」の合図は、陽線では目立って良い数字でした</strong>(60.5%、平均 +6.41%)。銘柄ごとでは、BTC 67.4%(43回)、ETH 63.3%(49回)、SOL 71.7%(46回)、PEPE 58.1%(43回)、金 56.5%(46回)、XRP 53.6%(97回)です。銘柄によって差があります。</li>
   <li><span class="tag fact">実測</span><strong>同じ合図でも、陰線(下げ)では役に立ちませんでした。</strong>5日後に下がっていたのは、ちょうど半分です。この期間、暗号資産は全体として値上がりしていたため、下げは続きにくかった、と考えられます。</li>
 </ul>
 <div class="warn">
@@ -2051,7 +2308,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <li><span class="tag common">常識</span><strong>インジケーターは、補助です。</strong>RSI は 50 より上なら強気、下なら弱気、70 以上は買われすぎ、30 以下は売られすぎの目安ですが、RSI だけで逆向きに入ることはしません。</li>
   <li><span class="tag common">常識</span><strong>強い流れの中では、インジケーターは当てになりません。</strong>何か月も押し目を作らずに上がる相場では、RSI は「買われすぎ」を示しつづけます。</li>
   <li><span class="tag common">常識</span><strong>レンジのまん中では、入りません。</strong>上にも下にも動く余地が同じだけあり、どちらに行くか分からないためです。</li>
-  <li><span class="tag common">常識</span><strong>抜けた直後ではなく、戻ってきたところを待ちます。</strong>高値を抜けた瞬間に出来高が増えるのは、売っていた人の損切り(買い戻し)が巻きこまれるためでもあります。新しい買いが入りやすいのは、抜けたあとに一度戻ってきて、また上がりはじめるところです。</li>
+  <li><span class="tag idea">考え方</span><strong>抜けた直後ではなく、戻ってきたところを待つ、と教えられることが多いです。</strong>手法3の手順の後半と同じ考え方です。戻らずに行ってしまうこともあります。高値を抜けた瞬間に出来高が増えるのは、売っていた人の損切り(買い戻し)が巻きこまれるためでもあります。新しい買いが入りやすいのは、抜けたあとに一度戻ってきて、また上がりはじめるところです。</li>
   <li><span class="tag fact">実測</span>上の表のとおり、条件を重ねると成績は良くなる傾向がありました。その代わり、<strong>入れる回数は大きく減ります。</strong>「見送る」ことが、取引の大半になります。</li>
 </ul>
 
@@ -2069,12 +2326,85 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
     <tr><td>金(PAXG)</td><td class="num up">+38%</td><td class="num up">+48%</td><td class="num up">+100%</td><td class="num">50%</td><td class="num down">-18%</td></tr>
   </tbody>
 </table></div>
-<p class="src">各銘柄の取引開始の約110日後から2026年11月18日まで。毎回、全資金で売買を続けた場合。「買って持ち続けた場合」は、同じ期間の最初の日に買って最後まで持った場合です。</p>
+<p class="src">各銘柄の取引開始の約110日後から2026年11月18日まで。毎回、全資金で売買を続けた場合。「買って持ち続けた場合」は、同じ期間の最初の日に買って最後まで持った場合です。前の「過去のデータで試してみる」の表とは、始まりの日が約110日おそく、終わりの日も6日ちがうので、数字は一致しません。たとえば BTC は、2017年12月の高値に近いところから数えるため、+1,568% ではなく +439% になります。</p>
 <ul>
   <li><span class="tag fact">実測</span><strong>BTC と ETH では、持ち続けるより良い結果でした。</strong>大きな下げの前に降りられたためです。</li>
   <li><span class="tag fact">実測</span><strong>XRP と PEPE では、損をしました。</strong>急に上がっては急に下がる銘柄では、上がってから買い、下がってから売ることのくり返しになります。持ち続けていればプラスだった銘柄で、マイナスになっています。</li>
   <li><span class="tag fact">実測</span><strong>2倍と3倍のどちらが良いかは、銘柄で逆になりました。</strong>「どの銘柄にも合う倍率」は、ありません。</li>
   <li><span class="tag idea">考え方</span>この方法の値打ちは、成績よりも、<strong>「どこで降りるか」をその場の気分で決めなくて済む</strong>ことにあります。</li>
+</ul>
+
+<h3 id="breakcheck">「ブレイクアウトは3割しか成功しない」を確かめる</h3>
+<p><span class="tag common">常識</span>「ブレイクアウト(高値や安値を抜けた方向に乗る取引)は、だましが多く、成功するのは3割ほど」とよく言われます。ただし、この数字には、たいてい出どころも、「成功」の決め方も書かれていません。そこで、決め方をはっきりさせて数えました。</p>
+<div class="note">
+  <p><strong>数え方</strong></p>
+  <ul>
+    <li>直近20本の高値を、終値で上に抜けた足を「ブレイクアウト」とする。</li>
+    <li>次の足の始値で買う。損切りは ATR の1倍下、利確は ATR の2倍上(損益比 1:2)。</li>
+    <li>20本以内に、利確に先に届けば「成功」、損切りに先に届けば「失敗」。</li>
+  </ul>
+</div>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>条件</th><th>成功</th><th>失敗</th><th>1回あたりの期待値</th><th>回数</th></tr></thead>
+  <tbody>
+    <tr><td colspan="5"><strong>日足</strong></td></tr>
+    <tr><td>ブレイクアウト(すべて)</td><td class="num">39.8%</td><td class="num">59.1%</td><td class="num up">+0.20R</td><td class="num">591</td></tr>
+    <tr><td>　長い足の流れが上向きのとき</td><td class="num">41.6%</td><td class="num">57.3%</td><td class="num up">+0.26R</td><td class="num">361</td></tr>
+    <tr><td>　長い足の流れが下向きのとき</td><td class="num">37.0%</td><td class="num">61.7%</td><td class="num up">+0.12R</td><td class="num">230</td></tr>
+    <tr><td>押し目買い(上昇中に20日線まで下がって、陽線で終わった)</td><td class="num">33.3%</td><td class="num">61.0%</td><td class="num">+0.06R</td><td class="num">210</td></tr>
+    <tr><td><em>比べる相手:でたらめな日に買う</em></td><td class="num">33.3%</td><td class="num">61.3%</td><td class="num">+0.05R</td><td class="num">4,985</td></tr>
+    <tr><td colspan="5"><strong>4時間足</strong></td></tr>
+    <tr><td>ブレイクアウト(すべて)</td><td class="num">34.3%</td><td class="num">63.1%</td><td class="num">+0.05R</td><td class="num">3,255</td></tr>
+    <tr><td>　長い足の流れが上向きのとき</td><td class="num">35.2%</td><td class="num">62.7%</td><td class="num">+0.08R</td><td class="num">1,953</td></tr>
+    <tr><td>　長い足の流れが下向きのとき</td><td class="num">32.9%</td><td class="num">63.7%</td><td class="num">+0.02R</td><td class="num">1,302</td></tr>
+    <tr><td>押し目買い(上と同じ条件を4時間足で)</td><td class="num">33.5%</td><td class="num">63.6%</td><td class="num">+0.03R</td><td class="num">1,595</td></tr>
+    <tr><td><em>比べる相手:でたらめな足で買う</em></td><td class="num">29.6%</td><td class="num">64.3%</td><td class="num down">-0.05R</td><td class="num">31,207</td></tr>
+  </tbody>
+</table></div>
+<p class="src">BTC・ETH・XRP・SOL・PEPE・金(PAXG)を合わせた数字。各銘柄の取引開始から2026年11月18日まで。手数料は入れていません。「長い足の流れ」は、25本線が100本線の上にあるかどうか。R は、損切りまでの幅を1とした単位です(第7章)。成功と失敗を足しても100%にならないのは、20本以内にどちらにも届かなかった分です。</p>
+<ul>
+  <li><span class="tag fact">実測</span><strong>「成功は3割ほど」は、だいたい合っていました。</strong>損益比 1:2 で数えると、成功は 34〜40% です。</li>
+  <li><span class="tag fact">実測</span><strong>けれども、「3割しか成功しない = 損をする」ではありません。</strong>勝ちが負けの2倍あれば、成功が 33.3% でトントンです(第5章の<a href="#expect">「期待値」</a>)。日足のブレイクアウトは、成功 39.8% で、1回あたり +0.20R でした。</li>
+  <li><span class="tag fact">実測</span><strong>抜けたあと、5本以内に元の水準を割ったものは、約半分ありました</strong>(日足 48.2%、4時間足 51.0%)。「だましが多い」のも事実です。だましに遭う前提で、損切りを入れておく必要があります。</li>
+  <li><span class="tag fact">実測</span><strong>長い足の流れに沿ったブレイクアウトのほうが、成績は良くなりました</strong>(日足で +0.26R 対 +0.12R)。「長い時間足の向きを先に確かめる」という教えと合います。</li>
+  <li><span class="tag fact">実測</span><strong>「押し目買いのほうが勝ちやすい」は、この数え方では確かめられませんでした。</strong>成功は 33% で、でたらめに買ったときと変わりません。押し目買いは「どこまで下がったら押し目か」を人が判断する手法で、機械的に数えると、良さが出にくいのかもしれません。</li>
+  <li><span class="tag idea">考え方</span><strong>4時間足では、差がほとんど消えます。</strong>+0.05R は、往復の手数料(約 0.1R 前後になることが多い)を引くと、残りません。短い足ほど、手数料の重さが効いてきます。</li>
+</ul>
+<h4>「長くもみ合ったあとほど、大きく動く」は本当か</h4>
+<p><span class="tag fact">実測</span>ブレイクアウトの前の20本の値幅を、狭い・中くらい・広いの3つに分け、そのあと20本でどこまで上がったかを比べました(日足)。</p>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>抜ける前の20日の値幅</th><th>そのあと20日の最大の上昇</th><th>値幅に対する割合</th></tr></thead>
+  <tbody>
+    <tr><td>狭い(まん中の値 8.5%)</td><td class="num">6.4%</td><td class="num">0.78倍</td></tr>
+    <tr><td>中くらい(19.0%)</td><td class="num">11.5%</td><td class="num">0.58倍</td></tr>
+    <tr><td>広い(31.5%)</td><td class="num">20.5%</td><td class="num">0.60倍</td></tr>
+  </tbody>
+</table></div>
+<ul>
+  <li><span class="tag fact">実測</span><strong>上がった幅そのものは、もみ合いが狭いほど小さくなりました。</strong>「狭いもみ合いのあとは大きく動く」とは、言えません。</li>
+  <li><span class="tag fact">実測</span><strong>ただし、もとの値幅と比べた割合は、狭いほうが大きくなりました</strong>(0.78倍 対 0.60倍)。損切りを狭く置ける分、損益比は良くなりやすい、という意味では、教えに一理あります。</li>
+</ul>
+
+<h4>「9月は弱い」は本当か</h4>
+<ul>
+  <li><span class="tag fact">事実</span><strong>米国株では、長いデータで確かめられています。</strong>S&amp;P 500 の1928年からの月ごとの平均では、9月が約 -1.1% で、いちばん悪い月です。9月に下がった年は 55% で、ほかの月の 39% より多くなっています。<sup>[96]</sup></li>
+  <li><span class="tag fact">事実</span><strong>ただし、最近は弱まっています。</strong>直近25年の9月の平均は -0.4% で、まん中の値はプラスです。なぜ9月が弱いのかは、はっきりした説明がありません。<sup>[96]</sup></li>
+  <li><span class="tag fact">実測</span><strong>BTC の9月は、前半と後半で逆でした。</strong>2017〜2022年は6年続けてマイナス、2023〜2026年は4年続けてプラスです。10年の平均は -2.5% ですが、「9月は下がる」と決めて売っていれば、直近の4年は続けて負けています。</li>
+  <li><span class="tag fact">実測</span>BTC の月ごとの平均でいちばん悪かったのは、9月ではなく <strong>6月</strong>(-5.1%)でした。金(PAXG)も、いちばん悪いのは6月です。ただし、どちらも10年に満たないデータです。</li>
+  <li><span class="tag idea">考え方</span><strong>広く知られた偏りは、弱まっていきます。</strong>みんなが「9月は下がる」と知っていれば、8月のうちに売る人が増え、9月の下げは小さくなります。月の決まりだけで売買するのは、すすめません。</li>
+</ul>
+
+<h4>注文が集まっている価格を見る — オーダーブックの考え方</h4>
+<p><span class="tag common">常識</span>為替の業者の中には、自社の顧客の「まだ約定していない注文」と「いま持っているポジション」が、どの価格にどれだけあるかを公開しているところがあります。暗号資産では、取引所の「板」が、これにあたります(第2章の「板の厚さと、価格が飛ぶしくみ」)。読み方は、次の3つです。</p>
+<ul>
+  <li><span class="tag common">常識</span><strong>指値の注文が厚い価格</strong>:そこまで来ると、まとまった売り(または買い)が出るので、止まりやすい。</li>
+  <li><span class="tag common">常識</span><strong>損切りの注文が集まっている価格</strong>:そこを抜けると、損切りがいっせいに出て、同じ向きに勢いがつきやすい。</li>
+  <li><span class="tag common">常識</span><strong>含み損のポジションが多い価格帯</strong>:そこから離れるほど、あきらめの決済が出やすい。</li>
+</ul>
+<ul>
+  <li><span class="tag idea">考え方</span><strong>見えているのは、市場のごく一部です。</strong>1社の顧客の分だけで、市場全体の注文ではありません。暗号資産の板も、その取引所の分だけです。</li>
+  <li><span class="tag idea">考え方</span><strong>見えている注文は、消せます。</strong>大きな注文を見せておいて、価格が近づくと取り消す、ということが実際に行われます。</li>
+  <li><span class="tag idea">考え方</span>過去の注文の記録は手に入りにくく、この教科書では、効果を確かめられていません。水平線などと合わせて、「ここは意識されそうだ」という目安として使うのが現実的です。</li>
 </ul>
 
 <h3 id="plan">取引計画 — 入る前に書き出す</h3>
@@ -2113,6 +2443,55 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <p>このサイトのデモトレードでは、持っていないものを先に売り、下がってから買い戻す「売り(ショート)」も練習できます。実際の取引でこれを行うには、信用取引や先物などの特別な口座が必要で、損失が元手を超える場合もあります。仕組みを十分に理解してから扱ってください。</p>
 </div>
 
+<section class="quiz">
+<h3 id="q-methods">第4章の確認問題</h3>
+<p>答えを選ぶと、その場で正解と解説が出ます。</p>
+<div class="q" data-a="0">
+  <p class="qt">問1. 手法を選ぶ前に、まず確かめることは何ですか。</p>
+  <button type="button" class="opt">いまの相場が、流れのある状態(トレンド)か、行き来する状態(レンジ)か</button>
+  <button type="button" class="opt">SNS で、いちばん人気のある手法はどれか</button>
+  <button type="button" class="opt">過去1週間で、いちばん上がった銘柄はどれか</button>
+  <p class="ex"><strong>答え:いまの相場が、流れのある状態(トレンド)か、行き来する状態(レンジ)か</strong><br>流れに乗る手法はレンジで負けやすく、レンジの手法は流れが出ると負けます。状態に合わない手法を使うと、逆効果になります。(→ <a href="#regime">相場の状態を見分ける</a>)</p>
+</div>
+<div class="q" data-a="1">
+  <p class="qt">問2. ある手法の勝率は 40% でした。この手法について、正しいものはどれですか。</p>
+  <button type="button" class="opt">半分も勝てないので、使ってはいけない</button>
+  <button type="button" class="opt">勝ったときの利益が、負けたときの損失より十分に大きければ、全体でプラスになりうる</button>
+  <button type="button" class="opt">勝率が 50% を超えるまで、条件を足しつづけるべき</button>
+  <p class="ex"><strong>答え:勝ったときの利益が、負けたときの損失より十分に大きければ、全体でプラスになりうる</strong><br>実測でも、流れに乗る手法は、勝率4〜5割でもプラスになることが多くありました。勝ちが負けの数倍あったためです。(→ <a href="#backtest">過去のデータで試してみる</a>)</p>
+</div>
+<div class="q" data-a="2">
+  <p class="qt">問3. 「この形が出たら勝率85%」という図を見ました。最初に確かめることは何ですか。</p>
+  <button type="button" class="opt">図のデザインが、きれいかどうか</button>
+  <button type="button" class="opt">フォロワーの数が、多いかどうか</button>
+  <button type="button" class="opt">銘柄・期間・回数と、「勝ち」の決め方が書いてあるか</button>
+  <p class="ex"><strong>答え:銘柄・期間・回数と、「勝ち」の決め方が書いてあるか</strong><br>この教科書で24種類の合図を数えたところ、合った割合はほとんどが 45〜55% でした。出どころの書かれていない数字は、確かめようがありません。(→ <a href="#sns">SNS でよく見る図を確かめる</a>)</p>
+</div>
+<div class="q" data-a="1">
+  <p class="qt">問4. 5日線が20日線を上に抜けた(ゴールデンクロス)だけで買った場合、実測ではどうでしたか。</p>
+  <button type="button" class="opt">8割以上の確率で上がった</button>
+  <button type="button" class="opt">何もしないときと、ほとんど変わらなかった</button>
+  <button type="button" class="opt">ほとんどの場合、下がった</button>
+  <p class="ex"><strong>答え:何もしないときと、ほとんど変わらなかった</strong><br>5日後に上がっていた割合は 50.6% で、すべての日の 50.3% と変わりませんでした。出来高などの条件と組み合わせる必要があります。(→ <a href="#volcheck">出来高で確かめる</a>)</p>
+</div>
+<div class="q" data-a="2">
+  <p class="qt">問5. 大きな陽線が出ましたが、出来高はいつもより少なめでした。どう考えますか。</p>
+  <button type="button" class="opt">大きく上がったので、強い買いの合図</button>
+  <button type="button" class="opt">出来高は、価格と関係がないので気にしない</button>
+  <button type="button" class="opt">売っていた人の買い戻しだけかもしれないので、続かない可能性を疑う</button>
+  <p class="ex"><strong>答え:売っていた人の買い戻しだけかもしれないので、続かない可能性を疑う</strong><br>実測でも、大きな陽線のあとの5日間は、出来高が多いと平均 +3.38%、少ないと +1.27% でした。(→ <a href="#volcheck">出来高で確かめる</a>)</p>
+</div>
+<div class="q" data-a="0">
+  <p class="qt">問6. 「入る前の12の確認」で、いちばん大事だとされているのはどれですか。</p>
+  <button type="button" class="opt">なぜ入るのかを、自分の言葉で説明できるか</button>
+  <button type="button" class="opt">いま、ほかの人が買っているか</button>
+  <button type="button" class="opt">前回の取引で、勝ったかどうか</button>
+  <p class="ex"><strong>答え:なぜ入るのかを、自分の言葉で説明できるか</strong><br>説明できない取引は、しません。説明できる取引だけに絞ると、あとで記録を見直したときに、何が良くて何が悪かったのかが分かります。(→ <a href="#check12">入る前の12の確認</a>)</p>
+</div>
+<p class="qres" role="status" aria-live="polite"></p>
+<button type="button" class="qagain" hidden>もう一度やる</button>
+</section>
+
 <!-- ============================================================ 5 -->
 <h2 id="money"><small>第5章</small>資金管理 — いちばん大事な章</h2>
 <div class="kp"><strong>この章の要点</strong><ul>
@@ -2136,7 +2515,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 </table></div>
 <p class="formula">必要な利益率 = 失った割合 ÷ (1 − 失った割合)  例:50% 失うと 0.5 ÷ 0.5 = 100%</p>
 
-<h3>1回の損失は、資金の1〜2%まで</h3>
+<h3 id="risk1">1回の損失は、資金の1〜2%まで</h3>
 <p><span class="tag common">常識</span>多くの入門書で、1回の取引で失う金額を資金の1〜2%以内にする、という目安が紹介されています。</p>
 <p><span class="tag fact">事実</span>1回の損失を資金の一定割合に固定したとき、連敗でどれだけ減るかは計算できます。</p>
 <div class="tbl-wrap"><table>
@@ -2220,7 +2599,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
     <tr><td class="num">2%</td><td class="num up">約 1.43 倍</td><td class="num up">約 1.06 倍</td></tr>
   </tbody>
 </table></div>
-<p class="formula">1回あたりの増え方(対数)= 勝率 × log(1 + 2 × 賭ける割合) + 負ける確率 × log(1 − 賭ける割合)</p>
+<p>表の数字は、100回のうち勝率どおりの回数だけ勝ったとして、(1 + 2 × 賭ける割合) を勝った回数だけ、(1 − 賭ける割合) を負けた回数だけ、掛け合わせたものです。</p>
 <ul>
   <li><span class="tag fact">事実</span>勝率をわずか5ポイント高く見積もっただけで、ケリーどおりの賭け方では資金が減っていきます。期待値はまだプラス(1回あたり +0.05)なのに、です。</li>
   <li><span class="tag idea">考え方</span>デモトレードの30回程度の成績から分かる勝率は、誤差がとても大きい数字です。ケリー基準をそのまま使うのは危険で、使うとしても「上限の目安」にとどめ、実際には第5章の「1回の損失を資金の1〜2%」に従うほうが現実的です。</li>
@@ -2235,7 +2614,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 </ol>
 <p>こうすると、損切りにかかったときの損失は 5,000 × 2% = 100 USDT となり、最初に決めた金額に収まります(実際には手数料が加わります)。</p>
 <h4>銘柄ごとの値動きに合わせる</h4>
-<p><span class="tag idea">考え方</span>損切りは、その銘柄の普通の値動きより外に置かないと、理由もなくかかってしまいます。そのため、値動きの大きい銘柄ほど損切りの幅は広くなり、同じ「100 を失う設定」でも買える金額は小さくなります。第2章の実測値を使って、損切りを「1日の高値と安値の差の平均」と同じ幅に置いた場合を計算すると、次のようになります。</p>
+<p><span class="tag idea">考え方</span>損切りは、その銘柄の普通の値動きより外に置かないと、理由もなくかかってしまいます。そのため、値動きの大きい銘柄ほど損切りの幅は広くなり、同じ「100 を失う設定」でも買える金額は小さくなります。第2章の実測値を使って、損切りを「1日の高値と安値の差の平均」と同じ幅に置いた場合を計算すると、次のようになります。比べやすいように、いちばん狭い目安で計算しました。第3章のように ATR の2倍に置くなら、買える金額は、この表の半分になります。</p>
 <div class="tbl-wrap"><table>
   <thead><tr><th>銘柄</th><th>損切りの幅(1日の値幅の平均)</th><th>100 を失う設定で買える金額</th><th>資金 10,000 に対する割合</th></tr></thead>
   <tbody>
@@ -2249,7 +2628,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 <p><span class="tag idea">考え方</span>同じ危険の大きさにそろえると、PEPE で買える金額は金の5分の1です。「どの銘柄も同じ金額で買う」のは、気づかないうちに、荒い銘柄で大きな賭けをしていることになります。</p>
 
 <h3 id="leverage">レバレッジと強制決済</h3>
-<p><span class="tag common">常識</span>レバレッジは、元手(証拠金)の何倍もの金額を取引するしくみです。利益も損失も、倍率の分だけ大きくなります。含み損が証拠金に近づくと、取引所が強制的に決済し(ロスカット)、証拠金のほとんどを失います。このサイトのデモトレードにはレバレッジはありません。</p>
+<p><span class="tag common">常識</span>レバレッジは、元手(証拠金)の何倍もの金額を取引するしくみです。利益も損失も、倍率の分だけ大きくなります。含み損が証拠金に近づくと、取引所が強制的に決済し(ロスカット)、証拠金のほとんどを失います。ふつうは証拠金の範囲で止まりますが、価格が一気に飛んだときは強制決済が間に合わず、取引所や商品によっては、証拠金より大きい損失を求められることがあります。このサイトのデモトレードでは、1〜100倍のレバレッジを試せます(損失は証拠金までで止まる設定で、強制決済の価格がチャートに出ます)。</p>
 <p><span class="tag fact">事実</span>手数料などを無視すると、証拠金がなくなる値動きの幅は、次のように計算できます。</p>
 <div class="tbl-wrap"><table>
   <thead><tr><th>レバレッジ</th><th>証拠金 1,000 で取引できる金額</th><th>証拠金がなくなる逆方向の値動き</th></tr></thead>
@@ -2269,7 +2648,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 <p><span class="tag fact">実測</span>ただし第2章の表のとおり、暗号資産どうしは強く連動しています(BTC との連動が 0.67〜0.84)。BTC・ETH・SOL を同時に買うと、3つに分けたつもりでも、ほぼ同じものを3倍買っているのに近い状態になります。</p>
 <ul>
   <li><span class="tag idea">考え方</span>同じ向きのポジションを複数持つときは、「1回の損失 1%」ではなく、<strong>全部が同時に損切りになった場合の合計</strong>で考えます。3銘柄を 1% ずつなら、合計 3% を1回で失う可能性があると見ます。</li>
-  <li><span class="tag fact">実測</span>この表の中で、暗号資産と別の動きをするのは金(0.28)だけです。</li>
+  <li><span class="tag fact">実測</span>第2章の最初の表の中で、暗号資産と別の動きをするのは金(0.28)だけです。ただし、2026年3月以降に限ると 0.52 まで上がっています(第2章)。金を足せば必ず分散になる、とは言えません。</li>
 </ul>
 
 <h3 id="platform-risk">チャートに出ない危険 — ステーブルコイン・取引所・詐欺</h3>
@@ -2294,6 +2673,48 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 <div class="warn">
   <p><span class="tag common">常識</span><strong>次のどれかに当てはまったら、詐欺を疑ってください。</strong>「必ず儲かる」「元本保証」と言われる/SNS で知り合った人に投資を勧められる/知らないサイトやアプリに送金するよう言われる/利益を引き出すのに「税金」「手数料」を先に払うよう言われる/秘密鍵や復元用の言葉(シードフレーズ)を聞かれる。</p>
 </div>
+
+<section class="quiz">
+<h3 id="q-money">第5章の確認問題</h3>
+<p>答えを選ぶと、その場で正解と解説が出ます。</p>
+<div class="q" data-a="2">
+  <p class="qt">問1. 資金が 50% 減りました。元の金額に戻すには、残った資金を何% 増やす必要がありますか。</p>
+  <button type="button" class="opt">50%</button>
+  <button type="button" class="opt">75%</button>
+  <button type="button" class="opt">100%</button>
+  <p class="ex"><strong>答え:100%</strong><br>100 が 50 になったあと、100 に戻すには、50 を2倍(+100%)にしなければなりません。大きく減らすほど、戻すのは難しくなります。(→ <a href="#loss">損失は取り戻しにくい</a>)</p>
+</div>
+<div class="q" data-a="0">
+  <p class="qt">問2. 1回の取引で失ってよい金額の目安は、どのくらいですか。</p>
+  <button type="button" class="opt">資金の 1〜2%</button>
+  <button type="button" class="opt">資金の 10〜20%</button>
+  <button type="button" class="opt">勝てる自信があるなら、いくらでもよい</button>
+  <p class="ex"><strong>答え:資金の 1〜2%</strong><br>1回の損失を小さく決めておけば、連敗しても資金は大きく減りません。勝率4割の手法では、7連敗くらいはふつうに起きます。(→ <a href="#risk1">1回の損失は 1〜2%</a>)</p>
+</div>
+<div class="q" data-a="1">
+  <p class="qt">問3. 資金は 10,000 です。1回に失ってよいのは 1%(100)と決めました。損切りは、買値から 4% 下に置きます。買う金額は、いくらにしますか。</p>
+  <button type="button" class="opt">100</button>
+  <button type="button" class="opt">2,500</button>
+  <button type="button" class="opt">10,000</button>
+  <p class="ex"><strong>答え:2,500</strong><br>失ってよい金額 ÷ 損切りまでの幅 = 100 ÷ 0.04 = 2,500 です。損切りまでが遠いほど、買う金額は小さくなります。(→ <a href="#sizing">買う金額の決め方</a>)</p>
+</div>
+<div class="q" data-a="2">
+  <p class="qt">問4. 勝率 60%、勝ったときの平均は +1%、負けたときの平均は -2% の手法があります。続けると、どうなりますか。</p>
+  <button type="button" class="opt">勝率が半分を超えているので、増えていく</button>
+  <button type="button" class="opt">増えも減りもしない</button>
+  <button type="button" class="opt">減っていく</button>
+  <p class="ex"><strong>答え:減っていく</strong><br>0.6 × 1% − 0.4 × 2% = −0.2% で、1回あたりの期待値はマイナスです。勝率が高くても、負けが大きければ減っていきます。(→ <a href="#expect">期待値</a>)</p>
+</div>
+<div class="q" data-a="1">
+  <p class="qt">問5. 期待値がプラスの手法を見つけました。1回の取引に、資金の半分を賭けることにしました。この考え方について、正しいものはどれですか。</p>
+  <button type="button" class="opt">期待値がプラスなので、大きく賭けるほど良い</button>
+  <button type="button" class="opt">期待値がプラスでも、賭けすぎると、連敗で資金がなくなる</button>
+  <button type="button" class="opt">期待値がプラスなら、連敗は起きない</button>
+  <p class="ex"><strong>答え:期待値がプラスでも、賭けすぎると、連敗で資金がなくなる</strong><br>期待値がプラスでも、連敗は起きます。1回に賭ける割合が大きいと、連敗のあいだに、続けられないところまで減ってしまいます。(→ <a href="#ruin">破産の確率</a>)</p>
+</div>
+<p class="qres" role="status" aria-live="polite"></p>
+<button type="button" class="qagain" hidden>もう一度やる</button>
+</section>
 
 <!-- ============================================================ 6 -->
 <h2 id="mind"><small>第6章</small>心理 — なぜルールを守れないのか</h2>
@@ -2352,8 +2773,49 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <li><strong>買う金額を、平気でいられる大きさにする。</strong>値動きが気になって何も手につかないなら、金額が大きすぎます。</li>
 </ol>
 
+<section class="quiz">
+<h3 id="q-mind">第6章の確認問題</h3>
+<p>答えを選ぶと、その場で正解と解説が出ます。</p>
+<div class="q" data-a="0">
+  <p class="qt">問1. 含み損のポジションを、なかなか損切りできません。おもな理由として、心理学で説明されているのはどれですか。</p>
+  <button type="button" class="opt">損を確定させる痛みを、強く感じるから</button>
+  <button type="button" class="opt">計算が苦手だから</button>
+  <button type="button" class="opt">意志が弱いから</button>
+  <p class="ex"><strong>答え:損を確定させる痛みを、強く感じるから</strong><br>人は、同じ金額でも、得の喜びより損の痛みを強く感じます(損失回避)。意志の弱さではなく、誰にでもある心のくせです。(→ <a href="#mind">第6章のはじめ</a>)</p>
+</div>
+<div class="q" data-a="1">
+  <p class="qt">問2. このくせへの対策として、いちばん効果があるとされているのはどれですか。</p>
+  <button type="button" class="opt">価格を、もっとこまめに見る</button>
+  <button type="button" class="opt">入る前に損切りと利確を決め、注文と同時に入れてしまう</button>
+  <button type="button" class="opt">負けたら、次は金額を大きくして取り返す</button>
+  <p class="ex"><strong>答え:入る前に損切りと利確を決め、注文と同時に入れてしまう</strong><br>ポジションを持ったあとは、もう冷静に判断できません。その場で判断しなくて済むしくみを、先に作っておきます。(→ <a href="#mind">対策</a>)</p>
+</div>
+<div class="q" data-a="2">
+  <p class="qt">問3. 「ここまで耐えたのだから」と、含み損を持ちつづけています。自分に聞くとよい質問はどれですか。</p>
+  <button type="button" class="opt">「あといくら下がったら、あきらめるか」</button>
+  <button type="button" class="opt">「買った価格まで戻る可能性は、何%か」</button>
+  <button type="button" class="opt">「いま何も持っていなかったら、この価格で新しく買うか」</button>
+  <p class="ex"><strong>答え:「いま何も持っていなかったら、この価格で新しく買うか」</strong><br>答えが「買わない」なら、持ちつづける理由は、過去の損だけです。すでに失った分は、これからの判断に関係がありません(サンクコスト)。(→ <a href="#mind">そのほかの心のくせ</a>)</p>
+</div>
+<div class="q" data-a="1">
+  <p class="qt">問4. 「正しい思考を身につければ、勝てるようになる」という言葉について、この教科書の立場はどれですか。</p>
+  <button type="button" class="opt">そのとおり。思考さえ変えれば、誰でも勝てる</button>
+  <button type="button" class="opt">心のくせを知ることは、大きく負けないためには役立つが、それだけで勝てるわけではない</button>
+  <button type="button" class="opt">心理は、成績とまったく関係がない</button>
+  <p class="ex"><strong>答え:心のくせを知ることは、大きく負けないためには役立つが、それだけで勝てるわけではない</strong><br>台湾の全取引記録を調べた研究では、デイトレードをする個人のうち、続けて利益を出せると見込めたのは 1% に届きませんでした。(→ <a href="#mind2">「勝ち続ける思考」を読む</a>)</p>
+</div>
+<p class="qres" role="status" aria-live="polite"></p>
+<button type="button" class="qagain" hidden>もう一度やる</button>
+</section>
+
 <!-- ============================================================ 7 -->
 <h2 id="practice"><small>第7章</small>デモトレードでの練習のしかた</h2>
+<div class="kp"><strong>この章の要点</strong><ul>
+  <li>手法を1つ、銘柄を1〜2個に絞り、同じやり方で30回続ける。途中で変えない。</li>
+  <li>注文と同時に、損切りと利確を入れる。買う金額は、毎回計算する。</li>
+  <li>数字に残らないこと(なぜ入ったか、計画どおりだったか、そのときの気持ち)を、1行ずつ書き残す。</li>
+  <li>デモで勝てても、実際のお金で勝てるとは限らない。約定のしかたと、気持ちが違う。</li>
+</ul></div>
 <p>このサイトのデモトレードは、仮想の資金で売買の練習ができる機能です。実際のお金は動きません。</p>
 
 <h3>練習の進め方</h3>
@@ -2428,7 +2890,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 <p><span class="tag common">常識</span>「R」は、最初に決めた損失の額を 1 とした単位です。100 USDT を失う設定で 200 USDT 勝てば +2R、決めたとおりに損切りすれば -1R です。金額ではなく R で記録すると、買う金額が違う取引どうしでも成績を比べられます。</p>
 
 <h3 id="streak">連敗したときの振り返り方</h3>
-<p><span class="tag fact">事実</span>上の「破産の確率」のシミュレーションでは、勝率 40% の手法で100回取引すると、いちばん長い連敗は真ん中の値で7連敗でした。連敗そのものは、手法が壊れた証拠にはなりません。</p>
+<p><span class="tag fact">事実</span>第5章の<a href="#ruin">「破産の確率」</a>のシミュレーションでは、勝率 40% の手法で100回取引すると、いちばん長い連敗は真ん中の値で7連敗でした。連敗そのものは、手法が壊れた証拠にはなりません。</p>
 <ol class="steps">
   <li><strong>まず止まる。</strong>決めておいた上限(たとえば「1日2連敗で終わり」、第6章)に届いたら、その日は新しく入りません。</li>
   <li><strong>負けた取引だけを並べる。</strong>「取引履歴の絞り込み」で負けを抽出し、記録表の「計画どおりか」を見ます。</li>
@@ -2454,9 +2916,9 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 <h4>見直しの動き</h4>
 <ul>
   <li><span class="tag fact">事実</span>暗号資産を「金融商品取引法」の対象にする改正法が、2026年7月15日に成立し、7月23日に公布されたと報じられています。インサイダー取引の規制なども新しく入ります。<sup>[76]</sup></li>
-  <li><span class="tag fact">事実</span>2026年度(令和8年度)の税制改正大綱では、登録された業者が扱う「特定暗号資産」の売買などの利益を、ほかの所得と分けて 20.315% で課税する方針と、損失を3年間繰り越せるしくみの導入が示されています。<sup>[75]</sup></li>
-  <li><span class="tag fact">事実</span>新しい課税が始まる時期は、2028年1月が見込まれると報じられていますが、資料によって「2027年以降」「2028年以降」と書き方が分かれています。始まる前に売った分は、今までどおり総合課税になる見込みとされます。<sup>[75]</sup><sup>[76]</sup></li>
-  <li><span class="tag idea">考え方</span>新しい制度の対象が「国内の登録業者が扱うもの」に限られる見込みである点は大切です。海外の取引所での取引や、bStocks のような商品がどう扱われるかは、この資料では確かめられませんでした。</li>
+  <li><span class="tag fact">事実</span>2026年3月31日に、2026年度(令和8年度)の税制改正の法律が成立しました。登録された業者が扱う「特定暗号資産」の売買などの利益を、ほかの所得と分けて 20.315% で課税し、損失を3年間繰り越せるしくみが入ります。<sup>[75]</sup></li>
+  <li><span class="tag fact">事実</span>新しい課税は、金融商品取引法の改正が施行された翌年の1月1日以後の取引から始まる、とされています。2026年11月の時点では、2028年1月が有力と報じられています。始まる前に売った分は、今までどおり総合課税になる見込みとされます。<sup>[75]</sup><sup>[76]</sup></li>
+  <li><span class="tag idea">考え方</span>新しい制度の対象が「国内の登録業者が扱うもの」に限られる見込みである点は大切です。海外の取引所での取引や、bStocks のような商品がどう扱われるかは、筆者が調べた範囲では確かめられませんでした。</li>
 </ul>
 <p><span class="tag idea">考え方</span>どちらの制度でも、<strong>取引ごとの日時・数量・価格の記録</strong>が計算の土台になります。このサイトの CSV 保存と同じ習慣を、実際の取引でも続けてください。</p>
 
@@ -2470,8 +2932,55 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   </ul>
 </div>
 
+<section class="quiz">
+<h3 id="q-practice">第7章の確認問題</h3>
+<p>答えを選ぶと、その場で正解と解説が出ます。</p>
+<div class="q" data-a="1">
+  <p class="qt">問1. デモトレードでの練習の進め方として、正しいものはどれですか。</p>
+  <button type="button" class="opt">いろいろな手法を、毎回変えて試す</button>
+  <button type="button" class="opt">手法を1つ、銘柄を1〜2個に絞り、同じやり方で30回くらい続ける</button>
+  <button type="button" class="opt">勝てるまで、金額を増やしていく</button>
+  <p class="ex"><strong>答え:手法を1つ、銘柄を1〜2個に絞り、同じやり方で30回くらい続ける</strong><br>途中で手法を変えると、何が良くて何が悪かったのかが分からなくなります。(→ <a href="#practice">練習の進め方</a>)</p>
+</div>
+<div class="q" data-a="0">
+  <p class="qt">問2. 勝率は高いのに、損益はマイナスでした。まず疑うことは何ですか。</p>
+  <button type="button" class="opt">利確が早く、損切りが遅い(小さく勝って、大きく負けている)</button>
+  <button type="button" class="opt">取引の回数が少なすぎる</button>
+  <button type="button" class="opt">銘柄の選び方が悪い</button>
+  <p class="ex"><strong>答え:利確が早く、損切りが遅い(小さく勝って、大きく負けている)</strong><br>平均の利益と、平均の損失を見比べます。第6章の心のくせが、そのまま数字に出た形です。(→ <a href="#practice">成績の数字の読み方</a>)</p>
+</div>
+<div class="q" data-a="2">
+  <p class="qt">問3. 記録に「R」を使うと、何が便利ですか。</p>
+  <button type="button" class="opt">税金の計算が、自動でできる</button>
+  <button type="button" class="opt">手数料が、安くなる</button>
+  <button type="button" class="opt">買う金額が違う取引どうしでも、成績を比べられる</button>
+  <p class="ex"><strong>答え:買う金額が違う取引どうしでも、成績を比べられる</strong><br>R は、最初に決めた損失の額を 1 とした単位です。100 を失う設定で 200 勝てば +2R、決めたとおりに損切りすれば −1R です。(→ <a href="#practice">記録表のひな形</a>)</p>
+</div>
+<div class="q" data-a="2">
+  <p class="qt">問4. 5連敗しました。最初にすることは何ですか。</p>
+  <button type="button" class="opt">すぐに、別の手法に変える</button>
+  <button type="button" class="opt">負けを取り返すために、金額を倍にする</button>
+  <button type="button" class="opt">いったん止まり、負けた取引を「計画どおりの負け」と「計画を破った負け」に分ける</button>
+  <p class="ex"><strong>答え:いったん止まり、負けた取引を「計画どおりの負け」と「計画を破った負け」に分ける</strong><br>計画どおりの負けは、手法のふつうの負けです。計画を破った負けは、自分の問題です。手法を見直すのは、30回分の記録がたまってからにします。(→ <a href="#practice">連敗したときの振り返り方</a>)</p>
+</div>
+<div class="q" data-a="1">
+  <p class="qt">問5. デモトレードと、実際のお金での取引の違いとして、正しいものはどれですか。</p>
+  <button type="button" class="opt">違いはない。デモで勝てれば、実際にも勝てる</button>
+  <button type="button" class="opt">実際の取引では、不利な価格で約定することがあり、気持ちの面でも決まりを守りにくくなる</button>
+  <button type="button" class="opt">実際の取引のほうが、有利な価格で約定する</button>
+  <p class="ex"><strong>答え:実際の取引では、不利な価格で約定することがあり、気持ちの面でも決まりを守りにくくなる</strong><br>デモは、表示中の価格でそのまま約定します。実際にはスプレッドやすべりがあり、自分のお金が減ると、冷静でいるのが急に難しくなります。(→ <a href="#practice">デモと実際の取引の違い</a>)</p>
+</div>
+<p class="qres" role="status" aria-live="polite"></p>
+<button type="button" class="qagain" hidden>もう一度やる</button>
+</section>
+
 <!-- ============================================================ 8 -->
 <h2 id="build"><small>第8章</small>自分でインジケーターを作って、試す</h2>
+<div class="kp"><strong>この章の要点</strong><ul>
+  <li>過去のデータで成績の良い合図を作るのは、簡単。難しいのは、それがこれからも通用するかを見きわめること。</li>
+  <li>結果は「持ち続けた場合より良いか」「30回以上あるか」「最大の下落に耐えられるか」の3つで見る。</li>
+  <li>成績が良くなるまで数字を変えつづけると、過去に合わせただけの決まりができあがる(過剰最適化)。</li>
+</ul></div>
 <p>このサイトでは、式を書くだけで自分のインジケーターを作り、売買の合図を出し、その合図どおりに売買していたらどうなっていたかを過去のデータで確かめられます。この章では、その手順と、結果の読み方を説明します。</p>
 <p><span class="tag idea">考え方</span>ここでいちばん伝えたいのは、<strong>「作る」より「疑う」ほうが大事</strong>だということです。過去のデータで成績の良い合図を作るのは、実はとても簡単です。難しいのは、それがこれからも通用するかを見きわめることです。</p>
 
@@ -2512,7 +3021,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <li>損切り・利確を指定した場合、1本の足の中で両方に届いたときは、損切りが先だったとして計算します。足の中でどちらが先だったかは分からないので、成績を良く見せないほうを採っています。</li>
 </ul>
 
-<p>式を書かなくても試せます。チャートの「ツール → 売買ルールを試す」には、第4章で説明した手法に対応するルールが6つ入っています(移動平均の交差、長期の平均線の上下、RSI、MACD、ボリンジャーバンド、高値・安値の更新)。選ぶだけで成績が出て、「チャートに出す」を押すと、合図がローソク足に表示されます。</p>
+<p>式を書かなくても試せます。チャートの「ツール → 売買ルールを試す」には、第3章のインジケーターと、第4章の手法に対応するルールが6つ入っています(移動平均の交差、長期の平均線の上下、RSI、MACD、ボリンジャーバンド、高値・安値の更新)。選ぶだけで成績が出て、「チャートに出す」を押すと、合図がローソク足に表示されます。</p>
 
 <h3>結果の読み方:まずこの3つを見る</h3>
 <ol class="steps">
@@ -2553,8 +3062,48 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 <h3>合図を知らせる</h3>
 <p>設定(⚙)の「合図が出たら知らせる」をオンにすると、足が確定して合図が出たときに、画面に表示します。ページを開いている間だけ働きます。合図が出たら、すぐに売買するのではなく、第4章の取引計画(どこで入り、どこで損切りし、どこで利確するか)に当てはめてから判断してください。</p>
 
+<section class="quiz">
+<h3 id="q-build">第8章の確認問題</h3>
+<p>答えを選ぶと、その場で正解と解説が出ます。</p>
+<div class="q" data-a="1">
+  <p class="qt">問1. 過去のデータで試したら、合図どおりの売買は +20% でした。同じ期間、買って持ちつづけた場合は +30% でした。どう読みますか。</p>
+  <button type="button" class="opt">+20% なので、良い手法</button>
+  <button type="button" class="opt">手間と手数料をかけて、成績を下げたことになる</button>
+  <button type="button" class="opt">比べる意味はない</button>
+  <p class="ex"><strong>答え:手間と手数料をかけて、成績を下げたことになる</strong><br>結果は、まず「何もせず持ちつづけた場合」と比べます。(→ <a href="#build">結果の読み方</a>)</p>
+</div>
+<div class="q" data-a="0">
+  <p class="qt">問2. 成績が良くなるまで、期間や条件の数字を何度も変えました。できあがった決まりについて、正しいものはどれですか。</p>
+  <button type="button" class="opt">過去の値動きに、たまたま合っただけの可能性が高い</button>
+  <button type="button" class="opt">たくさん試したので、信頼できる</button>
+  <button type="button" class="opt">これからの相場でも、同じ成績になる</button>
+  <p class="ex"><strong>答え:過去の値動きに、たまたま合っただけの可能性が高い</strong><br>これを過剰最適化(カーブフィッティング)と呼びます。別の銘柄や時間足でも試す、数字を少しずらしても成績が保たれるかを見る、といった確かめ方があります。(→ <a href="#build">過去に合わせすぎない</a>)</p>
+</div>
+<div class="q" data-a="2">
+  <p class="qt">問3. 試した結果、売買の回数は8回で、勝率は 88% でした。どう読みますか。</p>
+  <button type="button" class="opt">勝率が高いので、すぐに使う</button>
+  <button type="button" class="opt">勝率が高すぎるので、計算の間違い</button>
+  <button type="button" class="opt">回数が少なすぎて、偶然かどうか分からない</button>
+  <p class="ex"><strong>答え:回数が少なすぎて、偶然かどうか分からない</strong><br>回数が少ないと、たまたま当たった数回で成績が決まります。目安は30回以上です。(→ <a href="#build">結果の読み方</a>)</p>
+</div>
+<div class="q" data-a="0">
+  <p class="qt">問4. このサイトの試算で、合図が出たあと、売買はいつ行ったことにしていますか。</p>
+  <button type="button" class="opt">合図が出た足の、次の足の始値</button>
+  <button type="button" class="opt">合図が出た足の、終値</button>
+  <button type="button" class="opt">合図が出た足の、いちばん有利な価格</button>
+  <p class="ex"><strong>答え:合図が出た足の、次の足の始値</strong><br>合図は、足が確定してからでないと分かりません。同じ足の終値で買えたことにすると、実際にはできない取引で、成績を良く見せてしまいます。(→ <a href="#build">過去のデータで試す</a>)</p>
+</div>
+<p class="qres" role="status" aria-live="polite"></p>
+<button type="button" class="qagain" hidden>もう一度やる</button>
+</section>
+
 <!-- ============================================================ 9 -->
 <h2 id="mistakes"><small>第9章</small>よくある失敗</h2>
+<div class="kp"><strong>この章の要点</strong><ul>
+  <li>失敗の多くは、手法ではなく、決めたことを守れないことから起きる。</li>
+  <li>損切りを動かす、負けたあとに金額を増やす、急騰に飛びつく、の3つが特に多い。</li>
+  <li>どれも、入る前に決めて、記録を付けることで減らせる。</li>
+</ul></div>
 <p><span class="tag idea">考え方</span>初心者がつまずきやすい点を、なぜ起きるのかとあわせてまとめます。</p>
 <dl>
   <dt>損切りを動かしてしまう</dt>
@@ -2564,7 +3113,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <dt>急に上がった銘柄に飛びつく</dt>
   <dd>大きく上がったあとに買うと、いちばん高いところで買うことになりがちです。「乗り遅れたくない」という気持ちが原因です。条件がそろうまで待つ、と決めておきます。</dd>
   <dt>どの銘柄も同じ金額で買う</dt>
-  <dd>値動きの大きさは銘柄で5倍近く違います(第2章)。同じ金額で買うと、荒い銘柄で知らないうちに大きな危険を取っています。</dd>
+  <dd>値動きの大きさは、銘柄で何倍も違います(第2章)。同じ金額で買うと、荒い銘柄で知らないうちに大きな危険を取っています。</dd>
   <dt>似た銘柄をいくつも買って、分散したつもりになる</dt>
   <dd>暗号資産どうしは強く連動します。市場全体が下がると、すべてが同時に下がります(第5章)。</dd>
   <dt>インジケーターを増やしすぎる</dt>
@@ -2578,6 +3127,41 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <dt>数回の結果で手法を変える</dt>
   <dd>勝率4割の手法でも、5連敗は普通に起きます(第5章)。数回負けただけで手法を変えていると、どの手法も身につきません。</dd>
 </dl>
+
+<section class="quiz">
+<h3 id="q-mistakes">第9章の確認問題</h3>
+<p>答えを選ぶと、その場で正解と解説が出ます。</p>
+<div class="q" data-a="2">
+  <p class="qt">問1. 「もう少し待てば戻るかも」と思い、損切りの位置を遠くへ動かしました。この行動について、正しいものはどれですか。</p>
+  <button type="button" class="opt">相場に合わせた、柔軟な対応</button>
+  <button type="button" class="opt">損切りは、ときどき動かすほうがよい</button>
+  <button type="button" class="opt">小さな負けを、大きな負けに変えてしまう</button>
+  <p class="ex"><strong>答え:小さな負けを、大きな負けに変えてしまう</strong><br>損切りは、注文の前に決めて、あとから不利な方向へは動かしません。例外を1回認めると、次も認めてしまいます。(→ <a href="#mistakes">損切りを動かしてしまう</a>)</p>
+</div>
+<div class="q" data-a="0">
+  <p class="qt">問2. 足がまだ確定していないのに、「抜けた」と思って入りました。何が問題ですか。</p>
+  <button type="button" class="opt">確定するころには、戻っていることがある</button>
+  <button type="button" class="opt">手数料が高くなる</button>
+  <button type="button" class="opt">問題はない。早く入るほど有利</button>
+  <p class="ex"><strong>答え:確定するころには、戻っていることがある</strong><br>足の途中の形は、まだ決まっていません。足の確定を待ちます。(→ <a href="#mistakes">未確定の足で入ってしまう</a>)</p>
+</div>
+<div class="q" data-a="1">
+  <p class="qt">問3. 3回続けて負けたので、手法を変えました。この行動について、正しいものはどれですか。</p>
+  <button type="button" class="opt">負ける手法は、早く捨てるのが正しい</button>
+  <button type="button" class="opt">数回の結果では、手法が悪いのか、運が悪いのかを区別できない</button>
+  <button type="button" class="opt">3連敗する手法は、必ず期待値がマイナス</button>
+  <p class="ex"><strong>答え:数回の結果では、手法が悪いのか、運が悪いのかを区別できない</strong><br>勝率4割の手法でも、5連敗はふつうに起きます。数回で変えていると、どの手法も身につきません。(→ <a href="#mistakes">数回の結果で手法を変える</a>)</p>
+</div>
+<div class="q" data-a="1">
+  <p class="qt">問4. 日足は下向きですが、15分足で上がりはじめたので買いました。この取引で、気をつけることは何ですか。</p>
+  <button type="button" class="opt">短い足のほうが新しいので、短い足を信じる</button>
+  <button type="button" class="opt">大きな流れに逆らっているので、小さな上げのあとに大きな下げが来やすい</button>
+  <button type="button" class="opt">日足と15分足は、関係がない</button>
+  <p class="ex"><strong>答え:大きな流れに逆らっているので、小さな上げのあとに大きな下げが来やすい</strong><br>長い足の向きを、先に確かめます。(→ <a href="#mtf">複数の時間足</a>)</p>
+</div>
+<p class="qres" role="status" aria-live="polite"></p>
+<button type="button" class="qagain" hidden>もう一度やる</button>
+</section>
 
 <!-- ============================================================ 9 -->
 <h2 id="glossary"><small>第10章</small>用語集</h2>
@@ -2598,7 +3182,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <dt>ドローダウン</dt><dd>資金がいちばん多かった時点からの減少のことです。</dd>
   <dt>リスクリワード(損益比)</dt><dd>負けたときの損失に対して、勝ったときの利益が何倍かを表します。</dd>
   <dt>期待値</dt><dd>1回の取引あたりの平均的な損益です。プラスなら、続けるほど資金が増えます。</dd>
-  <dt>レバレッジ / 証拠金 / ロスカット</dt><dd>元手(証拠金)の何倍もの金額を取引するしくみがレバレッジ、含み損が大きくなったときの強制決済がロスカットです。</dd>
+  <dt>レバレッジ / 証拠金 / ロスカット</dt><dd>元手(証拠金)の何倍もの金額を取引するしくみがレバレッジです。含み損が大きくなったときの強制決済を、ロスカット、清算とも呼びます(→ 強制決済)。</dd>
   <dt>スプレッド / スリッページ</dt><dd>買値と売値の差がスプレッド、注文した価格と約定した価格のずれがスリッページです。</dd>
   <dt>半減期</dt><dd>ビットコインの新規発行量が半分になる出来事です。およそ4年ごとに起きます。</dd>
   <dt>ステーブルコイン</dt><dd>価格が米ドルなどとほぼ同じになるよう設計された暗号資産です。USDT、USDC など。</dd>
@@ -2629,6 +3213,20 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <dt>破産のリスク(リスク・オブ・ルイン)</dt><dd>連敗などで資金が続けられないほど減ってしまう確率です。</dd>
   <dt>ケリー基準</dt><dd>長い目で資金を最も速く増やす賭けの割合を求める式です。勝率の見誤りに弱く、そのまま使うと落ち込みが大きくなります。</dd>
   <dt>雑所得 / 総合課税 / 申告分離課税</dt><dd>暗号資産の利益は原則として雑所得で、ほかの所得と合計して税率が決まる総合課税の対象です。株の売却益のように、ほかと分けて一定の税率をかけるのが申告分離課税です。</dd>
+  <dt>ATR</dt><dd>1本の足の値動きの大きさを、14本分ならした数字です。損切りの幅を決めるのに使います(第3章)。</dd>
+  <dt>窓 / 窓埋め</dt><dd>前の足の終値と、次の足の始値の間にできるすき間が窓、あとで価格がそのすき間まで戻ることが窓埋めです(第2章)。</dd>
+  <dt>データ・スヌーピング / 過剰最適化(カーブフィッティング)</dt><dd>たくさんの規則や数字を試して、たまたま過去に合ったものを「効く」と思いこむ誤りです(第4章・第8章)。</dd>
+  <dt>トレーリングストップ</dt><dd>価格が有利に進むたびに、損切りの位置を引き上げていく方法です(第4章)。</dd>
+  <dt>ショートカバー / ショートスクイーズ</dt><dd>売っていた人の買い戻しがショートカバー、それが連鎖して急に上がることがショートスクイーズです。</dd>
+  <dt>円キャリー取引</dt><dd>金利の低い円を借りて、金利の高い通貨や株に投資する取引です。円高になると、いっせいに巻き戻されることがあります(第2章)。</dd>
+  <dt>VIX(恐怖指数)</dt><dd>米国株がこの先どれだけ大きく動くと見られているかを表す数字です。急落のときに上がります。</dd>
+  <dt>リスクオフ / リスクオン</dt><dd>値下がりの危険がある資産を避ける空気がリスクオフ、積極的に買う空気がリスクオンです。</dd>
+  <dt>相関(連動)</dt><dd>2つの銘柄が、どのくらい同じ向きに動くかを表す数字です。1 に近いほど、いっしょに動きます(第2章)。</dd>
+  <dt>建値(たてね)</dt><dd>ポジションを持ったときの価格です。</dd>
+  <dt>ゴールデンクロス / デッドクロス</dt><dd>短い移動平均線が、長い移動平均線を下から上に抜けることがゴールデンクロス、上から下に抜けることがデッドクロスです(第3章)。</dd>
+  <dt>ネックライン</dt><dd>ダブルトップなどの形で、山と山の間の谷(または谷と谷の間の山)を通る線です。ここを抜けると、形が確定します(第1章)。</dd>
+  <dt>安全資産</dt><dd>戦争や金融不安のときに買われやすいとされる資産です。金、スイスフラン、米国の国債など。いつも値上がりするわけではありません(第2章)。</dd>
+  <dt>通貨強弱</dt><dd>複数の通貨の組み合わせを見比べて、どの通貨が買われ、どの通貨が売られているかを分けて見る方法です(第2章)。</dd>
 </dl>
 
 <!-- ============================================================ 10 -->
@@ -2709,7 +3307,7 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <li>日本の詐欺対策 — <a href="https://www.fsa.go.jp/news/r8/sonota/20260806/20260806.html" rel="noopener noreferrer">金融庁(2026年8月6日)</a>、<a href="https://www.npa.go.jp/bureau/sosikihanzai/tokusyusagi/angoushisan_taisakukyouka20260806.html" rel="noopener noreferrer">警察庁(2026年8月6日)</a>、<a href="https://www.npa.go.jp/bureau/safetylife/sos47/new-topics/250428/02.html" rel="noopener noreferrer">警察庁: SNS型ロマンス詐欺</a>、<a href="https://www.kokusen.go.jp/mimamori/mj_mailmag/mj-shinsen530.html" rel="noopener noreferrer">国民生活センター: 見守り新鮮情報</a></li>
   <li>暗号資産の所得区分 — <a href="https://www.nta.go.jp/publication/pamph/pdf/virtual_currency_faq_03.pdf" rel="noopener noreferrer">国税庁: 暗号資産等に関する税務上の取扱いについて(FAQ)</a>、改訂の内容は <a href="https://www.tkc.jp/consolidate/tkc_express/2026/01/202601_13292" rel="noopener noreferrer">TKC の解説(2026年1月)</a>による</li>
   <li>総合課税・確定申告の目安・損益通算 — <a href="https://www.freee.co.jp/personal-business/guide/articles/5107/" rel="noopener noreferrer">freee: 暗号資産の税金の解説</a>、<a href="https://crexgroup.com/ja/crypto/tax/crypto-tax-net-off-guide/" rel="noopener noreferrer">CREX: 損益通算の解説</a></li>
-  <li>令和8年度税制改正大綱の暗号資産の分離課税 — <a href="https://www.yamada-partners.jp/reform/r8/k04-separate-taxation-for-crypto-assets" rel="noopener noreferrer">山田&amp;パートナーズ: 暗号資産の分離課税</a>、<a href="https://www.ht-tax.or.jp/topics/kasotsuka_reiwa8kaisei/" rel="noopener noreferrer">税理士法人の解説</a>、<a href="https://coinpost.jp/crypto/separate-taxation/" rel="noopener noreferrer">CoinPost: 分離課税</a></li>
+  <li>令和8年度税制改正大綱の暗号資産の分離課税 — <a href="https://www.yamada-partners.jp/reform/r8/k04-separate-taxation-for-crypto-assets" rel="noopener noreferrer">山田&amp;パートナーズ: 暗号資産の分離課税</a>、<a href="https://www.ht-tax.or.jp/topics/kasotsuka_reiwa8kaisei/" rel="noopener noreferrer">税理士法人の解説</a>、<a href="https://coinpost.jp/crypto/separate-taxation/" rel="noopener noreferrer">CoinPost: 分離課税</a>。法律の成立(2026年3月31日)は <a href="https://min-taxes.com/column/kaso-tsuka-zeikin-20percent-itsukara/" rel="noopener noreferrer">税理士による解説</a>、<a href="https://izujun-tax.com/crypto-separate-taxation-2026/" rel="noopener noreferrer">別の税理士事務所の解説</a> による</li>
   <li>金融商品取引法の改正(2026年) — <a href="https://monolith.law/corporate/fiea-amendment-2026-crypto" rel="noopener noreferrer">モノリス法律事務所の解説</a>、<a href="https://keiyaku-watch.jp/media/hourei/2026-2027-kinsyohou/" rel="noopener noreferrer">契約ウォッチ: 2026〜2027年の金商法改正</a></li>
   <li>チャートパターンの統計(ブルコウスキー) — <a href="https://www.thepatternsite.com/cup.html" rel="noopener noreferrer">ThePatternSite: Cup with Handle</a>、<a href="https://www.thepatternsite.com/Confirmation.html" rel="noopener noreferrer">Confirmation(形ができても抜けない割合)</a>、<a href="https://www.thepatternsite.com/id73.html" rel="noopener noreferrer">Bull Market Chart Patterns</a>。「成功率95%」という読みかえへの指摘は <a href="https://www.luxalgo.com/blog/cup-and-handle-pattern-success-rates-explained/" rel="noopener noreferrer">LuxAlgo の解説</a> による</li>
   <li>金の月ごとの偏り — <a href="https://econpapers.repec.org/RePEc:eee:riibaf:v:27:y:2013:i:1:p:1-11" rel="noopener noreferrer">Baur (2013) The autumn effect of gold, Research in International Business and Finance 27</a>、その後の検証は <a href="https://reference-global.com/article/10.2478/ijme-2024-0011?tab=article" rel="noopener noreferrer">Potrykus・Augustynowicz (2024)</a>(偏りを確認できなかったとする Borowski・Łukasik (2019) も、この論文の中で紹介されている)</li>
@@ -2730,6 +3328,8 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <li>金は安全資産か — <a href="https://econpapers.repec.org/RePEc:bla:finrev:v:45:y:2010:i:2:p:217-229" rel="noopener noreferrer">Baur・Lucey (2010) Is Gold a Hedge or a Safe Haven?, The Financial Review 45(2)</a>、<a href="https://econpapers.repec.org/RePEc:eee:jbfina:v:34:y:2010:i:8:p:1886-1898" rel="noopener noreferrer">Baur・McDermott (2010) Is gold a safe haven? International evidence, Journal of Banking &amp; Finance 34(8)</a>(「約15営業日」は、作業論文版の要旨による)</li>
   <li>ビットコインと株の連動 — <a href="https://www.imf.org/en/Blogs/Articles/2022/01/11/crypto-prices-move-more-in-sync-with-stocks-posing-new-risks" rel="noopener noreferrer">IMF: Crypto Prices Move More in Sync With Stocks, Posing New Risks(2022年1月)</a>(2021年までのデータによる分析です)</li>
   <li>2025年10〜11月のビットコインの下落 — <a href="https://www.morningstar.com/markets/crypto-etf-investors-pull-billions-bitcoin-slides-below-90000" rel="noopener noreferrer">Morningstar: Crypto ETF Investors Pull Billions as Bitcoin Slides Below $90,000</a>、<a href="https://www.aljazeera.com/economy/2025/11/18/bitcoin-ticks-up-after-erasing-all-of-2025-gains" rel="noopener noreferrer">Al Jazeera(2025年11月18日)</a>、<a href="https://www.theblock.co/post/379229/bitcoin-capitulation-wave-builds-as-etf-outflows-rate-shocks-hit-crypto-analysts" rel="noopener noreferrer">The Block の報道</a></li>
+  <li>米国株の「9月」の偏り — <a href="https://www.rbcwealthmanagement.com/en-us/insights/nothing-new-about-september-slides-for-stock-markets" rel="noopener noreferrer">RBC Wealth Management: Nothing new about September slides for stock markets</a>、<a href="https://www.nasdaq.com/articles/heres-the-average-stock-market-return-in-every-month-of-the-year" rel="noopener noreferrer">Nasdaq: The Average Stock Market Return in Every Month of the Year</a>(平均の数字は、期間とデータの出どころで少し変わります)</li>
+  <li>日本の取引時間とレバレッジの上限 — 東証の取引時間の延長は <a href="https://kabu.com/company/pressrelease/20241002_1.html" rel="noopener noreferrer">三菱UFJ eスマート証券の案内(2024年10月)</a>、<a href="https://www.dir.co.jp/report/column/20241002_012162.html" rel="noopener noreferrer">大和総研のコラム</a>。為替の25倍は <a href="https://www.j-cast.com/2011/07/26101938.html" rel="noopener noreferrer">J-CAST ニュース(2011年7月)</a>、暗号資産の2倍は <a href="https://coinpost.jp/?p=468613" rel="noopener noreferrer">CoinPost の解説</a> による(いずれも、金融庁などの原文は直接確認できていません)</li>
 </ol>
 
 <footer>

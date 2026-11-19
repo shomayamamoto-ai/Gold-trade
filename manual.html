@@ -155,7 +155,8 @@ html[data-fs="2"] body { font-size: 20px; }
   padding: 8px 8px 8px 14px; border-radius: 10px; background: var(--text); color: var(--bg);
   box-shadow: 0 4px 18px rgba(0, 0, 0, .3); font-size: 13px; line-height: 1.5;
 }
-.resume span { min-width: 0; }
+.resume span { flex: 1 1 auto; min-width: 0; }
+.resume { width: max-content; max-width: calc(100vw - 24px); }
 .resume button { flex: 0 0 auto; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; font: inherit; cursor: pointer; white-space: nowrap; }
 #resumeGo { background: var(--bg); color: var(--text); font-weight: 700; }
 #resumeNo { background: transparent; color: var(--bg); font-size: 18px; }
