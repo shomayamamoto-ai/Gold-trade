@@ -50,6 +50,7 @@
 </div>
 
 <div class="main-row">
+<div id="drawBar" class="draw-bar" role="toolbar" aria-label="線を引く道具" aria-orientation="vertical"></div>
 <main id="chartWrap" class="chart-wrap">
   <canvas id="chart" tabindex="0" aria-label="価格チャート。左右キーで移動、上下キーで拡大・縮小"></canvas>
   <div id="legends"></div>
@@ -309,11 +310,11 @@
         <dt>インジケーターを足す</dt>
         <dd>「<span class="touch">指標</span><span class="mouse">インジケーター</span>」から選びます(74種類・名前で検索可)。☆ を押すと「よく使う」に入ります。いちばん下の「＋ 自分で作る」では、式を書いてオリジナルの線や、売買の合図(▲▼)も作れます。合図は、設定画面から「過去データで試す」「出たら知らせる」が使えます。設定や削除は、名前の横の<span class="touch">「⋯」</span><span class="mouse">アイコン</span>から。</dd>
         <dt>線を引く・画像で保存する</dt>
-        <dd>「ツール」から、水平線・垂直線・トレンドライン・長方形・フィボナッチを引けます。「価格のお知らせ」の線を置くと、その価格に届いたときに知らせます(注文はしません)。ものさし・文字・リプレイ(過去の値動きの再生)・全画面表示も、ここにあります。同じメニューで、表示の切りかえ(ローソク足・平均足・ライン)と、画像の保存もできます。</dd>
+        <dd>「ツール」から、水平線・垂直線・トレンドライン・長方形・フィボナッチを引けます。「価格のお知らせ」の線を置くと、その価格に届いたときに知らせます(注文はしません)。ものさし・文字・リプレイ(過去の値動きの再生)・全画面表示も、ここにあります。同じメニューで、表示の切りかえ(ローソク足・平均足・ライン)、目盛りの切りかえ(ふつう・対数)、ほかの銘柄を重ねて比べる、画像の保存もできます。<span class="mouse">線を引く道具は、チャートの左はしのボタンからも選べます。</span></dd>
         <dt>売買ルールを過去のデータで試す</dt>
         <dd>「ツール → 売買ルールを試す」で、移動平均の交差や RSI などのルールどおりに売買していたら、どうなっていたかを計算できます。</dd>
         <dt>デモトレード(仮想の資金で練習)</dt>
-        <dd><span class="touch">画面下の「注文する」</span><span class="mouse">右上の「デモトレード」</span>から。利確・損切りの線は、チャート上でドラッグして動かせます。</dd>
+        <dd><span class="touch">画面下の「注文する」</span><span class="mouse">右上の「デモトレード」</span>から。利確・損切りの線は、チャート上でドラッグして動かせます。<span class="mouse">チャートの左上の「売」「買」のボタンは、2回押すと、注文画面に入れてある金額で、すぐに注文します。</span></dd>
         <dt>学ぶ</dt>
         <dd>「<span class="touch">ツール → 教科書を読む</span><span class="mouse">教科書</span>」で、銘柄・インジケーター・手法・資金管理の解説が読めます。</dd>
       </dl>
@@ -359,6 +360,21 @@
       <div class="spacer"></div>
       <button id="symCancel" class="ctl btn" type="button">キャンセル</button>
       <button id="symOk" class="ctl btn primary" type="button">追加</button>
+    </div>
+  </div>
+</div>
+
+<div id="cmpOverlay" class="overlay" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="cmpTitle">
+    <div class="dlg-head"><h2 id="cmpTitle">銘柄を重ねて比べる</h2></div>
+    <div class="dlg-body">
+      <p class="msg">選んだ銘柄を、変化率(%)の線でチャートに重ねます。画面の左端を 0% として、そこからどれだけ動いたかを比べられます。</p>
+      <div id="cmpList" class="results"></div>
+    </div>
+    <div class="dlg-foot">
+      <button id="cmpOff" class="ctl btn" type="button">比較をやめる</button>
+      <div class="spacer"></div>
+      <button id="cmpCancel" class="ctl btn" type="button">閉じる</button>
     </div>
   </div>
 </div>
