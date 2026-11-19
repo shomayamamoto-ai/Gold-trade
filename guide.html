@@ -255,11 +255,11 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
     <li><a href="#basics">チャートの基本</a>
       <ol><li><a href="#candle">ローソク足</a></li><li><a href="#structure">相場の構造</a></li><li><a href="#sr">サポートとレジスタンス</a></li><li><a href="#mtf">複数の時間足</a></li><li><a href="#orders">注文のしくみ</a></li></ol></li>
     <li><a href="#symbols">銘柄の特徴</a>
-      <ol><li><a href="#measured">値動きの実測</a></li><li><a href="#paxg">金</a></li><li><a href="#btc">BTC</a></li><li><a href="#eth">ETH</a></li><li><a href="#xrp">XRP</a></li><li><a href="#sol">SOL</a></li><li><a href="#doge">DOGE</a></li><li><a href="#pepe">PEPE</a></li></ol></li>
+      <ol><li><a href="#measured">値動きの実測</a></li><li><a href="#paxg">金</a></li><li><a href="#btc">BTC</a></li><li><a href="#eth">ETH</a></li><li><a href="#xrp">XRP</a></li><li><a href="#sol">SOL</a></li><li><a href="#doge">DOGE</a></li><li><a href="#pepe">PEPE</a></li><li><a href="#world">世界の出来事と価格</a></li></ol></li>
     <li><a href="#indicators">インジケーター</a>
       <ol><li><a href="#ma">移動平均線</a></li><li><a href="#rsi">RSI</a></li><li><a href="#macd">MACD</a></li><li><a href="#bb">ボリンジャーバンド</a></li><li><a href="#atr">ATR</a></li><li><a href="#vol">出来高</a></li><li><a href="#combine">組み合わせ方</a></li></ol></li>
     <li><a href="#methods">トレードの手法</a>
-      <ol><li><a href="#m1">流れに乗る</a></li><li><a href="#m2">レンジ取引</a></li><li><a href="#m3">ブレイクアウト</a></li><li><a href="#backtest">過去データでの検証</a></li><li><a href="#sns">SNS の図を確かめる</a></li><li><a href="#plan">取引計画</a></li></ol></li>
+      <ol><li><a href="#m1">流れに乗る</a></li><li><a href="#m2">レンジ取引</a></li><li><a href="#m3">ブレイクアウト</a></li><li><a href="#backtest">過去データでの検証</a></li><li><a href="#sns">SNS の図を確かめる</a></li><li><a href="#volcheck">出来高の決まりを試す</a></li><li><a href="#plan">取引計画</a></li></ol></li>
     <li><a href="#money">資金管理 — いちばん大事な章</a>
       <ol><li><a href="#expect">期待値</a></li><li><a href="#sizing">買う金額の決め方</a></li><li><a href="#leverage">レバレッジ</a></li><li><a href="#diversify">分散</a></li></ol></li>
     <li><a href="#mind">心理 — なぜルールを守れないのか</a></li>
@@ -390,6 +390,16 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <li><span class="tag common">常識</span>10,000 や 100,000 のような切りのよい数字も、意識されやすい価格です。</li>
 </ul>
 <p>このサイトでは「ツール」→「水平線」で線を引けます。線を置くとき、近くの高値・安値に自動で合わせます。</p>
+
+<h4 id="sr2">線ではなく「帯」で見る。根拠の重なりを見る</h4>
+<ul>
+  <li><span class="tag common">常識</span><strong>サポートやレジスタンスは、1本の線ではなく、幅のある帯として見ます。</strong>価格は、線ぴったりでは止まりません。少し手前で止まることも、少し行きすぎてから戻ることもあります。帯で見ておくと、「線を少し抜けただけ」の動き(だまし)にあわてにくくなります。</li>
+  <li><span class="tag common">常識</span><strong>線を引くときは、ひげの先ではなく終値を目安にします。</strong>その時間の取引が、最終的にいくらで決着したかを表すのが終値だからです。ニュースで伝えられる価格も、ふつうは終値です。最低2回、できれば3回以上止まった場所を選びます。</li>
+  <li><span class="tag common">常識</span><strong>切りのよい数字は、意識されやすい場所です。</strong>BTC の 100,000 ドル、ドル円の 150 円のような数字には、注文が集まりやすくなります。</li>
+  <li><span class="tag common">常識</span><strong>根拠が重なる場所ほど、多くの人が見ています。</strong>たとえば「過去に何度も止まった価格」と「200日移動平均線」と「フィボナッチの 61.8%」が同じあたりにあれば、別々の方法で見ている人たちが、同じ場所に注目していることになります。</li>
+  <li><span class="tag common">常識</span><strong>長い時間足の線ほど、重く扱います。</strong>週足・日足で見つけた帯のほうが、15分足で見つけた帯より、多くの人に見られています。</li>
+  <li><span class="tag idea">考え方</span><strong>帯に届いても、すぐには入りません。</strong>そこではね返るのか、抜けるのかは、届いた時点では分かりません。はね返す足(長いひげ、包み足)と出来高の増加を見てから入る、抜けたならいったん戻ってくるのを待つ、というように、「確かめてから」入るのが基本です。</li>
+</ul>
 
 <h3 id="dow">ダウ理論 — テクニカル分析の土台になった6つの考え方</h3>
 <p><span class="tag fact">事実</span>ダウ理論は、ダウ・ジョーンズ社を創業したチャールズ・ダウが、19世紀の終わりから20世紀の初めに新聞の論説で述べた考え方を、のちにハミルトンやレイアがまとめたものです。<sup>[24]</sup> 今のテクニカル分析の多くは、この考え方の上に成り立っています。</p>
@@ -1038,8 +1048,9 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <li><span class="tag idea">考え方</span>円建て(〜/JPY)の銘柄は、その通貨自体の値動きに加えて、ドルと円の為替の動きも価格に含まれます。BTC/USDT が動いていなくても、円安が進めば BTC/JPY は上がります。</li>
 </ul>
 
-<h3>24時間動く市場の「時間帯」</h3>
+<h3 id="hours">24時間動く市場の「時間帯」</h3>
 <p><span class="tag common">常識</span>暗号資産は土日も含めて24時間取引されますが、参加者の多い時間帯と少ない時間帯があります。欧州と米国の市場が開いている時間帯(日本時間の夕方〜深夜)は売買が増え、大きく動きやすくなります。米国の経済指標の発表(雇用統計、物価、金利の発表など)の直後は、特に急な動きが出やすい時間です。</p>
+<p><span class="tag fact">実測</span>BTC/USDT の過去2年分で、日本時間の1時間ごとの売買代金を比べました(全体の平均を1とした倍率)。いちばん多いのは <strong>23時台(1.79倍)と0時台(1.76倍)</strong>、次が22時台(1.39倍)と1時台(1.38倍)です。米国の株式市場が開く時間と重なります。少ないのは <strong>13〜15時台(0.74〜0.78倍)</strong>と、6〜8時台(0.77〜0.81倍)でした。「夜8〜10時がいちばん活発」と教えられることがありますが、20時台は 0.78倍と、むしろ少ない時間でした。増えはじめるのは22時からです。</p>
 <p><span class="tag idea">考え方</span>初めのうちは、重要な発表の直前直後には新しく入らない、と決めておくと、理由の分からない急な動きに巻き込まれにくくなります。</p>
 
 <h3 id="macro">値動きを左右する外の要因 — 金利・物価・ドル・中央銀行</h3>
@@ -1138,6 +1149,27 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <li><span class="tag idea">考え方</span>週末は「動きが小さい」ことが多い一方で、板が薄いため、まとまった注文やニュースが出たときには、少ない量で大きく動きやすくなります。週末に入る取引は、ふだんより金額を小さめにする、という考え方もあります。</li>
 </ul>
 
+<h4 id="gap">CME の「窓」と、窓埋め</h4>
+<p><span class="tag common">常識</span>株式のチャートでは、取引所が閉まっている間にニュースが出ると、次に開いたときの価格が前の終値から離れ、チャートにすき間ができます。これを「窓」と呼び、あとから価格がそのすき間まで戻ることを「窓埋め」と呼びます。「埋めない窓はない」という格言もあります。</p>
+<p><span class="tag fact">事実</span>24時間動く暗号資産にも、窓の話があります。米国の先物取引所 CME のビットコイン先物は、長いあいだ週末に取引が止まっていました。その間も現物は動くので、週明けに先物のチャートに窓ができました。ただし <strong>CME は2026年5月29日から、暗号資産の先物を土日も含めて24時間取引できるようにしました。</strong>これからは、週末の大きな窓はできにくくなります。<sup>[91]</sup></p>
+<p><span class="tag fact">事実</span>「CME の窓は◯%埋まる」という数字は、資料によって 70〜80% から 99%(80回のうち79回)まで、ばらばらです。どの窓を数えるか、いつまでに埋まれば「埋まった」とするかで、変わるためです。<sup>[91]</sup></p>
+<p><span class="tag fact">実測</span>そこで、現物の BTC/USDT で確かめました。「金曜の夜から日曜の夜までの49時間」の値動きを窓の代わりに使い、そのあと5日以内に、金曜の価格まで戻ったかを数えます。比べる相手として、<strong>平日の同じ長さ(49時間)の値動き</strong>でも、同じことを数えました。</p>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>49時間で動いた幅</th><th>週末:5日以内に戻った</th><th>平日:5日以内に戻った</th></tr></thead>
+  <tbody>
+    <tr><td>0.2〜1%</td><td class="num">91%(156回)</td><td class="num">90%(255回)</td></tr>
+    <tr><td>1〜2%</td><td class="num">80%(107回)</td><td class="num">75%(268回)</td></tr>
+    <tr><td>2%以上</td><td class="num">59%(161回)</td><td class="num">42%(854回)</td></tr>
+  </tbody>
+</table></div>
+<p class="src">BTC/USDT の1時間足、2017年8月〜2026年11月。金曜 21:00(UTC)から日曜 22:00(UTC)までを週末としました。CME の実際の取引時間とは少しずれるため、目安です。</p>
+<ul>
+  <li><span class="tag fact">実測</span><strong>小さな値動きは、週末でなくても、ほとんど戻ります。</strong>1%未満の動きは、平日でも90%が5日以内に元の価格に触れました。「窓は9割埋まる」が本当でも、それは窓に特別な力があるからではなく、小さな値動きがもともと戻りやすいからです。</li>
+  <li><span class="tag fact">実測</span><strong>大きな値動きでは、週末のほうが戻りやすい傾向がありました</strong>(59% 対 42%)。週末は売買が少なく、行きすぎた動きが出やすいため、と考えると筋が通ります。それでも、4割は戻っていません。</li>
+  <li><span class="tag fact">実測</span>「週末に大きく動いたら、月曜にほぼ戻る」とも言われます。週末に3%以上動いた125回を調べると、月曜に逆向きへ動いたのは 55% で、戻った幅は平均で週末の動きの 2% 分でした。<strong>月曜に戻る、とは言えません。</strong></li>
+  <li><span class="tag idea">考え方</span>窓埋めをねらうのは、流れに逆らう取引です。強い流れの中では、窓は埋まらずに、そのまま離れていきます。使うなら、損切りを先に決めておくことが欠かせません。</li>
+</ul>
+
 <h3 id="venues">取引所によって価格が違う理由</h3>
 <ul>
   <li><span class="tag fact">事実</span>34の取引所(19か国)のデータを調べた研究では、取引所や国の間の価格のずれは、BTC が急に値上がりしている時期に広がりやすく、米国・欧州の外では BTC が米国より高く取引されることが多い、と報告されています。<sup>[53]</sup></li>
@@ -1154,6 +1186,116 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
     <li>日足で見て、1日にどのくらい動くか。この章の表の銘柄と見比べて、どれに近いかを考えます。</li>
   </ol>
 </div>
+
+<h3 id="world">世界の出来事は、どう価格に伝わるか — 実例で見る</h3>
+<p>「金利」「ドル」「戦争」といった外の出来事が、チャートにどう表れるのかを、実際にあった2つの急落でたどります。出来事そのものより、<strong>伝わっていく順番</strong>に注目してください。</p>
+
+<h4>実例1:2024年8月5日 — 日本の利上げから、世界の株と暗号資産へ</h4>
+<ol class="steps">
+  <li><span class="tag fact">事実</span><strong>7月31日、日本銀行が政策金利を 0.25% に引き上げました</strong>(引き上げ幅は 0.15%)。さらに上げる可能性も示しました。<sup>[92]</sup></li>
+  <li><span class="tag fact">事実</span><strong>8月2日、米国の雇用の数字が予想より弱く</strong>、米国の景気への不安と、利下げの見方が強まりました。<sup>[92]</sup></li>
+  <li><span class="tag common">常識</span><strong>日本と米国の金利の差が縮む、と見られて、円高が進みました。</strong></li>
+  <li><span class="tag common">常識</span><strong>「円キャリー取引」の巻き戻しが起きました。</strong>円キャリー取引とは、金利の低い円を借りて、金利の高い通貨や株に投資する取引です。円高になると、借りた円を返すときに損が出ます。そこで、持っていた株などを売って円を買い戻す動きが、いっせいに出ました。</li>
+  <li><span class="tag common">常識</span><strong>借金(レバレッジ)をかけていた人には、追加の担保の請求が来ます。</strong>払えなければ、価格に関係なく強制的に売られます。売りが売りを呼びました。</li>
+  <li><span class="tag fact">事実</span><strong>8月5日、日経平均は 12.4% 下がりました。</strong>1987年のブラックマンデー以来の下げです。<sup>[92]</sup> 米国株の値動きの大きさを表す VIX 指数(恐怖指数)は、取引時間中に 65 まで上がったと報じられています。<sup>[92]</sup></li>
+</ol>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>このサイトのデータ</th><th>8月2日の終値 → 8月5日の安値</th><th>8月5日の終値まで</th><th>8月末まで</th></tr></thead>
+  <tbody>
+    <tr><td>BTC</td><td class="num down">-20.3%</td><td class="num down">-12.2%</td><td class="num down">-4.1%</td></tr>
+    <tr><td>ETH</td><td class="num down">-29.4%</td><td class="num down">-19.1%</td><td class="num down">-15.9%</td></tr>
+    <tr><td>金(PAXG)</td><td class="num down">-4.8%</td><td class="num down">-2.6%</td><td class="num up">+1.5%</td></tr>
+  </tbody>
+</table></div>
+<ul>
+  <li><span class="tag fact">実測</span><strong>暗号資産の出来事ではないのに、BTC は3日で一時 20% 下がりました。</strong>土日をはさんで、株式市場が開く前から下げはじめています。24時間開いている市場は、ほかの市場が閉まっている間の「売れるもの」になりやすい、と言われます。</li>
+  <li><span class="tag fact">実測</span><strong>「安全資産」の金も、いったんは下がりました</strong>(一時 -4.8%)。現金が急に必要になった人は、値上がりしているもの、すぐ売れるものから売るためです。金は、月末にはプラスに戻りました。</li>
+  <li><span class="tag fact">事実</span><strong>戻りも速いものでした。</strong>8月7日に日本銀行の副総裁が、市場が不安定なうちは利上げをしない考えを示すと、市場は落ち着きを取り戻しました。<sup>[92]</sup></li>
+  <li><span class="tag idea">考え方</span><strong>学べること:</strong>ひとつの原因で下がったのではありません。利上げ → 円高 → 借りたお金での取引の巻き戻し → 強制的な売り、と<strong>連鎖</strong>しました。第2章の「強制決済(清算)の連鎖」と同じ形が、世界の市場をまたいで起きた例です。</li>
+</ul>
+
+<h4>実例2:2025年10〜11月 — BTC が最高値から 3割下がるまで</h4>
+<p><span class="tag fact">実測</span>BTC/USDT は、2025年10月6日に 126,200 の最高値をつけたあと、11月18日に 90,000 を割り、11月21日には 80,600 まで下がりました。最高値から 36% の下落です。<span class="tag fact">事実</span>当時、原因として挙げられていたのは、次のようなものです。<sup>[95]</sup></p>
+<ul>
+  <li><span class="tag fact">事実</span><strong>米国の利下げの見方が後退した。</strong><span class="tag common">常識</span>利下げが遠のくと、ドルが買われ、金利のつかない資産(暗号資産や金)には逆風になりやすい、とされます。</li>
+  <li><span class="tag fact">事実</span><strong>米国の現物 ETF から、資金が出ていった。</strong>11月だけで約26億〜30億ドルと報じられています。ETF は、2024年からの上昇を支えた買い手でした。</li>
+  <li><span class="tag fact">事実</span><strong>レバレッジ取引の強制決済が連鎖した。</strong>1日で約20億ドル分が清算された日があった、と報じられています。<span class="tag fact">実測</span>このサイトのデータでも、10月10日は1日のうちに 122,550 から 102,000 まで下がっています。</li>
+  <li><span class="tag fact">事実</span><strong>株式市場も、同じ時期に不安定だった。</strong><span class="tag common">常識</span>リスクを取りにくい空気(リスクオフ)になると、株も暗号資産も、いっしょに売られやすくなります。</li>
+</ul>
+<p><span class="tag fact">事実</span>株と暗号資産がいっしょに動く傾向は、数字でも確かめられています。国際通貨基金(IMF)の分析では、ビットコインと米国株(S&amp;P 500)の値動きの連動の強さ(相関)は、2017〜19年の 0.01 から、2020〜21年には 0.36 に上がりました。「株が下がるときの逃げ場」としての働きは、限られている、という指摘です。<sup>[94]</sup></p>
+
+<h4>当時の「見通し」を、あとから読み返す</h4>
+<p><span class="tag fact">実測</span>この下落のあいだに書かれた、ある相場の見通しの記録(4本)を、実際の値動きと並べました。チャートの読み方としては、どれも筋の通ったものです。</p>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>書かれた日(その日の終値)</th><th>見通し</th><th>そのあと実際に起きたこと</th></tr></thead>
+  <tbody>
+    <tr><td>2025年10月28日<br>(112,898)</td><td>112,000〜113,000 で浅く押したあと上昇。上値のめどは 114,000〜115,000</td><td>7日後の11月4日に、98,944 まで下落</td></tr>
+    <tr><td>11月5日<br>(103,885)</td><td>100,000 を保てなければ 95,000 まで。95,000 を割ると、長い下降の流れへの転換に注意</td><td>11月18日に 90,000 割れ</td></tr>
+    <tr><td>11月10日<br>(106,011)</td><td>100,000 は底値に近い。悪くても 86,000〜87,000 まで</td><td>11日後の11月21日に、80,600 まで下落</td></tr>
+    <tr><td>11月18日<br>(92,961)</td><td>次に守るのは 85,000。最後の防衛線は 72,000〜74,000</td><td>3日後に 85,000 割れ。2026年1月に 97,924 まで戻したあと、2月に 72,000 割れ。7月には 57,800 まで下落</td></tr>
+  </tbody>
+</table></div>
+<ul>
+  <li><span class="tag fact">実測</span><strong>3週間のうちに、「ここが下値」の水準が 112,000 → 100,000 → 86,000 → 72,000 と、切り下がっていきました。</strong>しかも、どれも最後には割れています。</li>
+  <li><span class="tag idea">考え方</span><strong>これは、書いた人が下手だったからではありません。</strong>サポートは「止まりやすい場所」であって、「止まる場所」ではないからです。強い下げの中では、サポートは順番に割れていきます。</li>
+  <li><span class="tag idea">考え方</span><strong>役に立ったのは、予想の当たり外れより、いっしょに書かれていた「決まり」のほうでした。</strong>記録には「発表の前は、金額をいつもの半分にする」「一度に買わず、価格を分けて少しずつ買う」「割れたらやめる価格を先に決める」とあります。この決まりを守っていれば、予想が外れても、損は小さく済みます。</li>
+  <li><span class="tag idea">考え方</span><strong>「下がったら買い足す」には、落とし穴があります。</strong>100,000、90,000、86,000 と買い足していけば、平均の買値は下がります。けれども 57,800 まで下がった時点では、すべての買いが含み損です。買い足しは、「どこまで下がったらやめるか」と「全部でいくらまで使うか」を先に決めたうえで、借金(レバレッジ)を使わずに行うものです。</li>
+</ul>
+
+<h4>「安全資産」は、どこまで安全か</h4>
+<p><span class="tag common">常識</span>戦争や金融不安のときに買われやすいとされるものを、安全資産(逃避先)と呼びます。代表は、金、スイスフラン、米国の国債です。金は、国や中央銀行の政策に左右されにくい「実物」であることが、スイスフランは、政治的な中立と安定した経済が、理由とされます。</p>
+<ul>
+  <li><span class="tag fact">事実</span><strong>金の「安全」は、短いあいだの話です。</strong>米国・英国・ドイツの株と金の関係を調べた研究では、金は、株が大きく下がった直後には値を保ちやすいものの、その働きは <strong>約15営業日</strong>しか続かなかった、と報告されています。<sup>[93]</sup> また、先進国の株に対しては逃避先になったが、新興国の株に対してはならなかった、という研究もあります。<sup>[93]</sup></li>
+  <li><span class="tag fact">実測</span><strong>いつも上がるわけではありません。</strong>上の2024年8月の例では、金も一時 4.8% 下がりました。2026年2月末からの中東の衝突のあとは、60日間で 15% 下がっています(第4章の<a href="#sns">「SNS でよく見る図を、データで確かめる」</a>)。</li>
+  <li><span class="tag common">常識</span><strong>金は、利子も配当も生みません。</strong>持っているだけでは増えないので、金利が高いときには、相対的に不利になります。</li>
+  <li><span class="tag idea">考え方</span><strong>ビットコインは「デジタルの金」と呼ばれますが、値動きは金と大きく違います。</strong>下の表のとおり、1日の値動きは金の3〜4倍あり、上の2つの実例では、株といっしょに大きく下がりました。発行枚数に上限(2,100万枚)があるという「希少さ」は金と似ていますが、「不安なときに値を保つ」という働きは、いまのところ確かめられていません。</li>
+</ul>
+
+<h4>「通貨の強さ」を分けて見る</h4>
+<p><span class="tag common">常識</span>ドル円が上がったとき、理由は3つ考えられます。①ドルが強い、②円が弱い、③その両方、です。ドル円のチャートだけを見ていても、どれなのかは分かりません。そこで、<strong>ほかの通貨の組み合わせも並べて見ます。</strong>これを通貨強弱の分析と呼びます。</p>
+<ul>
+  <li><span class="tag common">常識</span>ドル円が上がり、ユーロドルが下がっているなら、<strong>ドルが強い</strong>(ドルが、円に対してもユーロに対しても買われている)と読めます。</li>
+  <li><span class="tag common">常識</span>ドル円が上がり、ユーロドルは動いていないなら、<strong>円が弱い</strong>と読めます。</li>
+  <li><span class="tag common">常識</span>いちばん強い通貨と、いちばん弱い通貨の組み合わせは、流れがはっきり出やすい、とされます。</li>
+  <li><span class="tag idea">考え方</span>暗号資産でも、同じ見方ができます。BTC/USDT が下がっているとき、ETH/BTC も下がっているなら「ETH は BTC より弱い」、ETH/BTC が上がっているなら「ETH は BTC より強い」と読めます。このサイトでは、銘柄の一覧の「為替」に USD/JPY と EUR/USDT、「BTC 建て」に ETH/BTC と SOL/BTC があります。</li>
+  <li><span class="tag idea">考え方</span>強さの比較は、「どれを取引するか」を選ぶ道具です。「いつ入るか」は、教えてくれません。</li>
+</ul>
+
+<h4>よく聞く数字を、確かめる</h4>
+<p>暗号資産の講義や動画でよく出てくる数字を、データと公的な資料で確かめました。</p>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>よく聞く話</th><th>確かめた結果</th></tr></thead>
+  <tbody>
+    <tr><td>「暗号資産は1日に 5〜10% 動く。株の約5倍」</td><td><span class="tag fact">実測</span>ふつうの日の値動き(始値から終値まで。まん中の値)は、BTC 1.47%、ETH 2.04%、SOL 2.92%、PEPE 3.36% でした。1日に 5% 以上動いた日は、BTC で 11.7%、PEPE で 32.1% です。「5〜10%」は、ふつうの日ではなく、<strong>荒れた日の数字</strong>です</td></tr>
+    <tr><td>「夜8〜10時がいちばん活発」</td><td><span class="tag fact">実測</span>BTC の売買がいちばん多いのは、日本時間の23時〜1時でした。20時台は、むしろ少ない時間です(この章の<a href="#hours">「時間帯」の実測</a>)</td></tr>
+    <tr><td>「アフリカでは 66% の人が銀行口座を持っていない」</td><td><span class="tag fact">事実</span>世界銀行の調査では、サハラ以南のアフリカで、金融機関や携帯電話の口座を持つ大人は、2021年の 49% から、2024年には <strong>58%</strong> に増えました。持っていない人は約 42% です。携帯電話を使った送金サービスが広がったためです<sup>[89]</sup></td></tr>
+    <tr><td>「暗号資産は約25,000種あり、9割以上は消える」</td><td><span class="tag fact">事実</span>価格情報サイト CoinGecko の調査では、2014年以降に掲載した24,000種あまりのうち、<strong>14,039種</strong>がすでに取引されなくなっていました(2024年の調査)。2021年7月〜2025年末に取引所以外で生まれた約2,020万種では、<strong>53.2%</strong> が消えています。<sup>[90]</sup> 「9割」という数字は確認できませんでしたが、<strong>半分以上が消える</strong>のは事実です</td></tr>
+    <tr><td>「米国の暗号資産の法律は、ほぼ決まった」</td><td><span class="tag fact">事実</span>ステーブルコインの法律(GENIUS 法)は、2025年7月に成立しました。<sup>[88]</sup> 一方、暗号資産の取引全体のルールを決める法案(CLARITY 法)は、2025年7月に下院を通り、2026年5月に上院の委員会を通りましたが、<strong>2026年9月15日、上院の本会議で審議に進めず</strong>、年内の成立はほぼなくなったと伝えられています。<sup>[87]</sup> 対立点のひとつは、ステーブルコインに利息のような報酬を付けてよいかで、銀行と暗号資産の会社が争っています<sup>[88]</sup></td></tr>
+  </tbody>
+</table></div>
+<ul>
+  <li><span class="tag idea">考え方</span><strong>「もうすぐ法律が決まるから、その前に買う」という考え方は、危うさがあります。</strong>上の法案は、2026年5月には「ほぼ決まり」と見られていましたが、4か月後に止まりました。決まるかどうか分からない出来事を当てにして買うなら、「決まらなかったとき」の損切りも、先に決めておきます。</li>
+  <li><span class="tag idea">考え方</span><strong>数字は、古くなります。</strong>口座を持たない人の割合のように、数年で大きく変わる数字もあります。聞いた数字は、いつの、誰の調査かを確かめる習慣をつけてください。</li>
+</ul>
+
+<h4>1日の値動きと、「売り」の危うさ</h4>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>銘柄</th><th>ふつうの日の値動き</th><th>5%以上動いた日</th><th>1日でいちばん上がった日</th><th>1日でいちばん下がった日</th><th>+10%以上の日/-10%以下の日</th></tr></thead>
+  <tbody>
+    <tr><td>BTC</td><td class="num">1.47%</td><td class="num">11.7%</td><td class="num up">+23%</td><td class="num down">-40%</td><td class="num">44日/30日</td></tr>
+    <tr><td>ETH</td><td class="num">2.04%</td><td class="num">18.8%</td><td class="num up">+26%</td><td class="num down">-45%</td><td class="num">82日/65日</td></tr>
+    <tr><td>XRP</td><td class="num">1.95%</td><td class="num">18.2%</td><td class="num up">+78%</td><td class="num down">-42%</td><td class="num">86日/60日</td></tr>
+    <tr><td>SOL</td><td class="num">2.92%</td><td class="num">27.5%</td><td class="num up">+46%</td><td class="num down">-42%</td><td class="num">117日/59日</td></tr>
+    <tr><td>PEPE</td><td class="num">3.36%</td><td class="num">32.1%</td><td class="num up">+89%</td><td class="num down">-30%</td><td class="num">84日/52日</td></tr>
+    <tr><td>金(PAXG)</td><td class="num">0.41%</td><td class="num">0.3%</td><td class="num up">+7%</td><td class="num down">-10%</td><td class="num">0日/1日</td></tr>
+  </tbody>
+</table></div>
+<p class="src">Binance の日足(UTC の1日)、各銘柄の取引開始から2026年11月18日まで。値動きは、始値から終値までの変化率。「ふつうの日」は、大きさの順に並べたまん中の値。</p>
+<ul>
+  <li><span class="tag fact">実測</span><strong>1日で 10% 以上「上がった」日は、「下がった」日より多くありました。</strong>PEPE は1日で +89%、XRP は +78% 上がった日があります。</li>
+  <li><span class="tag idea">考え方</span><strong>「売り(ショート)」は、急に上がったときの損が大きくなります。</strong>買いの損は、最悪でも買った金額までです。売りは、価格が2倍になれば、売った金額と同じだけ損をします。売買の少ない銘柄は、まとまった買いで急に跳ね上がります。「暗号資産では売りから入らない」と決めている人が多いのは、このためです。</li>
+  <li><span class="tag idea">考え方</span>このサイトのデモトレードでは、売りも練習できます。試すなら、まず BTC のような売買の多い銘柄で、必ず損切りを入れてください。</li>
+</ul>
 
 <!-- ============================================================ 3 -->
 <h2 id="indicators"><small>第3章</small>インジケーター</h2>
@@ -1849,6 +1991,91 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
 </ol>
 <p><span class="tag idea">考え方</span>いちばん確かなのは、<strong>自分で数えてみること</strong>です。このサイトでは、「インジケーター → 新しく作る」で条件を式にして、過去のデータでの結果をその場で見られます(第8章)。「勝率85%」が本当なら、自分で数えても85%前後になるはずです。</p>
 
+<h3 id="volcheck">出来高で「本気度」を確かめる — よく教えられる決まりを、データで試す</h3>
+<p><span class="tag common">常識</span>ローソク足は、買いと売りの「結果」です。陽線なら買いが勝ち、陰線なら売りが勝ちました。けれども、その勝ちが<strong>どれだけ本気だったか</strong>は、足の形だけでは分かりません。それを表すのが出来高です。大きな注文を出した人も、取引が成立した量は隠せないからです。</p>
+<div class="two">
+  <div><h4>自然な形</h4><p>大きく上がって、出来高も多い。<br>大きく下がって、出来高も多い。<br>→ その動きに、お金がついてきている</p></div>
+  <div><h4>違和感のある形</h4><p>大きく上がったのに、出来高が少ない。<br>高値を更新したのに、出来高が前より少ない。<br>上がるにつれて、出来高が減っていく。<br>→ 続かないかもしれない、と疑う</p></div>
+</div>
+<p><span class="tag common">常識</span>出来高が少ないのに急に上がったときは、<strong>ショートカバー</strong>(売っていた人が、損切りのために買い戻しただけ)の可能性があります。新しく買いたい人が増えたわけではないので、買い戻しが終わると、勢いが続かないことがあります。</p>
+<p>こうした読み方は、暗号資産の講義でよく教えられます。筋は通っていますが、本当にそうなるのかを、6銘柄の日足で数えました。</p>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>条件</th><th>5日後に上がっていた割合</th><th>5日間の値動きの平均</th><th>回数</th></tr></thead>
+  <tbody>
+    <tr><td><em>何もしないとき(すべての日)</em></td><td class="num">50.3%</td><td class="num">+0.86%</td><td class="num">15,046</td></tr>
+    <tr><td colspan="4"><strong>大きな足と、出来高</strong></td></tr>
+    <tr><td>大きな陽線 + 出来高が多い</td><td class="num">53.4%</td><td class="num up">+3.38%</td><td class="num">727</td></tr>
+    <tr><td>大きな陽線 + 出来高が少ない</td><td class="num">46.7%</td><td class="num">+1.27%</td><td class="num">422</td></tr>
+    <tr><td>大きな陰線 + 出来高が多い</td><td class="num">48.7%</td><td class="num down">-0.31%</td><td class="num">602</td></tr>
+    <tr><td>大きな陰線 + 出来高が少ない</td><td class="num">47.1%</td><td class="num">+0.01%</td><td class="num">399</td></tr>
+    <tr><td colspan="4"><strong>高値の更新(20日間の高値を、終値で上回った日)</strong></td></tr>
+    <tr><td>出来高が多い</td><td class="num">55.2%</td><td class="num up">+3.42%</td><td class="num">279</td></tr>
+    <tr><td>出来高が少ない</td><td class="num">50.9%</td><td class="num">+2.08%</td><td class="num">291</td></tr>
+    <tr><td colspan="4"><strong>移動平均線(5日線と20日線)</strong></td></tr>
+    <tr><td>ゴールデンクロスだけ</td><td class="num">50.6%</td><td class="num">+0.79%</td><td class="num">427</td></tr>
+    <tr><td>ゴールデンクロス + 出来高が多い</td><td class="num">62.0%</td><td class="num up">+2.97%</td><td class="num">71</td></tr>
+    <tr><td>デッドクロス</td><td class="num">48.1%</td><td class="num">+0.18%</td><td class="num">428</td></tr>
+    <tr><td colspan="4"><strong>日足と週足の向き</strong></td></tr>
+    <tr><td>日足が上向き(5日線が20日線の上で、どちらも右上がり)</td><td class="num">52.5%</td><td class="num">+2.15%</td><td class="num">4,404</td></tr>
+    <tr><td>日足も週足も上向き</td><td class="num">54.3%</td><td class="num up">+2.62%</td><td class="num">2,257</td></tr>
+    <tr><td>日足は上向き、週足は下向き</td><td class="num">52.6%</td><td class="num">+1.96%</td><td class="num">1,751</td></tr>
+    <tr><td>日足も週足も下向き</td><td class="num">51.4%</td><td class="num">+0.63%</td><td class="num">4,087</td></tr>
+    <tr><td colspan="4"><strong>「実体も出来高も、14日平均の2倍以上」という合図</strong></td></tr>
+    <tr><td>陽線で出た</td><td class="num">60.5%</td><td class="num up">+6.41%</td><td class="num">324</td></tr>
+    <tr><td>陰線で出た</td><td class="num">50.0%</td><td class="num down">-0.62%</td><td class="num">222</td></tr>
+  </tbody>
+</table></div>
+<p class="src">BTC・ETH・XRP・SOL・PEPE・金(PAXG)の日足を合わせた数字。各銘柄の取引開始から2026年11月18日まで。条件がそろった日の翌日の始値で買い、5日後の終値で比べています。手数料は入れていません。「大きな足」は実体が14日平均の1.5倍以上、「出来高が多い」は平均の1.5倍以上、「少ない」は平均以下。週足の向きは、25日線と100日線(5週・20週に相当)で代用しました。</p>
+<ul>
+  <li><span class="tag fact">実測</span><strong>「出来高をともなう上昇は続きやすい」は、データでも確かめられました。</strong>大きな陽線のあとの5日間は、出来高が多いと平均 +3.38%、少ないと +1.27% でした。高値の更新でも、出来高が多いほうが成績が上です。</li>
+  <li><span class="tag fact">実測</span><strong>「ゴールデンクロスだけで入るのは危ない」も、そのとおりでした。</strong>5日線と20日線の交差だけでは、上がった割合 50.6%、平均 +0.79% で、何もしないときと変わりません。出来高の条件を足すと 62.0% になりましたが、71回しかないので、まだ確かとは言えません。</li>
+  <li><span class="tag fact">実測</span><strong>「日足と週足の向きがそろったときに入る」には、少しだけ効果がありました</strong>(54.3%、平均 +2.62%)。ただし、週足が下向きのとき(52.6%、+1.96%)との差は、わずかです。</li>
+  <li><span class="tag fact">実測</span><strong>「実体も出来高も2倍」の合図は、陽線では目立って良い数字でした</strong>(60.5%、平均 +6.41%)。銘柄ごとでは、BTC 67.4%(43回)、ETH 63.3%(49回)、SOL 71.7%(46回)、PEPE 58.1%(43回)です。「いくつかの銘柄で利益が出た」という話と合います。</li>
+  <li><span class="tag fact">実測</span><strong>同じ合図でも、陰線(下げ)では役に立ちませんでした。</strong>5日後に下がっていたのは、ちょうど半分です。この期間、暗号資産は全体として値上がりしていたため、下げは続きにくかった、と考えられます。</li>
+</ul>
+<div class="warn">
+  <p><strong>この数字を、そのまま信じてはいけない理由</strong> <span class="tag idea">考え方</span></p>
+  <ul>
+    <li><strong>全体が値上がりした期間です。</strong>「買い」の合図が良く見えるのは、ある意味で当然です。</li>
+    <li><strong>平均は、少数の大当たりに引っぱられています。</strong>陽線の合図の平均は +6.41% ですが、まん中の値は +1.52% です。PEPE では平均 +22% に対して、まん中は +7.5% でした。数回の急騰が、平均を押し上げています。</li>
+    <li><strong>回数が少ない条件があります。</strong>銘柄ごとでは40〜50回です。10回ちがえば、割合は20ポイント動きます。</li>
+    <li><strong>合図のあとの5日間に、どれだけ下がる場面があったかは、数えていません。</strong>途中で大きく下がれば、損切りにかかっていたはずです。</li>
+    <li><strong>条件の決め方は、筆者が置いたものです。</strong>「1.5倍」を「2倍」に変えれば、数字は変わります。良い数字が出るまで条件を変えていくと、過去に合わせすぎた決まりができあがります(第8章)。</li>
+  </ul>
+</div>
+
+<h4>値動き・出来高・インジケーターの3つがそろったときだけ入る</h4>
+<p><span class="tag idea">考え方</span>講義でよく教えられる考え方に、「三位一体」があります。①値動き(足の形と流れ)、②出来高、③インジケーターの3つを、同じ重さで見て、<strong>3つとも同じ向きを示したときだけ入る</strong>、というものです。ひとつでも違和感があれば、見送ります。</p>
+<ul>
+  <li><span class="tag common">常識</span><strong>インジケーターは、補助です。</strong>RSI は 50 より上なら強気、下なら弱気、70 以上は買われすぎ、30 以下は売られすぎの目安ですが、RSI だけで逆向きに入ることはしません。</li>
+  <li><span class="tag common">常識</span><strong>強い流れの中では、インジケーターは当てになりません。</strong>何か月も押し目を作らずに上がる相場では、RSI は「買われすぎ」を示しつづけます。</li>
+  <li><span class="tag common">常識</span><strong>レンジのまん中では、入りません。</strong>上にも下にも動く余地が同じだけあり、どちらに行くか分からないためです。</li>
+  <li><span class="tag common">常識</span><strong>抜けた直後ではなく、戻ってきたところを待ちます。</strong>高値を抜けた瞬間に出来高が増えるのは、売っていた人の損切り(買い戻し)が巻きこまれるためでもあります。新しい買いが入りやすいのは、抜けたあとに一度戻ってきて、また上がりはじめるところです。</li>
+  <li><span class="tag fact">実測</span>上の表のとおり、条件を重ねると成績は良くなる傾向がありました。その代わり、<strong>入れる回数は大きく減ります。</strong>「見送る」ことが、取引の大半になります。</li>
+</ul>
+
+<h4>ATR を使った、追いかける損切り(トレーリングストップ)</h4>
+<p><span class="tag common">常識</span>価格が上がるたびに、損切りの位置を引き上げていく方法です。よく教えられるのは、「いまの価格から、<strong>ATR の2〜3倍</strong>だけ下に置く」「価格が上がったときだけ引き上げ、下がったときは動かさない」「終値で判断する」という決まりです。ATR は、1日の値動きの大きさの平均です(第3章)。</p>
+<p><span class="tag fact">実測</span>「日足も週足も上向きのときに買い、ATR(14日)の2倍または3倍の損切りを終値で割ったら売る」という決まりを、過去のデータで試しました(手数料は片道 0.1%)。</p>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>銘柄</th><th>ATR の2倍</th><th>ATR の3倍</th><th>買って持ち続けた場合</th><th>勝率(3倍)</th><th>最大の下落(3倍)</th></tr></thead>
+  <tbody>
+    <tr><td>BTC</td><td class="num up">+1,105%</td><td class="num up">+1,047%</td><td class="num up">+439%</td><td class="num">52%</td><td class="num down">-50%</td></tr>
+    <tr><td>ETH</td><td class="num up">+3,079%</td><td class="num up">+4,336%</td><td class="num up">+293%</td><td class="num">54%</td><td class="num down">-66%</td></tr>
+    <tr><td>SOL</td><td class="num up">+1,197%</td><td class="num up">+2,875%</td><td class="num up">+3,739%</td><td class="num">50%</td><td class="num down">-66%</td></tr>
+    <tr><td>XRP</td><td class="num down">-23%</td><td class="num down">-49%</td><td class="num up">+204%</td><td class="num">26%</td><td class="num down">-91%</td></tr>
+    <tr><td>PEPE</td><td class="num up">+43%</td><td class="num down">-38%</td><td class="num up">+238%</td><td class="num">25%</td><td class="num down">-82%</td></tr>
+    <tr><td>金(PAXG)</td><td class="num up">+38%</td><td class="num up">+48%</td><td class="num up">+100%</td><td class="num">50%</td><td class="num down">-18%</td></tr>
+  </tbody>
+</table></div>
+<p class="src">各銘柄の取引開始の約110日後から2026年11月18日まで。毎回、全資金で売買を続けた場合。「買って持ち続けた場合」は、同じ期間の最初の日に買って最後まで持った場合です。</p>
+<ul>
+  <li><span class="tag fact">実測</span><strong>BTC と ETH では、持ち続けるより良い結果でした。</strong>大きな下げの前に降りられたためです。</li>
+  <li><span class="tag fact">実測</span><strong>XRP と PEPE では、損をしました。</strong>急に上がっては急に下がる銘柄では、上がってから買い、下がってから売ることのくり返しになります。持ち続けていればプラスだった銘柄で、マイナスになっています。</li>
+  <li><span class="tag fact">実測</span><strong>2倍と3倍のどちらが良いかは、銘柄で逆になりました。</strong>「どの銘柄にも合う倍率」は、ありません。</li>
+  <li><span class="tag idea">考え方</span>この方法の値打ちは、成績よりも、<strong>「どこで降りるか」をその場の気分で決めなくて済む</strong>ことにあります。</li>
+</ul>
+
 <h3 id="plan">取引計画 — 入る前に書き出す</h3>
 <p><span class="tag idea">考え方</span>入る前に次の項目を書き出すと、「なんとなく」の取引が減ります。書けない項目があるなら、その取引は見送ります。</p>
 <div class="plan">
@@ -1861,6 +2088,24 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <p>⑥ 買う金額:資金 10,000 の 1%(100)を失う設定 → 100 ÷ 0.04 = 2,500 分</p>
   <p>⑦ 見送る条件:重要な経済指標の発表の直前、BTC の日足が下降の流れのとき</p>
 </div>
+
+<h4 id="check12">入る前の、12の確認</h4>
+<p><span class="tag idea">考え方</span>取引計画を書いたら、注文を出す前に、次の12個を確かめます。暗号資産の講義でよく使われる確認表を、この教科書の言葉に直したものです。</p>
+<ol class="steps">
+  <li>日足と週足は、同じ向きか。</li>
+  <li>5日線と20日線の位置は、その向きと合っているか。</li>
+  <li>価格の動きに、出来高がついてきているか。</li>
+  <li>高値を更新したとき、出来高は増えていたか。</li>
+  <li>出来高が減っているのに、価格だけが上がっていないか。</li>
+  <li>サポートとレジスタンスを、終値で確かめたか。</li>
+  <li>売買の多かった価格の帯(第3章の出来高プロファイル)を確かめたか。</li>
+  <li>RSI などのインジケーターに、違和感はないか。</li>
+  <li>値動き・出来高・インジケーターの3つが、そろっているか。</li>
+  <li>なぜ入るのかを、自分の言葉で説明できるか。</li>
+  <li>損切りと利確の価格を、先に決めたか。</li>
+  <li>負けても平気でいられる金額か。</li>
+</ol>
+<p><span class="tag idea">考え方</span>10番目がいちばん大事です。<strong>自分に説明できない取引は、しない。</strong>「なんとなく上がりそう」「SNS で誰かが買っていた」は、説明になりません。説明できる取引だけに絞ると、回数は減りますが、あとで記録を見直したときに、何が良くて何が悪かったのかが分かるようになります。</p>
 
 <div class="note">
   <p><strong>「売り」から入る取引について</strong> <span class="tag common">常識</span></p>
@@ -2475,6 +2720,15 @@ h2[id], h3[id], .card[id] { scroll-margin-top: 64px; }
   <li>デイトレードをする個人の成績(台湾) — <a href="https://faculty.haas.berkeley.edu/odean/papers/day%20traders/Day%20Trading%20Skill%20110523.pdf" rel="noopener noreferrer">Barber・Lee・Liu・Odean: The Cross-Section of Speculator Skill</a>、<a href="https://econpapers.repec.org/RePEc:oup:rasset:v:10:y:2020:i:1:p:61-93." rel="noopener noreferrer">Learning, Fast or Slow, Review of Asset Pricing Studies 10(1), 2020</a></li>
   <li>グランビルの法則 — <a href="https://www.oanda.com/us-en/skills-and-insights/education/technical-analysis/indicators-and-oscillators/an-introduction-to-granvilles-rules-trading/" rel="noopener noreferrer">OANDA: An introduction to Granville's rules</a>、<a href="https://www.traders.co.jp/column/article/13" rel="noopener noreferrer">トレーダーズ・ウェブの解説</a>(発表の年は、資料によって1960年・1963年と分かれています)</li>
   <li>エリオット波動と、その批判 — <a href="https://marottaonmoney.com/mailbag-what-do-you-think-about-the-elliott-wave-principle/" rel="noopener noreferrer">Marotta on Money の解説</a>(学術的な検証は、筆者が調べた範囲では見つかりませんでした)</li>
+  <li>米国の暗号資産の法案(CLARITY 法)の経過 — <a href="https://www.dlapiper.com/en/insights/publications/2026/09/senate-fails-to-advance-the-clarity-act" rel="noopener noreferrer">DLA Piper: Senate fails to advance the CLARITY Act(2026年9月)</a>、<a href="https://www.lw.com/en/us-crypto-policy-tracker/legislative-developments" rel="noopener noreferrer">Latham &amp; Watkins: US Crypto Policy Tracker</a></li>
+  <li>ステーブルコインの法律(GENIUS 法)と、利息をめぐる対立 — <a href="https://www.everycrsreport.com/reports/IF13174.html" rel="noopener noreferrer">米国議会調査局: The Stablecoin Yield Debate(2026年3月)</a>、<a href="https://www.theblock.co/post/392117/trump-genius-stablecoin-law-threatened-banks-congress-stalls-market-structure-bill" rel="noopener noreferrer">The Block の報道</a></li>
+  <li>口座を持つ人の割合(サハラ以南のアフリカ) — <a href="https://www.worldbank.org/en/news/press-release/2025/07/16/mobile-phone-technology-powers-saving-surge-in-developing-economies" rel="noopener noreferrer">世界銀行: Global Findex 2025 の発表(2025年7月16日)</a></li>
+  <li>取引されなくなった暗号資産の割合 — <a href="https://www.coingecko.com/research/publications/how-many-cryptocurrencies-failed" rel="noopener noreferrer">CoinGecko: How Many Cryptocurrencies Have Failed?</a>、2014年以降の調査は <a href="https://www.crowdfundinsider.com/2024/01/220347-majority-of-cryptocurrencies-have-died-research-report/" rel="noopener noreferrer">Crowdfund Insider の記事(2024年1月)</a> による</li>
+  <li>CME の暗号資産先物の24時間取引と、窓が埋まる割合 — <a href="https://www.cmegroup.com/media-room/press-releases/2026/6/01/cme_group_announceslaunchof247cryptocurrencyfuturesandoptionstra.html" rel="noopener noreferrer">CME Group の発表(2026年6月1日)</a>、<a href="https://www.theblock.co/news/markets/2026-02-19-cme-group-launch-24-7-crypto-futures-options-trading-may-29-390491" rel="noopener noreferrer">The Block の報道</a>、割合の数字は <a href="https://cryptoslate.com/do-cme-gaps-always-have-to-fill-bitcoins-60k-flush-says-no/" rel="noopener noreferrer">CryptoSlate の記事</a> などによる(もとの調査は直接確認できていません)</li>
+  <li>2024年8月5日の急落 — <a href="https://www.japantimes.co.jp/business/2024/08/05/markets/nikkei-plunge" rel="noopener noreferrer">The Japan Times: Nikkei plunge(2024年8月5日)</a>、<a href="https://www.interactivebrokers.eu/campus/traders-insight/insights-into-the-japanese-equities-market-sell-off/" rel="noopener noreferrer">Interactive Brokers の解説</a>。VIX の 65 は <a href="https://convextrade.com/history/2024-yen-carry-trade-unwind" rel="noopener noreferrer">Convex Trade のまとめ</a> による(ほかの資料では確認できていません)</li>
+  <li>金は安全資産か — <a href="https://econpapers.repec.org/RePEc:bla:finrev:v:45:y:2010:i:2:p:217-229" rel="noopener noreferrer">Baur・Lucey (2010) Is Gold a Hedge or a Safe Haven?, The Financial Review 45(2)</a>、<a href="https://econpapers.repec.org/RePEc:eee:jbfina:v:34:y:2010:i:8:p:1886-1898" rel="noopener noreferrer">Baur・McDermott (2010) Is gold a safe haven? International evidence, Journal of Banking &amp; Finance 34(8)</a>(「約15営業日」は、作業論文版の要旨による)</li>
+  <li>ビットコインと株の連動 — <a href="https://www.imf.org/en/Blogs/Articles/2022/01/11/crypto-prices-move-more-in-sync-with-stocks-posing-new-risks" rel="noopener noreferrer">IMF: Crypto Prices Move More in Sync With Stocks, Posing New Risks(2022年1月)</a>(2021年までのデータによる分析です)</li>
+  <li>2025年10〜11月のビットコインの下落 — <a href="https://www.morningstar.com/markets/crypto-etf-investors-pull-billions-bitcoin-slides-below-90000" rel="noopener noreferrer">Morningstar: Crypto ETF Investors Pull Billions as Bitcoin Slides Below $90,000</a>、<a href="https://www.aljazeera.com/economy/2025/11/18/bitcoin-ticks-up-after-erasing-all-of-2025-gains" rel="noopener noreferrer">Al Jazeera(2025年11月18日)</a>、<a href="https://www.theblock.co/post/379229/bitcoin-capitulation-wave-builds-as-etf-outflows-rate-shocks-hit-crypto-analysts" rel="noopener noreferrer">The Block の報道</a></li>
 </ol>
 
 <footer>
