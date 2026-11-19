@@ -145,6 +145,71 @@
   const meaning = { '事実': '出典で確認できる内容です', '実測': 'Binance の日足データから筆者が計算した数字です', '常識': '相場の世界で広く知られている一般的な知識です', '考え方': '筆者の整理や推測です。正しいとは限りません' };
   document.querySelectorAll('.tag').forEach(t => { const m = meaning[t.textContent.trim()]; if (m) t.title = m; });
 
+  // ---- 章ごとの、読むのにかかる時間の目安(日本語の文章を1分に約500文字として計算)
+  const chapters = items.filter(it => it.isChapter);
+  chapters.forEach(it => {
+    let n = 0;
+    for (let el = it.el.nextElementSibling; el && el.tagName !== 'H2' && el.tagName !== 'FOOTER'; el = el.nextElementSibling) n += el.textContent.replace(/\s+/g, '').length;
+    it.mins = Math.max(1, Math.round(n / 500));
+    const m = document.createElement('span');
+    m.className = 'mins'; m.textContent = `約${it.mins}分`;
+    it.a.appendChild(m);
+  });
+  // 「最初に読む道すじ」の各行にも、リンク先の節の長さから目安を出す
+  document.querySelectorAll('.path a[href^="#"]').forEach(a => {
+    const head = document.getElementById(a.getAttribute('href').slice(1));
+    if (!head || a.dataset.nomin !== undefined) return;
+    const stop = head.tagName === 'H2' ? ['H2'] : head.tagName === 'H3' ? ['H2', 'H3'] : ['H2', 'H3', 'H4'];
+    let n = 0;
+    for (let el = head.nextElementSibling; el && !stop.includes(el.tagName) && el.tagName !== 'FOOTER'; el = el.nextElementSibling) n += el.textContent.replace(/\s+/g, '').length;
+    const m = document.createElement('span');
+    m.className = 'mins'; m.textContent = `約${Math.max(1, Math.round(n / 500))}分`;
+    a.after(m);
+  });
+
+  // ---- 確認問題(選ぶと、その場で答えと解説が出る。結果はこの端末に覚えておく)
+  const quizSaved = prefs.quiz && typeof prefs.quiz === 'object' ? prefs.quiz : {};
+  const navMark = (id, text) => {
+    const it = items.find(x => x.el.id === id);
+    if (!it) return;
+    let m = it.a.querySelector('.mins');
+    if (!m) { m = document.createElement('span'); m.className = 'mins'; it.a.appendChild(m); }
+    m.textContent = text;
+  };
+  document.querySelectorAll('.quiz').forEach(qz => {
+    qz.classList.add('js');
+    const head = qz.querySelector('h3[id]'), id = head ? head.id : '';
+    const qs = [...qz.querySelectorAll('.q')], res = qz.querySelector('.qres'), again = qz.querySelector('.qagain');
+    let right = 0, done = 0;
+    const report = () => {
+      if (done < qs.length) { res.textContent = done ? `${qs.length}問中 ${done}問まで答えました` : ''; again.hidden = true; return; }
+      res.textContent = `${qs.length}問中 ${right}問 正解` + (right === qs.length ? '。全問正解です' : '。まちがえた問題は、解説のリンクから読み直せます');
+      again.hidden = false;
+      quizSaved[id] = { n: qs.length, ok: right }; prefs.quiz = quizSaved; write(KEY, prefs);
+      navMark(id, `${right}/${qs.length}`);
+    };
+    qs.forEach(q => {
+      const ans = Number(q.dataset.a), opts = [...q.querySelectorAll('.opt')];
+      opts.forEach((b, k) => b.addEventListener('click', () => {
+        if (q.classList.contains('done')) return;
+        q.classList.add('done');
+        opts.forEach((o, j) => { o.disabled = true; if (j === ans) o.classList.add('ok'); });
+        if (k !== ans) b.classList.add('ng'); else right++;
+        b.setAttribute('aria-pressed', 'true');
+        done++;
+        report();
+      }));
+    });
+    again.addEventListener('click', () => {
+      right = 0; done = 0;
+      qs.forEach(q => { q.classList.remove('done'); q.querySelectorAll('.opt').forEach(o => { o.disabled = false; o.classList.remove('ok', 'ng'); o.removeAttribute('aria-pressed'); }); });
+      report();
+      head.scrollIntoView();
+    });
+    const old = quizSaved[id];
+    if (old && old.n === qs.length) navMark(id, `${old.ok}/${old.n}`);
+  });
+
   markTables();
   onScroll();
 })();
