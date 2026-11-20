@@ -274,6 +274,12 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 .exam-btn:disabled { opacity: .5; cursor: default; }
 @media (max-width: 520px) { .learn-row { grid-template-columns: 7em 1fr; } .learn-n { grid-column: 1 / -1; margin-top: -4px; } }
 @media print { .exam, .learn { display: none; } }
+.noprint { }
+@media print { .noprint, #tryCount { display: none !important; } }
+.try .try-done { min-height: 36px; }
+.learn-ch a { padding: 6px 10px; }
+.open-chart a { padding: 6px 14px; }
+@media (max-width: 360px) { .bar #themeBtn { display: none; } } /* とても狭い画面では、章の名前の場所を空ける(明るさの切りかえは、チャートの画面でできる) */
 </style>
 </head>
 <body>
@@ -377,8 +383,8 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 </div>
 <p>第1章から第10章の終わりには、<strong>確認問題</strong>があります。選ぶと、その場で答えと解説が出ます。読んだだけで終わらせず、身についたかを確かめるのに使ってください。結果は、この端末に覚えておき、左のもくじに「4/5」のように出ます。</p>
 <p>本文のあちこちに、<strong>「チャートで試す」</strong>の課題が17個あります。ボタンを押すと、その課題に合った銘柄とインジケーターでチャートが開きます。読むだけでなく、手を動かすと身につきます。<span id="tryCount"></span></p>
-<h3 id="progress">学習の進み具合</h3>
-<p>この端末で読んだ章、確認問題、課題の進み具合です。下の章の名前を押すと、その章へ移動します。最後に<a href="#exam">総合テスト</a>で、身についたかを確かめられます。</p>
+<h3 id="progress" class="noprint">学習の進み具合</h3>
+<p class="noprint">この端末で読んだ章、確認問題、課題の進み具合です。下の章の名前を押すと、その章へ移動します。最後に<a href="#exam">総合テスト</a>で、身についたかを確かめられます。</p>
 <div id="learn" class="learn"></div>
 <noscript><p>進み具合の表示と確認問題には、JavaScript が必要です。</p></noscript>
 
@@ -644,10 +650,10 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
       <line x1="462" y1="64.8" x2="462" y2="151.2" stroke="#1f9d8f" stroke-width="2"/><rect x="453.0" y="68.0" width="18" height="80.0" fill="#1f9d8f"/><line x1="492" y1="52.0" x2="492" y2="128.8" stroke="#e0463f" stroke-width="2"/><rect x="483.0" y="58.4" width="18" height="67.2" fill="#e0463f"/><line x1="446" y1="108.0" x2="512" y2="108.0" stroke="currentColor" stroke-width="1" stroke-dasharray="4 3" opacity=".6"/>
       <g stroke="currentColor" stroke-width="1" opacity=".25"><line x1="140" y1="20" x2="140" y2="250"/><line x1="280" y1="20" x2="280" y2="250"/><line x1="420" y1="20" x2="420" y2="250"/></g>
       <g text-anchor="middle">
-        <text x="70" y="226" font-weight="700">たくり線</text><text x="70" y="246" opacity=".75">下げたあとの安値で</text>
-        <text x="210" y="226" font-weight="700">首吊り線</text><text x="210" y="246" opacity=".75">上げたあとの高値で</text>
-        <text x="350" y="226" font-weight="700">切り込み線</text><text x="350" y="246" opacity=".75">半分より上で終わる</text>
-        <text x="490" y="226" font-weight="700">かぶせ線</text><text x="490" y="246" opacity=".75">半分より下で終わる</text>
+        <text x="70" y="226" font-weight="700">たくり線</text><text x="70" y="246" opacity=".75">安値で出る</text>
+        <text x="210" y="226" font-weight="700">首吊り線</text><text x="210" y="246" opacity=".75">高値で出る</text>
+        <text x="350" y="226" font-weight="700">切り込み線</text><text x="350" y="246" opacity=".75">半分より上</text>
+        <text x="490" y="226" font-weight="700">かぶせ線</text><text x="490" y="246" opacity=".75">半分より下</text>
       </g>
     </g>
   </svg>
@@ -1323,7 +1329,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <p class="ex"><strong>答え:1ドルとほぼ同じ値段になるよう作られているが、常に1ドルである保証はない</strong><br>2022年5月には、テラ USD というステーブルコインが1ドルを大きく割り込み、元に戻りませんでした。「/USDT」の銘柄は、USDT で値段を表しています。(→ <a href="#stable">ステーブルコインと決済通貨</a>)</p>
 </div>
 <div class="q" data-a="0">
-  <p class="qt">問4. この章の最初の表で、BTC 以外の暗号資産に共通していたことは何ですか。</p>
+  <p class="qt">問4. この章の最初の表で、金と BTC 以外の暗号資産に共通していたことは何ですか。</p>
   <button type="button" class="opt">どれも、高値から3分の2以上を失った時期がある</button>
   <button type="button" class="opt">どれも、金より値動きが小さい</button>
   <button type="button" class="opt">どれも、BTC と逆の向きに動く</button>
@@ -1575,7 +1581,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 </ul>
 <p><span class="tag fact">事実</span>株と暗号資産がいっしょに動く傾向は、数字でも確かめられています。国際通貨基金(IMF)の分析では、ビットコインと米国株(S&amp;P 500)の値動きの連動の強さ(相関)は、2017〜19年の 0.01 から、2020〜21年には 0.36 に上がりました。「株が下がるときの逃げ場」としての働きは、限られている、という指摘です。<sup>[94]</sup></p>
 
-<h4>当時の「見通し」を、あとから読み返す</h4>
+<h4 id="lookback">当時の「見通し」を、あとから読み返す</h4>
 <p><span class="tag fact">実測</span>この下落のあいだに、個人の投資家が書きとめていた相場の見通し(4本)を、実際の値動きと並べました。チャートの読み方としては、どれも筋の通ったものです。</p>
 <div class="tbl-wrap"><table>
   <thead><tr><th>書かれた日(その日の終値)</th><th>見通し</th><th>そのあと実際に起きたこと</th></tr></thead>
@@ -1593,7 +1599,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <li><span class="tag idea">考え方</span><strong>「下がったら買い足す」には、落とし穴があります。</strong>100,000、90,000、86,000 と買い足していけば、平均の買値は下がります。けれども 57,800 まで下がった時点では、すべての買いが含み損です。買い足しは、「どこまで下がったらやめるか」と「全部でいくらまで使うか」を先に決めたうえで、借金(レバレッジ)を使わずに行うものです。</li>
 </ul>
 
-<h4>「安全資産」は、どこまで安全か</h4>
+<h4 id="safe">「安全資産」は、どこまで安全か</h4>
 <p><span class="tag common">常識</span>戦争や金融不安のときに買われやすいとされるものを、安全資産(逃避先)と呼びます。代表は、金、スイスフラン、米国の国債です。金は、国や中央銀行の政策に左右されにくい「実物」であることが、スイスフランは、政治的な中立と安定した経済が、理由とされます。</p>
 <ul>
   <li><span class="tag fact">事実</span><strong>金の「安全」は、短いあいだの話です。</strong>米国・英国・ドイツの株と金の関係を調べた研究では、金は、株が大きく下がった直後には値を保ちやすいものの、その働きは <strong>約15営業日</strong>しか続かなかった、と報告されています。<sup>[93]</sup> また、先進国の株に対しては逃避先になったが、新興国の株に対してはならなかった、という研究もあります。<sup>[93]</sup></li>
@@ -1602,7 +1608,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <li><span class="tag idea">考え方</span><strong>ビットコインは「デジタルの金」と呼ばれますが、値動きは金と大きく違います。</strong>下の表のとおり、1日の値動きは金の2〜4倍あり(測り方で変わります)、上の2つの実例では、株といっしょに大きく下がりました。発行枚数に上限(2,100万枚)があるという「希少さ」は金と似ていますが、「不安なときに値を保つ」という働きは、いまのところ確かめられていません。</li>
 </ul>
 
-<h4>「通貨の強さ」を分けて見る</h4>
+<h4 id="strength">「通貨の強さ」を分けて見る</h4>
 <p><span class="tag common">常識</span>ドル円が上がったとき、理由は3つ考えられます。①ドルが強い、②円が弱い、③その両方、です。ドル円のチャートだけを見ていても、どれなのかは分かりません。そこで、<strong>ほかの通貨の組み合わせも並べて見ます。</strong>これを通貨強弱の分析と呼びます。</p>
 <ul>
   <li><span class="tag common">常識</span>ドル円が上がり、ユーロドルが下がっているなら、<strong>ドルが強い</strong>(ドルが、円に対してもユーロに対しても買われている)と読めます。</li>
@@ -1674,7 +1680,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <button type="button" class="opt">大きく上がった</button>
   <button type="button" class="opt">まったく動かなかった</button>
   <button type="button" class="opt">いったん下がり、月末にはプラスに戻った</button>
-  <p class="ex"><strong>答え:いったん下がり、月末にはプラスに戻った</strong><br>金も、一時 4.8% 下がりました。急に現金が必要になった人は、すぐ売れるものから売るためです。「安全資産」は、いつも上がるという意味ではありません。(→ <a href="#world">「安全資産」は、どこまで安全か</a>)</p>
+  <p class="ex"><strong>答え:いったん下がり、月末にはプラスに戻った</strong><br>金も、一時 4.8% 下がりました。急に現金が必要になった人は、すぐ売れるものから売るためです。「安全資産」は、いつも上がるという意味ではありません。(→ <a href="#safe">「安全資産」は、どこまで安全か</a>)</p>
 </div>
 <div class="q" data-a="2">
   <p class="qt">問3. BTC/USDT の売買がいちばん多いのは、日本時間の何時ごろでしたか(実測)。</p>
@@ -1695,14 +1701,14 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <button type="button" class="opt">円が、ほかの通貨に対して弱い</button>
   <button type="button" class="opt">ユーロが、ほかの通貨に対して強い</button>
   <button type="button" class="opt">ドルが、円にもユーロにも買われている(ドルが強い)</button>
-  <p class="ex"><strong>答え:ドルが、円にもユーロにも買われている(ドルが強い)</strong><br>ドル円だけを見ていても、ドルが強いのか円が弱いのかは分かりません。ほかの組み合わせも並べて見ます。(→ <a href="#world">「通貨の強さ」を分けて見る</a>)</p>
+  <p class="ex"><strong>答え:ドルが、円にもユーロにも買われている(ドルが強い)</strong><br>ドル円だけを見ていても、ドルが強いのか円が弱いのかは分かりません。ほかの組み合わせも並べて見ます。(→ <a href="#strength">「通貨の強さ」を分けて見る</a>)</p>
 </div>
 <div class="q" data-a="0">
   <p class="qt">問6. サポート(下値の支え)について、2025年10〜11月の下落から学べることは何ですか。</p>
   <button type="button" class="opt">サポートは「止まりやすい場所」であって、「止まる場所」ではない</button>
   <button type="button" class="opt">切りのよい数字のサポートは、必ず守られる</button>
   <button type="button" class="opt">サポートを割ったら、すぐに買い足すとよい</button>
-  <p class="ex"><strong>答え:サポートは「止まりやすい場所」であって、「止まる場所」ではない</strong><br>3週間のうちに、「ここが下値」とされた水準は 112,000 → 100,000 → 86,000 → 72,000 と切り下がり、どれも最後には割れました。(→ <a href="#world">当時の「見通し」を、あとから読み返す</a>)</p>
+  <p class="ex"><strong>答え:サポートは「止まりやすい場所」であって、「止まる場所」ではない</strong><br>3週間のうちに、「ここが下値」とされた水準は 112,000 → 100,000 → 86,000 → 72,000 と切り下がり、どれも最後には割れました。(→ <a href="#lookback">当時の「見通し」を、あとから読み返す</a>)</p>
 </div>
 <p class="qres" role="status" aria-live="polite"></p>
 <button type="button" class="qagain" hidden>もう一度やる</button>
@@ -2903,7 +2909,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <p class="try-h"><strong>チャートで試す</strong> 買う金額を、損切りから逆算する</p>
   <p class="open-chart"><a href="index.html?symbol=BTCUSDT&amp;interval=1h">BTC の1時間足を開く<span aria-hidden="true"> →</span></a></p>
   <ol>
-    <li>右のデモトレードの欄で、「損切り」に、いまの価格より2%下の価格を入れます。</li>
+    <li>デモトレードの欄(スマホでは、下の「注文する」から開きます)で、「損切り」に、いまの価格より2%下の価格を入れます。</li>
     <li>その下に出る「1%」のボタンを押します(損切りになったときに、資金の1%を失う金額が自動で入ります)。</li>
     <li>その金額は、資金の何%にあたりますか。損切りを4%下にすると、どう変わりますか。</li>
   </ol>
@@ -2930,7 +2936,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <p class="try-h"><strong>チャートで試す</strong> レバレッジと、強制決済の価格を見る</p>
   <p class="open-chart"><a href="index.html?symbol=BTCUSDT&amp;interval=1h">BTC の1時間足を開く<span aria-hidden="true"> →</span></a></p>
   <ol>
-    <li>デモトレードの欄で、レバレッジを10倍にして、小さな金額で買います。</li>
+    <li>デモトレードの欄(スマホでは、下の「注文する」から開きます)で、レバレッジを10倍にして、小さな金額で買います。</li>
     <li>チャートに出る「強制決済」の線が、買値から何%下にあるかを見ます。</li>
     <li>この1週間の値動きの中で、その幅を超える下げは何回ありましたか。確かめたら、ポジションは決済します。</li>
   </ol>
@@ -2983,7 +2989,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <button type="button" class="opt">資金の 1〜2%</button>
   <button type="button" class="opt">資金の 10〜20%</button>
   <button type="button" class="opt">勝てる自信があるなら、いくらでもよい</button>
-  <p class="ex"><strong>答え:資金の 1〜2%</strong><br>1回の損失を小さく決めておけば、連敗しても資金は大きく減りません。勝率4割の手法では、7連敗くらいはふつうに起きます。(→ <a href="#risk1">1回の損失は 1〜2%</a>)</p>
+  <p class="ex"><strong>答え:資金の 1〜2%</strong><br>1回の損失を小さく決めておけば、連敗しても資金は大きく減りません。勝率4割の手法では、100回の取引のうちに7連敗くらいは起きます(破産の確率の節)。(→ <a href="#risk1">1回の損失は 1〜2%</a>)</p>
 </div>
 <div class="q" data-a="1">
   <p class="qt">問3. 資金は 10,000 です。1回に失ってよいのは 1%(100)と決めました。損切りは、買値から 4% 下に置きます。買う金額は、いくらにしますか。</p>
@@ -3078,7 +3084,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <p class="ex"><strong>答え:損を確定させる痛みを、強く感じるから</strong><br>人は、同じ金額でも、得の喜びより損の痛みを強く感じます(損失回避)。意志の弱さではなく、誰にでもある心のくせです。(→ <a href="#mind">第7章のはじめ</a>)</p>
 </div>
 <div class="q" data-a="1">
-  <p class="qt">問2. このくせへの対策として、いちばん効果があるとされているのはどれですか。</p>
+  <p class="qt">問2. このくせへの対策として、この教科書がすすめているのはどれですか。</p>
   <button type="button" class="opt">価格を、もっとこまめに見る</button>
   <button type="button" class="opt">入る前に損切りと利確を決め、注文と同時に入れてしまう</button>
   <button type="button" class="opt">負けたら、次は金額を大きくして取り返す</button>
@@ -3242,14 +3248,14 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <button type="button" class="opt">税金の計算が、自動でできる</button>
   <button type="button" class="opt">手数料が、安くなる</button>
   <button type="button" class="opt">買う金額が違う取引どうしでも、成績を比べられる</button>
-  <p class="ex"><strong>答え:買う金額が違う取引どうしでも、成績を比べられる</strong><br>R は、最初に決めた損失の額を 1 とした単位です。100 を失う設定で 200 勝てば +2R、決めたとおりに損切りすれば −1R です。(→ <a href="#practice">記録表のひな形</a>)</p>
+  <p class="ex"><strong>答え:買う金額が違う取引どうしでも、成績を比べられる</strong><br>R は、最初に決めた損失の額を 1 とした単位です。100 を失う設定で 200 勝てば +2R、決めたとおりに損切りすれば −1R です。(→ <a href="#journal2">記録表のひな形</a>)</p>
 </div>
 <div class="q" data-a="2">
   <p class="qt">問4. 5連敗しました。最初にすることは何ですか。</p>
   <button type="button" class="opt">すぐに、別の手法に変える</button>
   <button type="button" class="opt">負けを取り返すために、金額を倍にする</button>
   <button type="button" class="opt">いったん止まり、負けた取引を「計画どおりの負け」と「計画を破った負け」に分ける</button>
-  <p class="ex"><strong>答え:いったん止まり、負けた取引を「計画どおりの負け」と「計画を破った負け」に分ける</strong><br>計画どおりの負けは、手法のふつうの負けです。計画を破った負けは、自分の問題です。手法を見直すのは、30回分の記録がたまってからにします。(→ <a href="#practice">連敗したときの振り返り方</a>)</p>
+  <p class="ex"><strong>答え:いったん止まり、負けた取引を「計画どおりの負け」と「計画を破った負け」に分ける</strong><br>計画どおりの負けは、手法のふつうの負けです。計画を破った負けは、自分の問題です。手法を見直すのは、30回分の記録がたまってからにします。(→ <a href="#streak">連敗したときの振り返り方</a>)</p>
 </div>
 <div class="q" data-a="1">
   <p class="qt">問5. デモトレードと、実際のお金での取引の違いとして、正しいものはどれですか。</p>

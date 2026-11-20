@@ -4447,7 +4447,9 @@ function bindHelp() {
   // 初めて開いたときだけ、ポップアップ式の案内を自動で始める
   let seen = false;
   try { seen = !!localStorage.getItem(HELP_KEY); } catch (e) { seen = true; }
-  if (!seen) startTour();
+  // 教科書の課題などから、銘柄や指標を指定して開いたときは、案内で作業をさえぎらない(案内は、次にふつうに開いたときに出る)
+  const fromLink = /[?&](symbol|ind)=/.test(location.search) || /guide\.html|manual\.html/.test(document.referrer || '');
+  if (!seen && !fromLink) startTour();
 }
 
 // ---------------------------------------------------------------- ポップアップ式の案内(初回に自動で出る)

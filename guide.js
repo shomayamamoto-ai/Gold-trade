@@ -6,7 +6,7 @@
   // 教科書と操作マニュアルで同じ仕組みを使う。読んでいた場所は、ページごとに別々に覚える
   const CHART_KEY = 'gold-trade-chart-v1', KEY = document.documentElement.dataset.key === 'manual' ? 'gold-trade-manual-v1' : 'gold-trade-guide-v1';
   const PAGE_TITLE = document.documentElement.dataset.title || 'トレードの教科書';
-  const read = k => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { return {}; } };
+  const read = k => { try { const v = JSON.parse(localStorage.getItem(k)); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch (e) { return {}; } }; // 壊れた値は、空として扱う
   const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 保存できなくても読める */ } };
   const prefs = read(KEY);
 
@@ -191,7 +191,7 @@
       b.setAttribute('aria-pressed', 'true');
       if (q.dataset.key) { qlog[q.dataset.key] = k === ans ? 1 : 0; prefs.qlog = qlog; write(KEY, prefs); }
       answered(k === ans);
-      renderLearn(); renderExamInfo();
+      renderLearn(); renderExamInfo(); paintNavMarks();
     }));
   };
   const resetQ = q => { q.classList.remove('done'); q.querySelectorAll('.opt').forEach(o => { o.disabled = false; o.classList.remove('ok', 'ng'); o.removeAttribute('aria-pressed'); }); };
@@ -207,13 +207,20 @@
       res.textContent = `${qs.length}問中 ${right}問 正解` + (right === qs.length ? '。全問正解です' : '。まちがえた問題は、解説のリンクから読み直せます');
       again.hidden = false;
       quizSaved[id] = { n: qs.length, ok: right }; prefs.quiz = quizSaved; write(KEY, prefs);
-      navMark(id, `${right}/${qs.length}`);
     };
     qs.forEach(q => wireQ(q, ok => { if (ok) right++; done++; report(); }));
     again.addEventListener('click', () => { right = 0; done = 0; qs.forEach(resetQ); report(); head.scrollIntoView(); });
-    const old = quizSaved[id];
-    if (old && old.n === qs.length) navMark(id, `${old.ok}/${old.n}`);
+    // 前に全部答えてあれば、その結果を出しておく(選んだ答えまでは覚えていないので、問題は解き直せる状態のまま)
+    if (qs.every(q => q.dataset.key in qlog)) { res.textContent = `前回までの結果:${qs.length}問中 ${qs.filter(q => qlog[q.dataset.key] === 1).length}問 正解`; }
   });
+  // もくじの印は、1問ごとの最後の答え(章の確認問題・総合テスト・解き直しのどれでも)から出す
+  function paintNavMarks() {
+    chapterQuizzes.forEach(qz => {
+      const qs = [...qz.querySelectorAll('.q')], ans = qs.filter(q => q.dataset.key in qlog).length;
+      if (ans) navMark(qz.querySelector('h3[id]').id, `${qs.filter(q => qlog[q.dataset.key] === 1).length}/${qs.length}`);
+    });
+  }
+  paintNavMarks();
 
   // ---- 総合テスト:各章から1問ずつ出す。まちがえた問題だけを解き直すこともできる
   const examBox = $('examQuiz');
@@ -241,7 +248,7 @@
         if (done < list.length) { res.textContent = `${list.length}問中 ${done}問まで答えました`; return; }
         const pct = Math.round(right / list.length * 100);
         res.textContent = `${list.length}問中 ${right}問 正解(${pct}%)。` + (right === list.length ? '全問正解です。' : 'まちがえた問題は、解説のリンクから本文を読み直してください。');
-        if (title.indexOf('総合') === 0) { const best = prefs.exam && prefs.exam.best > pct ? prefs.exam.best : pct; prefs.exam = { last: pct, best, n: ((prefs.exam && prefs.exam.n) || 0) + 1 }; write(KEY, prefs); }
+        if (title.indexOf('総合') === 0) { const pe = prefs.exam && Number.isFinite(prefs.exam.best) && Number.isFinite(prefs.exam.n) ? prefs.exam : null; const best = pe && pe.best > pct ? pe.best : pct; prefs.exam = { last: pct, best, n: (pe ? pe.n : 0) + 1 }; write(KEY, prefs); }
         renderExamInfo(); renderLearn();
       });
       wrap.appendChild(q);
@@ -254,7 +261,8 @@
     const info = $('examInfo'), wrongBtn = $('examWrong');
     if (!info) return;
     const w = wrongKeys().length, e = prefs.exam;
-    info.textContent = (e ? `これまでに ${e.n} 回。前回 ${e.last}%、いちばん良かった回 ${e.best}%。` : 'まだ受けていません。') + (w ? ` まちがえたままの問題が ${w} 問あります。` : '');
+    const okE = e && [e.n, e.last, e.best].every(Number.isFinite);
+    info.textContent = (okE ? `これまでに ${e.n} 回。前回 ${e.last}%、いちばん良かった回 ${e.best}%。` : 'まだ受けていません。') + (w ? ` まちがえたままの問題が ${w} 問あります。` : '');
     wrongBtn.disabled = !w; wrongBtn.textContent = w ? `まちがえた問題だけ解き直す(${w}問)` : 'まちがえた問題はありません';
   }
   if (examBox) {
@@ -294,10 +302,13 @@
   }
   // 章の確認問題まで読み進めたら、その章を「読んだ」ことにする
   if ('IntersectionObserver' in window) {
+    // もくじから飛んだときなど、通りすぎただけでは数えない。確認問題の見出しが 1.5 秒見えていたら「読んだ」とする
+    const seenTimers = {};
     const io = new IntersectionObserver(es => es.forEach(e => {
-      if (!e.isIntersecting) return;
       const ch = e.target.id.slice(2);
-      if (!seen[ch]) { seen[ch] = 1; prefs.seen = seen; write(KEY, prefs); renderLearn(); }
+      clearTimeout(seenTimers[ch]);
+      if (!e.isIntersecting || seen[ch]) return;
+      seenTimers[ch] = setTimeout(() => { seen[ch] = 1; prefs.seen = seen; write(KEY, prefs); renderLearn(); }, 1500);
     }), { threshold: 0.6 });
     chapterQuizzes.forEach(qz => io.observe(qz.querySelector('h3[id]')));
   }
@@ -325,7 +336,7 @@
   const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
   const norm = t => t.replace(/\s+/g, ' ').trim();
   // ひらがな・カタカナ、全角・半角、大文字・小文字の違いを気にせず探せるようにそろえる
-  const fold = t => t.normalize('NFKC').toLowerCase().replace(/[ぁ-ゖ]/g, ch => String.fromCharCode(ch.charCodeAt(0) + 0x60));
+  const fold = t => t.normalize('NFKC').toLowerCase().replace(/[−‐‑–—]/g, '-').replace(/[〜～]/g, '~').replace(/[ぁ-ゖ]/g, ch => String.fromCharCode(ch.charCodeAt(0) + 0x60));
   // 漢字の言葉を、よみがなでも探せるようにする(よみ → 本文での書き方)
   const YOMI = [['そんぎり', '損切り'], ['りかく', '利確'], ['できだか', '出来高'], ['いどうへいきん', '移動平均'], ['きたいち', '期待値'], ['しょうりつ', '勝率'], ['そんえきひ', '損益比'], ['しきんかんり', '資金管理'], ['てすうりょう', '手数料'], ['おしめ', '押し目'], ['もどり', '戻り'], ['たかね', '高値'], ['やすね', '安値'], ['おわりね', '終値'], ['はじめね', '始値'], ['ようせん', '陽線'], ['いんせん', '陰線'], ['きんり', '金利'], ['えんだか', '円高'], ['えんやす', '円安'], ['かわせ', '為替'], ['ぜいきん', '税金'], ['かくていしんこく', '確定申告'], ['れんぱい', '連敗'], ['ぶんさん', '分散'], ['あんごうしさん', '暗号資産'], ['かそうつうか', '暗号資産'], ['さきもの', '先物'], ['げんぶつ', '現物'], ['まど', '窓'], ['いた', '板'], ['なりゆき', '成行'], ['さしね', '指値'], ['ぎゃくさしね', '逆指値'], ['ふくみえき', '含み益'], ['ふくみぞん', '含み損'], ['けっさい', '決済'], ['じゅんばり', '順張り'], ['ぎゃくばり', '逆張り'], ['しょうこきん', '証拠金'], ['きょうせいけっさい', '強制決済'], ['せいさん', '清算'], ['はんげんき', '半減期'], ['りゅうどうせい', '流動性'], ['じっしつきんり', '実質金利'], ['たてね', '建値'], ['そうかん', '相関'], ['れんどう', '連動'], ['あんぜんしさん', '安全資産'], ['つうかきょうじゃく', '通貨強弱'], ['はさん', '破産'], ['しんり', '心理'], ['きろく', '記録'], ['しっぱい', '失敗'], ['きん', '金'], ['かぶ', '株'], ['ひげ', 'ヒゲ'], ['じったい', '実体'], ['へいきんあし', '平均足'], ['いちもくきんこうひょう', '一目均衡表'], ['くも', '雲'], ['たいすう', '対数'], ['ひかく', '比較'], ['しゅうまつ', '週末'], ['かちょく', '価格'], ['かかく', '価格'], ['ねうごき', '値動き'], ['ねはば', '値幅'], ['だまし', 'だまし'], ['そうごうてすと', '総合テスト'], ['ようごしゅう', '用語集'], ['しゅってん', '出典']].map(([y, w]) => [fold(y), fold(w)]);
   const variants = w => { const out = [w]; if (w.length >= 2) YOMI.forEach(([y, k]) => { if (y === w || (w.length >= 3 && y.startsWith(w))) out.push(k); }); return out; };
@@ -333,8 +344,9 @@
   function buildIndex() {
     findIndex = [];
     let chap = '', sect = '';
-    document.querySelectorAll('main h2, main h3, main h4, main p, main li, main td, main dt, main dd, main figcaption').forEach(el => {
-      if (el.closest('.toc, .path')) return;
+    document.querySelectorAll('main h2, main h3, main h4, main p, main li, main th, main td, main dt, main dd, main summary, main figcaption').forEach(el => {
+      // もくじ、総合テストの出題(作り直すたびに変わる)、確認問題の解説(答えが見えてしまう)は探さない
+      if (el.closest('.toc, .path, #examQuiz') || el.classList.contains('ex')) return;
       if (el.tagName === 'H2') { chap = norm(el.textContent); sect = ''; }
       else if (el.tagName === 'H3') sect = norm(el.textContent).split(' — ')[0];
       if ((el.tagName === 'LI' || el.tagName === 'DD' || el.tagName === 'TD') && el.querySelector('li, p, table')) return; // 中身を別に数えるので、外側は飛ばす
@@ -360,7 +372,9 @@
   const jump = el => {
     setFind(false);
     // 表の中のセルなどは、行ごと目立たせる
-    const target = el.tagName === 'TD' ? el.parentNode : el;
+    const target = el.tagName === 'TD' || el.tagName === 'TH' ? el.parentNode : el;
+    // 折りたたまれた中にあるときは、開いてから移動する
+    for (let d = el.closest('details'); d; d = d.parentNode.closest ? d.parentNode.closest('details') : null) d.open = true;
     target.scrollIntoView({ block: 'center' });
     if (hitEl) hitEl.classList.remove('hit');
     hitEl = target; target.classList.add('hit');
@@ -400,7 +414,7 @@
   }
   let findTimer = 0;
   findIn.addEventListener('input', () => { clearTimeout(findTimer); findTimer = setTimeout(runFind, 120); });
-  findIn.addEventListener('keydown', e => { if (e.key === 'Enter') { clearTimeout(findTimer); runFind(); const first = findOut.querySelector('.res'); if (first) first.click(); } });
+  findIn.addEventListener('keydown', e => { if (e.isComposing || e.keyCode === 229) return; /* かな漢字変換の確定の Enter では、移動しない */ if (e.key === 'Enter') { clearTimeout(findTimer); runFind(); const first = findOut.querySelector('.res'); if (first) first.click(); } });
   function setFind(on) {
     findBox.hidden = !on;
     findBtn.setAttribute('aria-expanded', String(on));
@@ -408,7 +422,7 @@
   }
   findBtn.addEventListener('click', () => setFind(findBox.hidden));
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && !findBox.hidden) { setFind(false); findBtn.focus(); }
+    if (e.key === 'Escape' && !findBox.hidden) { setFind(false); findBtn.focus({ preventScroll: true }); }
     else if (e.key === '/' && findBox.hidden && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '') && !e.ctrlKey && !e.metaKey) { e.preventDefault(); setFind(true); }
   });
   document.addEventListener('pointerdown', e => { if (!findBox.hidden && !findBox.contains(e.target) && !findBtn.contains(e.target)) setFind(false); });
@@ -433,6 +447,15 @@
       const re = new RegExp(words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
       const skip = 'a, button, h1, h2, h3, h4, sup, svg, code, .quiz, .toc, .path, .tag, .term, .formula, .open-chart, .try';
       let used = new Set();
+      // カタカナの言葉が、もっと長いカタカナの言葉の一部であるとき(「ディスポジション効果」の中の「ポジション」など)や、
+      // 同じ文字でも別の意味で使われているとき(「元に戻りました」の「戻り」など)は、印を付けない
+      const KATA = /[\u30A1-\u30FAー]/, NOT_AFTER = { '戻り': /^[まっそた]/, '連動': /^(国債|して|する|し)/, '決済': /^(通貨|す|さ|し)/, '分散': /^(し|す|さ)/, '清算': /^(し|す|さ)/ };
+      const senseOk = (text, at, w) => {
+        const prev = text[at - 1] || '', rest = text.slice(at + w.length);
+        if (/^[\u30A1-\u30FAー]+$/.test(w) && (KATA.test(prev) || KATA.test(rest[0] || ''))) return false;
+        if (w === '建玉' || w === '戻り' && /[にへ]$/.test(text.slice(0, at))) return false; // 建玉は2つの意味で使うので付けない。「〜に戻り」は動詞
+        return !(NOT_AFTER[w] && NOT_AFTER[w].test(rest));
+      };
       const walk = root => {
         const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: t => t.nodeValue.length < 2 || t.parentNode.closest(skip) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
         const nodes = [];
@@ -442,7 +465,7 @@
           for (let guard = 0; guard < 6 && node; guard++) {
             re.lastIndex = 0;
             let m, found = null;
-            while ((m = re.exec(node.nodeValue))) { const dt = terms.get(m[0]); if (!used.has(dt)) { found = m; break; } }
+            while ((m = re.exec(node.nodeValue))) { const dt = terms.get(m[0]); if (!used.has(dt) && senseOk(node.nodeValue, m.index, m[0])) { found = m; break; } }
             if (!found) return;
             const dt = terms.get(found[0]); used.add(dt);
             const rest = node.splitText(found.index); const after = rest.splitText(found[0].length);
@@ -453,17 +476,25 @@
         });
       };
       // 用語集そのものと、それより後ろ(出典)には印を付けない
-      let stop = false;
-      for (let el = document.querySelector('main').firstElementChild; el && !stop; el = el.nextElementSibling) {
-        if (el.tagName === 'H2') { used = new Set(); if (el === gloss) stop = true; continue; }
-        if (el.tagName === 'FOOTER') break;
-        walk(el);
-      }
-      const pop = mk('div', 'termpop'); pop.hidden = true; pop.setAttribute('role', 'dialog');
+      // 一度にやると、開いた直後に画面がしばらく固まる。手の空いたときに、少しずつ進める
+      const idle = window.requestIdleCallback ? f => requestIdleCallback(f, { timeout: 600 }) : f => setTimeout(f, 60);
+      let cursor = document.querySelector('main').firstElementChild;
+      const step = dl => {
+        const t0 = performance.now();
+        for (; cursor; cursor = cursor.nextElementSibling) {
+          if (cursor.tagName === 'H2') { used = new Set(); if (cursor === gloss) { cursor = null; break; } continue; }
+          if (cursor.tagName === 'FOOTER') { cursor = null; break; }
+          walk(cursor);
+          if (performance.now() - t0 > 12 && !(dl && dl.timeRemaining && dl.timeRemaining() > 4)) { cursor = cursor.nextElementSibling; break; }
+        }
+        if (cursor) idle(step);
+      };
+      idle(step);
+      const pop = mk('div', 'termpop'); pop.hidden = true; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', '言葉の説明');
       document.body.appendChild(pop);
       let popFor = null;
       const closePop = () => { pop.hidden = true; if (popFor) popFor.setAttribute('aria-expanded', 'false'); popFor = null; };
-      const openPop = sp => {
+      const openPop = (sp, byKey) => {
         if (popFor === sp) { closePop(); return; }
         closePop();
         const dt = document.getElementById(sp.dataset.t), dd = dt && dt.nextElementSibling;
@@ -481,6 +512,7 @@
         const below = r.bottom + 6 + h < innerHeight || r.top < h + 12;
         pop.style.left = Math.round(left + scrollX) + 'px';
         pop.style.top = Math.round((below ? r.bottom + 6 : r.top - h - 6) + scrollY) + 'px';
+        if (byKey) more.focus({ preventScroll: true }); // キーボードで開いたときは、中のリンクへ移れるようにする
       };
       document.addEventListener('click', e => {
         const sp = e.target.closest && e.target.closest('.term');
@@ -489,11 +521,13 @@
       });
       document.addEventListener('keydown', e => {
         if (e.key === 'Escape' && !pop.hidden) { const f = popFor; closePop(); if (f) f.focus(); }
-        else if ((e.key === 'Enter' || e.key === ' ') && document.activeElement && document.activeElement.classList.contains('term')) { e.preventDefault(); openPop(document.activeElement); }
+        else if ((e.key === 'Enter' || e.key === ' ') && document.activeElement && document.activeElement.classList.contains('term')) { e.preventDefault(); openPop(document.activeElement, true); }
       });
       addEventListener('resize', closePop);
     }
   }
+
+  addEventListener('beforeprint', () => document.querySelectorAll('main details').forEach(d => { d.open = true; }));
 
   markTables();
   onScroll();
