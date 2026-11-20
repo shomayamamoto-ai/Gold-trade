@@ -468,7 +468,7 @@ function load() {
   const qInd = qs.get('ind');
   if (qInd !== null) {
     const want = [];
-    qInd.split(',').forEach(t => { t = t.trim(); if (Object.prototype.hasOwnProperty.call(IND_TYPES, t) && !want.includes(t) && want.length < 6) want.push(t); });
+    qInd.split(',').forEach(t => { t = t.trim(); if (!Object.prototype.hasOwnProperty.call(IND_TYPES, t) && Object.prototype.hasOwnProperty.call(IND_TYPES, t.toLowerCase())) t = t.toLowerCase(); if (Object.prototype.hasOwnProperty.call(IND_TYPES, t) && !want.includes(t) && want.length < 6) want.push(t); });
     want.forEach(type => {
       const same = state.indicators.filter(i => i.type === type);
       if (same.some(i => !i.hidden && shownHere(i))) return;
@@ -1162,7 +1162,7 @@ function compareSeries(i0, i1) {
   if (ib < 0) return null;
   const m0 = bars[ib].c;
   for (let i = ib; i < val.length; i++) { const c = cmp.byT.get(bars[i].t); if (c > 0) val[i] = m0 * c / c0; }
-  cmp.view = { val, base: ib, pct: i => (val[i] > 0 ? val[i] / m0 - 1 : NaN) };
+  cmp.view = { val, base: ib, late: ib > i0, pct: i => (val[i] > 0 ? val[i] / m0 - 1 : NaN) };
   return cmp.view;
 }
 
@@ -1186,6 +1186,7 @@ function nf(dg) { return nfCache[dg] || (nfCache[dg] = new Intl.NumberFormat('en
 const nfSig6 = new Intl.NumberFormat('en-US', { maximumSignificantDigits: 6 });
 function priceDigits(v) {
   const a = Math.abs(v);
+  if (a === 0) return 2;
   if (a >= 1000) return 2;
   if (a >= 1) return a >= 100 ? 2 : 4;
   if (a >= 0.01) return 5;
@@ -1460,7 +1461,13 @@ function drawMain(pane, i0, i1, th) {
   if (!isFinite(lo)) return;
   // 重ねて比べる銘柄の線も、画面に収まるようにする
   const cmpLine = compareSeries(i0, i1);
-  if (cmpLine) for (let i = i0; i <= i1; i++) { const v = cmpLine.val[i]; if (v > 0) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }
+  if (cmpLine) {
+    // ただし、ローソク足が小さくなりすぎないよう、足の値幅の上下1つ分までしか広げない(はみ出た線は、枠の外に切れる)
+    let clo = lo, chi = hi;
+    for (let i = i0; i <= i1; i++) { const v = cmpLine.val[i]; if (v > 0) { clo = Math.min(clo, v); chi = Math.max(chi, v); } }
+    if (state.logScale && lo > 0) { const r = Math.max(Math.log(hi / lo), 0.02); lo = Math.max(clo, lo / Math.exp(r)); hi = Math.min(chi, hi * Math.exp(r)); }
+    else { const r = hi - lo || hi * 0.02; lo = Math.max(clo, lo - r); hi = Math.min(chi, hi + r); }
+  }
   /* 価格 ↔ 画面の縦位置。対数目盛りのときは、価格の対数を取ってから同じ計算をする(同じ%の動きが、同じ高さになる)。
    * 線・注文の線・十字線・ドラッグなど、価格と位置の変換はすべて pane.yOf / pane.vOf を通すので、ここだけ変えればそろう。
    * 対数は 0 以下の値に使えないので、0 以下の価格があるときは、ふつうの目盛りで描く */
@@ -1469,10 +1476,11 @@ function drawMain(pane, i0, i1, th) {
   let a = fw(lo), b = fw(hi);
   if (b === a) { if (log) { a -= 0.01; b += 0.01; } else { a -= 1; b += 1; } }
   const padV = (b - a) * 0.1;
-  const tmin = a - padV * 1.6, tmax = b + padV * 0.5 + headroom(tmin, b, pane, compact ? 78 : 44);
+  // ふつうの目盛りで、価格がすべてプラスなら、目盛りが 0 より下へ行かないようにする
+  const tmin = !log && lo > 0 ? Math.max(0, a - padV * 1.6) : a - padV * 1.6, tmax = b + padV * 0.5 + headroom(tmin, b, pane, compact ? 78 : 44);
   const min = bk(tmin), max = bk(tmax);
-  // 対数目盛りで 0 以下の値(一部のインジケーターの線など)が来たら、画面の下の外に置く
-  const yOf = v => (log && !(v > 0) ? pane.y + pane.h * 4 : pane.y + pane.h - (fw(v) - tmin) / (tmax - tmin) * pane.h);
+  // 対数目盛りでは、0 以下の値(一部のインジケーターの線など)は描けない。位置なし(NaN)にして、線をそこで切る
+  const yOf = v => (log && !(v > 0) ? NaN : pane.y + pane.h - (fw(v) - tmin) / (tmax - tmin) * pane.h);
   pane.yOf = yOf; pane.vOf = y => bk(tmin + (pane.y + pane.h - y) / pane.h * (tmax - tmin)); pane.fmt = fmtPrice; pane.log = log;
 
   gridAndAxis(pane, min, max, yOf, th, fmtPrice, log);
@@ -1979,6 +1987,7 @@ function buildDrawBar() {
   const I = {
     cursor: '<path d="M4 2.5l8 6.2-3.6.5 2 4-1.6.8-2-4L4 12.5z"/>',
     h: '<path d="M1.5 8h13"/><circle cx="8" cy="8" r="1.6"/>',
+    v: '<path d="M8 1.5v13"/><circle cx="8" cy="8" r="1.6"/>',
     t: '<path d="M3.6 11.4l8.8-6.8"/><circle cx="2.8" cy="12" r="1.3"/><circle cx="13.2" cy="4" r="1.3"/>',
     r: '<rect x="2.5" y="4" width="11" height="8" rx="1"/>',
     f: '<path d="M2 3h12M2 6.5h12M2 9.5h12M2 13h12"/>',
@@ -1989,7 +1998,7 @@ function buildDrawBar() {
     undo: '<path d="M5.5 3L2.5 6l3 3"/><path d="M2.5 6h6.5a4 4 0 0 1 0 8H6"/>',
   };
   const btns = [];
-  let armed = 0;
+  let armed = 0, armedSym = '';
   const add = (key, icon, label, fn, pressed) => {
     const b = el('button', { type: 'button', title: label, 'aria-label': label });
     b.innerHTML = svg(icon);
@@ -2001,6 +2010,7 @@ function buildDrawBar() {
   const tool = (key, label) => add(key, I[key], label, () => setTool(state.tool === key ? null : key), () => state.tool === key);
   add('cursor', I.cursor, 'カーソル(線を引かずに、チャートを動かす・線を選ぶ)', () => setTool(null), () => !state.tool);
   tool('h', '水平線(決めた価格に横線を引く)');
+  tool('v', '垂直線(決めた日時に縦線を引く)');
   tool('t', 'トレンドライン(2点を結ぶ線を引く)');
   tool('r', '長方形(値動きの範囲を囲む)');
   tool('f', 'フィボナッチ(戻りの目安を引く)');
@@ -2015,8 +2025,8 @@ function buildDrawBar() {
   const del = add('clear', ICONS.trash.replace(/^<svg[^>]*>|<\/svg>$/g, ''), NAME, () => {
     const n = curDrawings().length, now = Date.now();
     if (!n) { toast('この銘柄には、消す線がありません。'); return; }
-    if (now - armed > 4000) {
-      armed = now; del.classList.add('armed'); del.title = 'もう一度押すと、すべて削除します'; del.setAttribute('aria-label', del.title);
+    if (now - armed > 4000 || armedSym !== state.symbol) {
+      armed = now; armedSym = state.symbol; del.classList.add('armed'); del.title = 'もう一度押すと、すべて削除します'; del.setAttribute('aria-label', del.title);
       toast(`もう一度押すと、この銘柄の線(${n}本)をすべて削除します。`);
       setTimeout(() => { if (Date.now() - armed >= 3900) disarm(); }, 4000);
       return;
@@ -2261,7 +2271,8 @@ function updateLegends() {
           le.appendChild(x);
         }
         setText(le, '.name', cs ? cs.label : state.compare);
-        setText(le, '.params', '比較(左端から)');
+        // 比べる銘柄の歴史が短いと、左端にはデータがない。そのときは、0% にした日を出す
+        setText(le, '.params', v && v.late ? `比較(${fmtDate(state.bars[v.base].t)} から)` : '比較(左端から)');
         let k = i;
         while (v && k >= v.base && !(v.val[k] > 0)) k--;
         setVals(le, v && k >= v.base ? [['', fmtPct(v.pct(k)), CMP_COLOR]]
@@ -4002,7 +4013,7 @@ function bindTrade() {
     const had = T.positions[sym], opening = !had || Math.sign(had.qty) === dir;
     const hadDir = had ? Math.sign(had.qty) : 0; // 決済すると had の数量が変わるので、向きを先に覚えておく
     const done = () => { $('trTp').value = ''; $('trSl').value = ''; $('trNote').value = ''; renderRisk(); renderTrade(); draw(); };
-    if (orderType === 'limit' && !quick) {
+    if (orderType === 'limit') {
       // 指値注文:いまは約定させず、予約として残す
       syncIfStale();
       const lp = parseFloat($('trLimit').value), quote = liveQuote(sym);
@@ -4062,10 +4073,11 @@ function bindTrade() {
   $('trSell').addEventListener('click', () => order('sell'));
   /* チャート上の売買ボタン。押しまちがいで注文しないよう、2回押して確定する:
    * 1回目で「もう一度押すと買います」に変わり(3秒)、その間にもう一度押すと注文する。ほかの場所を押すと取り消す */
-  const qt = { side: '', at: 0, timer: 0 };
+  const qt = { side: '', at: 0, timer: 0, sym: '' };
   const qtDisarm = () => {
     if (!qt.side) return;
-    $(qt.side === 'buy' ? 'qtBuy' : 'qtSell').classList.remove('armed');
+    const qb = $(qt.side === 'buy' ? 'qtBuy' : 'qtSell');
+    qb.classList.remove('armed'); qb.setAttribute('aria-pressed', 'false');
     clearTimeout(qt.timer); qt.side = ''; qt.at = 0;
   };
   const qtMake = (side, word, tip) => {
@@ -4073,11 +4085,16 @@ function bindTrade() {
       el('span', { class: 'qt-idle' }, [document.createTextNode(word + ' '), el('b', { id: side === 'buy' ? 'qtBuyPx' : 'qtSellPx' })]),
       el('span', { class: 'qt-arm', text: `もう一度押すと${side === 'buy' ? '買います' : '売ります'}` }),
     ]);
+    b.setAttribute('aria-pressed', 'false');
+    // キーを押しっぱなしにしても、くり返しの入力では確定しない(1回目で構え、いったん離してから2回目)
+    b.addEventListener('keydown', e => { if (e.repeat && (e.key === 'Enter' || e.key === ' ')) e.preventDefault(); });
     b.addEventListener('click', () => {
       const now = Date.now();
-      if (qt.side !== side) {
+      if (qt.side !== side || qt.sym !== state.symbol) {
         qtDisarm();
-        qt.side = side; qt.at = now; b.classList.add('armed');
+        qt.side = side; qt.at = now; qt.sym = state.symbol; b.classList.add('armed'); b.setAttribute('aria-pressed', 'true');
+        // 注文画面が「指値」のときは、指値の予約になることを、押す前に伝える
+        b.querySelector('.qt-arm').textContent = `もう一度押すと${orderType === 'limit' ? '指値で' : ''}${side === 'buy' ? '買います' : '売ります'}`;
         qt.timer = setTimeout(qtDisarm, 3000);
         return;
       }
@@ -4088,8 +4105,8 @@ function bindTrade() {
     return b;
   };
   quickEl = el('div', { class: 'quick-trade', role: 'group', 'aria-label': 'チャートから、いまの価格で売買する(デモ)' }, [
-    qtMake('sell', '売', 'いまの価格で売る(成行)。金額・レバレッジ・利確・損切りは、デモトレードの画面で入れたものを使います。2回押すと注文します'),
-    qtMake('buy', '買', 'いまの価格で買う(成行)。金額・レバレッジ・利確・損切りは、デモトレードの画面で入れたものを使います。2回押すと注文します'),
+    qtMake('sell', '売', 'いまの価格で売る。金額・レバレッジ・利確・損切りは、デモトレードの画面で入れたものを使います(画面が「指値」のときは、その価格で予約します)。2回押すと注文します'),
+    qtMake('buy', '買', 'いまの価格で買う。金額・レバレッジ・利確・損切りは、デモトレードの画面で入れたものを使います(画面が「指値」のときは、その価格で予約します)。2回押すと注文します'),
   ]);
   quickEl.hidden = true;
   mainStack().appendChild(quickEl);

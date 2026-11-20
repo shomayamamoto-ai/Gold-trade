@@ -769,7 +769,7 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .draw-bar::-webkit-scrollbar { display: none; }
 .draw-bar button {
   display: flex; flex: 0 0 auto; align-items: center; justify-content: center;
-  width: 30px; height: 30px; padding: 0;
+  width: 32px; height: 32px; padding: 0;
   border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer;
 }
 .draw-bar button svg { width: 18px; height: 18px; }
@@ -777,23 +777,37 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .draw-bar button[aria-pressed="true"] { background: var(--hover); color: var(--text); box-shadow: inset 0 0 0 1.5px var(--accent); }
 .draw-bar button.armed { background: #c0392b; color: #fff; }
 .draw-bar .sep { flex: 0 0 auto; width: 22px; height: 1px; margin: 4px 0; background: var(--line); }
-@media (max-width: 760px), (max-height: 480px) { .draw-bar { display: none; } }
+/* スマホ(縦向き)では、チャートの下に横並びで出す。指で押しやすい大きさにし、はみ出す分は横にスクロールする */
+@media (max-width: 760px) {
+  .main-row { flex-direction: column; }
+  .draw-bar {
+    order: 2; flex-direction: row; justify-content: flex-start; gap: 4px; width: 100%; height: 44px; padding: 0 8px;
+    overflow-x: auto; overflow-y: hidden; border-right: 0; border-top: 1px solid var(--line);
+  }
+  .draw-bar button { width: 40px; height: 36px; }
+  .draw-bar button svg { width: 20px; height: 20px; }
+  .draw-bar .sep { width: 1px; height: 22px; margin: 0 4px; }
+}
+@media (max-height: 480px) { .draw-bar { display: none; } }
 
 /* ---- チャート上の売買ボタン(凡例のすぐ下。スマホでは、下のバーから注文するので出さない) */
 .stack .legend.main { order: -2; }
 .quick-trade { order: -1; display: flex; gap: 4px; margin: 2px 0 3px 4px; pointer-events: auto; }
 .quick-trade[hidden] { display: none; }
 .qt {
-  height: 24px; padding: 0 8px; border: 0; border-radius: 5px;
-  color: #fff; font: inherit; font-size: 12px; font-weight: 700; line-height: 24px; white-space: nowrap; cursor: pointer;
+  height: 32px; padding: 0 10px; border: 0; border-radius: 6px;
+  color: #fff; font: inherit; font-size: 12px; font-weight: 700; line-height: 32px; white-space: nowrap; cursor: pointer;
 }
 .qt b { font-weight: 600; font-variant-numeric: tabular-nums; }
 .qt.buy { background: #1f9d8f; }
 .qt.sell { background: #e0463f; }
 .qt:hover { filter: brightness(1.08); }
 .qt:disabled { opacity: .45; cursor: default; filter: none; }
-.qt .qt-arm, .qt.armed .qt-idle { display: none; }
-.qt.armed .qt-arm { display: inline; }
+/* 2つの表示を同じ場所に重ね、幅をいつも同じにする(構えたときに幅が変わると、となりのボタンが動いて押しまちがえる) */
+.qt { display: inline-grid; align-items: center; justify-items: center; }
+.qt > span { grid-area: 1 / 1; }
+.qt .qt-arm, .qt.armed .qt-idle { visibility: hidden; }
+.qt.armed .qt-arm { visibility: visible; }
 .qt.armed { outline: 2px solid var(--text); outline-offset: 1px; }
 @media (max-width: 760px), (max-height: 480px) { .quick-trade { display: none; } }
 
