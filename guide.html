@@ -331,7 +331,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
     <span class="tag common">常識</span>相場の世界で広く知られている、一般的な知識です。<br>
     <span class="tag idea">考え方</span>筆者の整理や推測です。正しいとは限りません。
   </p>
-  <p>「実測」の数字は、2026年11月12日〜18日までのデータで計算しました(表ごとに、下の注に期間を書いています)。過去の結果であり、これからも同じになるとは限りません。</p>
+  <p>「実測」の数字は、2026年11月20日までのデータで計算しました(表ごとに、下の注に期間を書いています)。過去の結果であり、これからも同じになるとは限りません。</p>
 </div>
 
 <h2 id="start" style="margin-top:36px"><small>はじめに</small>最初に読む道すじ</h2>
@@ -383,7 +383,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 </div>
 <p>第1章から第10章の終わりには、<strong>確認問題</strong>があります。選ぶと、その場で答えと解説が出ます。読んだだけで終わらせず、身についたかを確かめるのに使ってください。結果は、この端末に覚えておき、左のもくじに「4/5」のように出ます。</p>
 <p>本文のあちこちに、<strong>「チャートで試す」</strong>の課題が17個あります。ボタンを押すと、その課題に合った銘柄とインジケーターでチャートが開きます。読むだけでなく、手を動かすと身につきます。<span id="tryCount"></span></p>
-<h3 id="progress" class="noprint">学習の進み具合</h3>
+<h3 id="learnhead" class="noprint">学習の進み具合</h3>
 <p class="noprint">この端末で読んだ章、確認問題、課題の進み具合です。下の章の名前を押すと、その章へ移動します。最後に<a href="#exam">総合テスト</a>で、身についたかを確かめられます。</p>
 <div id="learn" class="learn"></div>
 <noscript><p>進み具合の表示と確認問題には、JavaScript が必要です。</p></noscript>
@@ -736,12 +736,13 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   </tbody>
 </table></div>
 <p><span class="tag common">常識</span>このサイトのデモトレードでは、成行と指値の注文ができます。利確の価格は指値、損切りの価格は逆指値と同じ働きをします。</p>
+<p><span class="tag fact">事実</span>デモでは、指値と利確は、その価格で取引があれば、指定した価格ちょうどで約定します。損切りは、届いた瞬間に売れる(買える)価格で約定するので、急に動いたときは、損切りの価格より悪い価格になることがあります(操作マニュアルの<a href="manual.html#fills">「デモの約定のきまり」</a>)。</p>
 <h4>手数料のほかにかかる2つのコスト</h4>
 <ul>
   <li><span class="tag common">常識</span><strong>スプレッド</strong>:いちばん高い買い注文と、いちばん安い売り注文の差です。買った直後に売ると、この差の分だけ必ず損をします。取引の少ない銘柄ほど広くなります。</li>
   <li><span class="tag common">常識</span><strong>スリッページ</strong>:注文した価格と、実際に約定した価格のずれです。急に動いているときや、大きな金額を注文したときに起きます。</li>
 </ul>
-<p><span class="tag idea">考え方</span>デモトレードにはこの2つがありません。そのため、短い時間で何度も売買する手法ほど、デモの成績は実際より良く見えます。</p>
+<p><span class="tag idea">考え方</span>このサイトのデモトレードでも、成行の注文は、板(並んでいる注文)の上位5段を使って約定させるので、スプレッドと、注文の大きさによるずれは入ります。ただし、注文が届くまでの遅れや、指値の順番待ちはありません。そのため、短い時間で何度も売買する手法ほど、デモの成績は実際より少し良く見えます。</p>
 
 <section class="quiz">
 <h3 id="q-basics">第1章の確認問題</h3>
@@ -801,17 +802,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 </ul>
 
 <h3 id="measured">値動きの大きさを、実際のデータで比べる</h3>
-<p><span class="tag fact">実測</span>2024年11月13日〜2026年11月12日の2年間(730日)の日足から計算しました。</p>
+<p><span class="tag fact">実測</span>2024年11月21日〜2026年11月20日の2年間(730日)の日足から計算しました。</p>
 <div class="tbl-wrap"><table>
   <thead><tr><th>銘柄</th><th>1日の平均的な値動き</th><th>1日の高値と安値の差(平均)</th><th>5%以上動いた日数</th><th>最悪の1日</th><th>高値からの最大の下落</th><th>BTC との連動</th></tr></thead>
   <tbody>
-    <tr><td>金 (PAXG)</td><td class="num">0.85%</td><td class="num">1.75%</td><td class="num">5日</td><td class="num down">-10.1%</td><td class="num down">-29.9%</td><td class="num">0.28</td></tr>
-    <tr><td>BTC</td><td class="num">1.59%</td><td class="num">3.39%</td><td class="num">29日</td><td class="num down">-14.0%</td><td class="num down">-53.0%</td><td class="num">1.00</td></tr>
-    <tr><td>ETH</td><td class="num">2.45%</td><td class="num">5.25%</td><td class="num">97日</td><td class="num down">-15.0%</td><td class="num down">-67.6%</td><td class="num">0.84</td></tr>
-    <tr><td>XRP</td><td class="num">2.78%</td><td class="num">6.14%</td><td class="num">106日</td><td class="num down">-19.7%</td><td class="num down">-72.0%</td><td class="num">0.72</td></tr>
-    <tr><td>SOL</td><td class="num">2.84%</td><td class="num">6.03%</td><td class="num">118日</td><td class="num down">-20.5%</td><td class="num down">-76.3%</td><td class="num">0.80</td></tr>
-    <tr><td>DOGE</td><td class="num">3.04%</td><td class="num">6.64%</td><td class="num">123日</td><td class="num down">-22.1%</td><td class="num down">-85.7%</td><td class="num">0.78</td></tr>
-    <tr><td>PEPE</td><td class="num">4.01%</td><td class="num">8.76%</td><td class="num">187日</td><td class="num down">-27.5%</td><td class="num down">-91.2%</td><td class="num">0.67</td></tr>
+    <tr><td>金 (PAXG)</td><td class="num">0.86%</td><td class="num">1.76%</td><td class="num">5日</td><td class="num down">-10.1%</td><td class="num down">-36.1%</td><td class="num">0.29</td></tr>
+    <tr><td>BTC</td><td class="num">1.60%</td><td class="num">3.40%</td><td class="num">30日</td><td class="num down">-14.0%</td><td class="num down">-53.0%</td><td class="num">1.00</td></tr>
+    <tr><td>ETH</td><td class="num">2.46%</td><td class="num">5.27%</td><td class="num">99日</td><td class="num down">-15.0%</td><td class="num down">-67.6%</td><td class="num">0.85</td></tr>
+    <tr><td>XRP</td><td class="num">2.73%</td><td class="num">6.01%</td><td class="num">104日</td><td class="num down">-19.7%</td><td class="num down">-74.3%</td><td class="num">0.75</td></tr>
+    <tr><td>SOL</td><td class="num">2.86%</td><td class="num">6.03%</td><td class="num">120日</td><td class="num down">-20.5%</td><td class="num down">-76.3%</td><td class="num">0.81</td></tr>
+    <tr><td>DOGE</td><td class="num">3.04%</td><td class="num">6.58%</td><td class="num">121日</td><td class="num down">-22.1%</td><td class="num down">-88.3%</td><td class="num">0.78</td></tr>
+    <tr><td>PEPE</td><td class="num">3.93%</td><td class="num">8.60%</td><td class="num">186日</td><td class="num down">-27.5%</td><td class="num down">-91.2%</td><td class="num">0.70</td></tr>
   </tbody>
 </table></div>
 <details><summary>表の各列の意味と計算のしかた</summary><div>
@@ -825,11 +826,11 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 </div></details>
 <h4>この表から分かること</h4>
 <ul>
-  <li><span class="tag fact">実測</span><strong>この表の7銘柄で、値動きの大きさは5倍近く違います。</strong>PEPE の1日の平均的な値動き(4.01%)は、金(0.85%)の約4.7倍です。</li>
-  <li><span class="tag fact">実測</span><strong>PEPE は、4日に1日は 5% 以上動きました</strong>(730日中187日)。金は2年で5日だけです。</li>
-  <li><span class="tag fact">実測</span><strong>この表の BTC 以外の暗号資産は、どれも高値から3分の2以上を失った時期があります。</strong>ETH で -67.6%、DOGE で -85.7%、PEPE で -91.2% です。</li>
-  <li><span class="tag fact">実測</span><strong>金も安全ではありません。</strong>2026年1月30日に1日で -10.1% 下げ、同年1月28日の高値から11月までに -29.9% 下げています。</li>
-  <li><span class="tag fact">実測</span><strong>暗号資産どうしは強く連動しています。</strong>ETH・SOL・DOGE は 0.8 前後で、BTC が下がる日はほぼ一緒に下がります。この表では金だけが 0.28 と低く、別の動きをしました(連動の強さは、期間で変わります。下の「そのほかの銘柄」の表のあとを見てください)。</li>
+  <li><span class="tag fact">実測</span><strong>この表の7銘柄で、値動きの大きさは5倍近く違います。</strong>PEPE の1日の平均的な値動き(3.93%)は、金(0.86%)の約4.6倍です。</li>
+  <li><span class="tag fact">実測</span><strong>PEPE は、4日に1日は 5% 以上動きました</strong>(730日中186日)。金は2年で5日だけです。</li>
+  <li><span class="tag fact">実測</span><strong>この表の BTC 以外の暗号資産は、どれも高値から3分の2以上を失った時期があります。</strong>ETH で -67.6%、DOGE で -88.3%、PEPE で -91.2% です。</li>
+  <li><span class="tag fact">実測</span><strong>金も安全ではありません。</strong>2026年1月30日に1日で -10.1% 下げ、同年1月28日の高値から11月までに -36.1% 下げています。</li>
+  <li><span class="tag fact">実測</span><strong>暗号資産どうしは強く連動しています。</strong>ETH・SOL・DOGE は 0.8 前後で、BTC が下がる日はほぼ一緒に下がります。この表では金だけが 0.29 と低く、別の動きをしました(連動の強さは、期間で変わります。下の「そのほかの銘柄」の表のあとを見てください)。</li>
 </ul>
 <p><span class="tag idea">考え方</span>ここから導ける実用的な結論は2つです。1つ目は、<strong>値動きの大きい銘柄ほど、買う金額を小さくする</strong>こと(第6章で計算方法を説明します)。2つ目は、<strong>暗号資産を何種類も買っても、危険はあまり減らない</strong>ことです。</p>
 
@@ -860,9 +861,9 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <p><span class="tag fact">事実</span>ただし、金利と金の関係は近年弱まっているという見方と、関係は続いているという見方があり、専門家の間でも意見が分かれています。<sup>[10]</sup></p>
   <h4>取引するときのポイント</h4>
   <ul>
-    <li><span class="tag fact">実測</span>1日の平均的な値動きは 0.85% と、この表の中でいちばん小さい銘柄です。練習の最初の銘柄に向いています。</li>
-    <li><span class="tag fact">実測</span>BTC との連動は 0.28 と低く、暗号資産とは別の理由で動きます。</li>
-    <li><span class="tag fact">実測</span>1日の売買代金の平均は約2,700万 USDT で、BTC(約18.5億 USDT)の約70分の1です。大きな金額の売買には向きません。</li>
+    <li><span class="tag fact">実測</span>1日の平均的な値動きは 0.86% と、この表の中でいちばん小さい銘柄です。練習の最初の銘柄に向いています。</li>
+    <li><span class="tag fact">実測</span>BTC との連動は 0.29 と低く、暗号資産とは別の理由で動きます。</li>
+    <li><span class="tag fact">実測</span>1日の売買代金の平均は約2,700万 USDT で、BTC(約18.2億 USDT)の約70分の1です。大きな金額の売買には向きません。</li>
     <li><span class="tag idea">考え方</span>動きが小さいので、短い時間足では手数料に対して取れる幅が小さくなりがちです。日足で数日〜数週間持つ取引のほうが合っています。</li>
   </ul>
   <h4>注意点</h4>
@@ -887,8 +888,8 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   </ul>
   <h4>取引するときのポイント</h4>
   <ul>
-    <li><span class="tag fact">実測</span>暗号資産の中では値動きが最も小さく(1日平均 1.59%)、売買代金は最も多い(1日平均 約18.5億 USDT)銘柄です。</li>
-    <li><span class="tag fact">実測</span>ほかの暗号資産は BTC と 0.67〜0.84 の強さで連動します。ほかの銘柄を取引するときも、先に BTC の日足を見て、市場全体の向きを確かめる価値があります。</li>
+    <li><span class="tag fact">実測</span>暗号資産の中では値動きが最も小さく(1日平均 1.60%)、売買代金は最も多い(1日平均 約18.2億 USDT)銘柄です。</li>
+    <li><span class="tag fact">実測</span>ほかの暗号資産は BTC と 0.70〜0.85 の強さで連動します。ほかの銘柄を取引するときも、先に BTC の日足を見て、市場全体の向きを確かめる価値があります。</li>
     <li><span class="tag fact">実測</span>それでも、2年間で高値から -53.0% 下げ、1日で -14.0% 下げた日があります。「いちばん安定している暗号資産」であって、安定した資産ではありません。</li>
   </ul>
   <h4>注意点</h4>
@@ -912,7 +913,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   </ul>
   <h4>取引するときのポイント</h4>
   <ul>
-    <li><span class="tag fact">実測</span>BTC との連動は 0.84 で、この表の中で最も強く連動します。一方で、動く幅は BTC の約1.5倍(1日平均 2.45%)です。</li>
+    <li><span class="tag fact">実測</span>BTC との連動は 0.85 で、この表の中で最も強く連動します。一方で、動く幅は BTC の約1.5倍(1日平均 2.46%)です。</li>
     <li><span class="tag idea">考え方</span>「BTC と同じ方向に、より大きく動く銘柄」と考えると扱いやすくなります。BTC と同じ金額を買うと、危険は約1.5倍になります。</li>
   </ul>
 </div>
@@ -931,7 +932,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <h4>取引するときのポイント</h4>
   <ul>
     <li><span class="tag fact">実測</span>2年間で最も大きく上げた日は +34.1% でした。最初の表の7銘柄の中では、PEPE に次ぐ大きさです。ニュースで一気に動く性質が数字に表れています。</li>
-    <li><span class="tag fact">実測</span>BTC との連動は 0.72 と、主要な銘柄の中ではやや低めです。XRP 独自の材料で動く日があることを示しています。</li>
+    <li><span class="tag fact">実測</span>BTC との連動は 0.75 と、主要な銘柄の中ではやや低めです。XRP 独自の材料で動く日があることを示しています。</li>
     <li><span class="tag common">常識</span>日本でも取引する人が多い銘柄で、円建て(XRP/JPY)でも取引されています。</li>
   </ul>
   <h4>注意点</h4>
@@ -953,7 +954,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   </ul>
   <h4>取引するときのポイント</h4>
   <ul>
-    <li><span class="tag fact">実測</span>1日の平均的な値動きは 2.84% で、BTC の約1.8倍です。5%以上動いた日は730日中118日、つまり6日に1日ほどあります。</li>
+    <li><span class="tag fact">実測</span>1日の平均的な値動きは 2.86% で、BTC の約1.8倍です。5%以上動いた日は730日中120日、つまり6日に1日ほどあります。</li>
     <li><span class="tag idea">考え方</span>上昇の流れが出たときの伸びが大きい反面、下げも深い銘柄です。流れに乗る手法(第5章)と相性がよい一方、損切りなしで持つと傷が大きくなります。</li>
   </ul>
 </div>
@@ -972,7 +973,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   </ul>
   <h4>取引するときのポイント</h4>
   <ul>
-    <li><span class="tag fact">実測</span>2年間で高値から -85.7% 下げました。上げたあとの下げが非常に深い銘柄です。</li>
+    <li><span class="tag fact">実測</span>2年間で高値から -88.3% 下げました。上げたあとの下げが非常に深い銘柄です。</li>
     <li><span class="tag idea">考え方</span>「急騰したあとに飛びついて高値で買う」という失敗が最も起きやすい種類の銘柄です。上がっている途中で追いかけず、条件がそろうまで待つことが特に大切です。</li>
   </ul>
 </div>
@@ -985,52 +986,52 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <p><span class="tag common">常識</span>ミームコインは、実用的な使い道よりも、人気や話題で価格が決まります。</p>
   <h4>取引するときのポイント</h4>
   <ul>
-    <li><span class="tag fact">実測</span>この表の中で最も値動きが大きい銘柄です。1日の平均的な値動きは 4.01%、1日の高値と安値の差は平均 8.76% あります。</li>
-    <li><span class="tag fact">実測</span>最悪の1日は -27.5%、最良の1日は +47.3% でした。高値からは -91.2% 下げています。</li>
+    <li><span class="tag fact">実測</span>この表の中で最も値動きが大きい銘柄です。1日の平均的な値動きは 3.93%、1日の高値と安値の差は平均 8.60% あります。</li>
+    <li><span class="tag fact">実測</span>最悪の1日は -27.5%、最良の1日は +34.8% でした。高値からは -91.2% 下げています。</li>
     <li><span class="tag common">常識</span>1枚の価格が非常に小さい(小数点以下に 0 が並ぶ)ため、価格の「安さ」と割安さは関係がありません。</li>
   </ul>
   <h4>注意点</h4>
   <ul>
-    <li><span class="tag idea">考え方</span>BTC と同じ感覚で同じ金額を買うと、危険は約2.5倍になります(1日の平均的な値動きが 4.01% 対 1.59%)。買う金額を半分以下にするのが目安です。</li>
+    <li><span class="tag idea">考え方</span>BTC と同じ感覚で同じ金額を買うと、危険は約2.5倍になります(1日の平均的な値動きが 3.93% 対 1.60%)。買う金額を半分以下にするのが目安です。</li>
     <li><span class="tag idea">考え方</span>練習には使えますが、実際のお金で扱うなら、失ってもよい少額にとどめるのが無難です。</li>
   </ul>
 </div>
 
 <h3 id="measured2">そのほかの銘柄の値動き</h3>
-<p><span class="tag fact">実測</span>上の表と同じ計算で、ほかの銘柄も比べました。期間は2024年11月13日〜2026年11月12日です。Binance での取引開始が遅い銘柄は、開始日からの数字で、短い期間の数字ほど当てになりません。</p>
+<p><span class="tag fact">実測</span>上の表と同じ計算で、ほかの銘柄も比べました。期間は2024年11月21日〜2026年11月20日です。Binance での取引開始が遅い銘柄は、開始日からの数字で、短い期間の数字ほど当てになりません。</p>
 <div class="tbl-wrap"><table>
   <thead><tr><th>銘柄(期間)</th><th>1日の平均的な値動き / 高値と安値の差</th><th>高値からの最大の下落 / BTC との連動</th></tr></thead>
   <tbody>
-    <tr><td>金 XAUT(2026年3月27日〜)</td><td class="num">0.90% / 1.68%</td><td class="num">-19.4% / 0.52</td></tr>
-    <tr><td>EUR/USDT(ユーロ)</td><td class="num">0.28% / 0.63%</td><td class="num">-8.1% / 0.15</td></tr>
-    <tr><td>TRX</td><td class="num">1.47% / 2.86%</td><td class="num">-51.1% / 0.18</td></tr>
-    <tr><td>BNB</td><td class="num">1.78% / 3.92%</td><td class="num">-58.2% / 0.70</td></tr>
-    <tr><td>LTC</td><td class="num">2.57% / 5.79%</td><td class="num">-70.1% / 0.63</td></tr>
-    <tr><td>BCH</td><td class="num">2.74% / 5.93%</td><td class="num">-70.9% / 0.64</td></tr>
-    <tr><td>SHIB</td><td class="num">2.76% / 6.15%</td><td class="num">-87.5% / 0.73</td></tr>
-    <tr><td>DOT</td><td class="num">3.18% / 6.93%</td><td class="num">-93.0% / 0.63</td></tr>
-    <tr><td>LINK</td><td class="num">3.21% / 6.79%</td><td class="num">-75.4% / 0.72</td></tr>
-    <tr><td>AVAX</td><td class="num">3.24% / 6.82%</td><td class="num">-89.1% / 0.71</td></tr>
-    <tr><td>ADA</td><td class="num">3.27% / 7.09%</td><td class="num">-88.3% / 0.72</td></tr>
-    <tr><td>XLM</td><td class="num">3.31% / 7.08%</td><td class="num">-74.4% / 0.52</td></tr>
-    <tr><td>HBAR</td><td class="num">3.39% / 7.30%</td><td class="num">-83.0% / 0.52</td></tr>
-    <tr><td>TRUMP(2025年1月20日〜)</td><td class="num">3.61% / 8.25%</td><td class="num">-97.6% / 0.49</td></tr>
-    <tr><td>AAVE</td><td class="num">3.63% / 7.63%</td><td class="num">-84.1% / 0.67</td></tr>
-    <tr><td>SUI</td><td class="num">3.64% / 7.80%</td><td class="num">-87.7% / 0.73</td></tr>
-    <tr><td>UNI</td><td class="num">3.75% / 8.09%</td><td class="num">-87.1% / 0.64</td></tr>
-    <tr><td>TAO</td><td class="num">3.83% / 8.47%</td><td class="num">-79.5% / 0.64</td></tr>
-    <tr><td>NEAR</td><td class="num">3.92% / 8.23%</td><td class="num">-88.0% / 0.61</td></tr>
-    <tr><td>BONK</td><td class="num">4.40% / 9.47%</td><td class="num">-95.8% / 0.67</td></tr>
-    <tr><td>WIF</td><td class="num">4.51% / 9.84%</td><td class="num">-96.7% / 0.65</td></tr>
-    <tr><td>ZEC</td><td class="num">4.93% / 10.39%</td><td class="num">-71.8% / 0.43</td></tr>
-    <tr><td>PENGU(2024年12月18日〜)</td><td class="num">4.95% / 13.39%</td><td class="num">-91.0% / 0.61</td></tr>
+    <tr><td>金 XAUT(2026年3月27日〜)</td><td class="num">0.93% / 1.71%</td><td class="num">-26.5% / 0.53</td></tr>
+    <tr><td>EUR/USDT(ユーロ)</td><td class="num">0.28% / 0.62%</td><td class="num">-8.8% / 0.15</td></tr>
+    <tr><td>TRX</td><td class="num">1.45% / 2.81%</td><td class="num">-51.1% / 0.18</td></tr>
+    <tr><td>BNB</td><td class="num">1.81% / 3.92%</td><td class="num">-58.6% / 0.71</td></tr>
+    <tr><td>LTC</td><td class="num">2.55% / 5.74%</td><td class="num">-70.3% / 0.66</td></tr>
+    <tr><td>BCH</td><td class="num">2.73% / 5.90%</td><td class="num">-70.9% / 0.65</td></tr>
+    <tr><td>SHIB</td><td class="num">2.75% / 6.10%</td><td class="num">-89.1% / 0.73</td></tr>
+    <tr><td>DOT</td><td class="num">3.15% / 6.89%</td><td class="num">-93.8% / 0.64</td></tr>
+    <tr><td>XLM</td><td class="num">3.20% / 6.90%</td><td class="num">-77.2% / 0.57</td></tr>
+    <tr><td>LINK</td><td class="num">3.20% / 6.76%</td><td class="num">-75.4% / 0.73</td></tr>
+    <tr><td>AVAX</td><td class="num">3.24% / 6.80%</td><td class="num">-89.1% / 0.71</td></tr>
+    <tr><td>ADA</td><td class="num">3.25% / 7.01%</td><td class="num">-88.3% / 0.73</td></tr>
+    <tr><td>HBAR</td><td class="num">3.26% / 7.10%</td><td class="num">-86.2% / 0.59</td></tr>
+    <tr><td>TRUMP(2025年1月20日〜)</td><td class="num">3.62% / 8.25%</td><td class="num">-98.1% / 0.50</td></tr>
+    <tr><td>AAVE</td><td class="num">3.64% / 7.62%</td><td class="num">-84.1% / 0.68</td></tr>
+    <tr><td>SUI</td><td class="num">3.65% / 7.76%</td><td class="num">-87.7% / 0.73</td></tr>
+    <tr><td>UNI</td><td class="num">3.76% / 8.10%</td><td class="num">-87.1% / 0.65</td></tr>
+    <tr><td>TAO</td><td class="num">3.84% / 8.47%</td><td class="num">-79.5% / 0.65</td></tr>
+    <tr><td>NEAR</td><td class="num">3.93% / 8.23%</td><td class="num">-88.0% / 0.63</td></tr>
+    <tr><td>BONK</td><td class="num">4.36% / 9.27%</td><td class="num">-96.1% / 0.68</td></tr>
+    <tr><td>WIF</td><td class="num">4.45% / 9.72%</td><td class="num">-96.9% / 0.66</td></tr>
+    <tr><td>ZEC</td><td class="num">4.93% / 10.39%</td><td class="num">-71.8% / 0.45</td></tr>
+    <tr><td>PENGU(2024年12月18日〜)</td><td class="num">4.95% / 13.35%</td><td class="num">-91.0% / 0.61</td></tr>
   </tbody>
 </table></div>
-<p class="src">HYPE は Binance の現物での取引開始が2026年9月25日で、49日分しかないため表に入れていません(参考:1日の平均的な値動き 2.26%)。bStocks(株のトークン)はこのあとのカードで扱います。</p>
+<p class="src">HYPE は Binance の現物での取引開始が2026年9月25日で、57日分しかないため表に入れていません(参考:1日の平均的な値動き 2.53%)。bStocks(株のトークン)はこのあとのカードで扱います。</p>
 <ul>
-  <li><span class="tag fact">実測</span><strong>この表の23銘柄のうち13銘柄が、高値から8割以上下げた時期がありました。</strong>DOT は -93.0%、TRUMP は -97.6% です。最初の表の BTC(-53.0%)と比べると、下げの深さがまったく違います。</li>
+  <li><span class="tag fact">実測</span><strong>この表の23銘柄のうち13銘柄が、高値から8割以上下げた時期がありました。</strong>DOT は -93.8%、TRUMP は -98.1% です。最初の表の BTC(-53.0%)と比べると、下げの深さがまったく違います。</li>
   <li><span class="tag fact">実測</span><strong>TRX は1日の値動きが BTC より小さく、BTC との連動も 0.18 と低い銘柄でした。</strong>ただし2024年12月3日に1日で +96.1%、翌日に -23.7% と、まれに極端に動いています。平均が小さいことと、危険が小さいことは違います。</li>
-  <li><span class="tag fact">実測</span><strong>連動の強さは、期間で変わります。</strong>金(PAXG)と BTC の連動は2年間では 0.28 でしたが、XAUT と同じ2026年3月27日以降に限ると 0.52 でした。</li>
+  <li><span class="tag fact">実測</span><strong>連動の強さは、期間で変わります。</strong>金(PAXG)と BTC の連動は2年間では 0.29 でしたが、XAUT と同じ2026年3月27日以降に限ると 0.53 でした。</li>
 </ul>
 
 <div class="card" id="xaut">
@@ -1042,12 +1043,12 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <h4>価格を動かす要因</h4>
   <ul>
     <li><span class="tag common">常識</span>基本は PAXG と同じで、金の国際価格です(上の PAXG のカードと、第3章の「値動きを左右する外の要因」を見てください)。</li>
-    <li><span class="tag fact">実測</span>2026年3月27日〜11月12日の231日で、XAUT と PAXG の1日の変化率の連動は 0.998 で、ほぼ同じ動きでした。終値の差は平均 -0.14%(XAUT がわずかに安い)で、いちばん開いたのは2026年10月31日(土曜日)の -0.50% でした。</li>
+    <li><span class="tag fact">実測</span>2026年3月27日〜11月20日の239日で、XAUT と PAXG の1日の変化率の連動は 0.998 で、ほぼ同じ動きでした。終値の差は平均 -0.14%(XAUT がわずかに安い)で、いちばん開いたのは2026年10月31日(土曜日)の -0.50% でした。</li>
   </ul>
   <h4>取引するときのポイント</h4>
   <ul>
     <li><span class="tag fact">実測</span>Binance での1日の売買代金の平均は約3,100万 USDT で、PAXG(約2,700万 USDT)と同じくらいです。</li>
-    <li><span class="tag fact">実測</span>土日は値動きが小さくなります。平日の1日の高値と安値の差は平均 2.12% ですが、土日は 0.58% でした。金の現物市場が閉まっている間は、新しい材料が少ないためと考えられます。</li>
+    <li><span class="tag fact">実測</span>土日は値動きが小さくなります。平日の1日の高値と安値の差は平均 2.13% ですが、土日は 0.65% でした。金の現物市場が閉まっている間は、新しい材料が少ないためと考えられます。</li>
     <li><span class="tag idea">考え方</span>練習では、PAXG と XAUT を「同じものの2つの値段」として見比べると、わずかな価格差がどう生まれ、どう縮むかを観察できます。</li>
   </ul>
   <h4>注意点</h4>
@@ -1070,7 +1071,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   </ul>
   <h4>取引するときのポイント</h4>
   <ul>
-    <li><span class="tag fact">実測</span>1日の平均的な値動きは 1.78% で、BTC(1.59%)に近い大きさです。BTC との連動は 0.70 でした。</li>
+    <li><span class="tag fact">実測</span>1日の平均的な値動きは 1.81% で、BTC(1.60%)に近い大きさです。BTC との連動は 0.71 でした。</li>
   </ul>
   <h4>注意点</h4>
   <ul>
@@ -1090,7 +1091,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   </ul>
   <h4>取引するときのポイント</h4>
   <ul>
-    <li><span class="tag fact">実測</span>1日の平均的な値動きは 1.47% で BTC より小さく、BTC との連動は 0.18 と、暗号資産の中では目立って低い銘柄でした。</li>
+    <li><span class="tag fact">実測</span>1日の平均的な値動きは 1.45% で BTC より小さく、BTC との連動は 0.18 と、暗号資産の中では目立って低い銘柄でした。</li>
     <li><span class="tag fact">実測</span>一方で、2024年12月3日に +96.1%、翌日 -23.7% という極端な日がありました。ふだん穏やかな銘柄ほど、損切りを置かずに持ちがちなので注意が必要です。</li>
   </ul>
 </div>
@@ -1108,7 +1109,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   </ul>
   <h4>取引するときのポイント・注意点</h4>
   <ul>
-    <li><span class="tag fact">実測</span>Binance の現物での取引開始は2026年9月25日で、日足は49日分しかありません。値動きの性質を判断するには、まだ短すぎます。</li>
+    <li><span class="tag fact">実測</span>Binance の現物での取引開始は2026年9月25日で、日足は57日分しかありません。値動きの性質を判断するには、まだ短すぎます。</li>
     <li><span class="tag idea">考え方</span>初期の配布分や、開発者向けに確保された分のロック解除が今後も続くとされ(2027〜2028年に大半が終わる予定<sup>[31]</sup>)、売りが出やすい時期があり得ます。</li>
   </ul>
 </div>
@@ -1120,7 +1121,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <p><span class="tag fact">事実</span>2017年9月下旬に始まった台帳で、学術論文として発表された「ウロボロス」というプルーフ・オブ・ステークの方式を使っています。発行上限は450億枚で、この上限は変更できない設定になっています。<sup>[32]</sup></p>
   <h4>取引するときのポイント</h4>
   <ul>
-    <li><span class="tag fact">実測</span>1日の平均的な値動きは 3.27%、高値からの最大の下落は -88.3% でした。</li>
+    <li><span class="tag fact">実測</span>1日の平均的な値動きは 3.25%、高値からの最大の下落は -88.3% でした。</li>
     <li><span class="tag fact">実測</span>2025年3月2日に +72.2%、翌日に -24.4% と動きました。ニュースで一気に上げ、翌日にその多くを返す動きです。</li>
     <li><span class="tag common">常識</span>このサイトでは円建て(ADA/JPY)でも表示できます。</li>
   </ul>
@@ -1134,7 +1135,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <p><span class="tag idea">考え方</span>分散型の貸し借りのサービスなどは、担保の価格を知るためにオラクルを使います。「ほかのサービスの裏方」なので、利用が増えても LINK の価格にどれだけ反映されるかは、分かりにくい銘柄です。</p>
   <h4>取引するときのポイント</h4>
   <ul>
-    <li><span class="tag fact">実測</span>1日の平均的な値動きは 3.21%、BTC との連動は 0.72 でした。動きの大きさは ETH より一段大きい程度です。</li>
+    <li><span class="tag fact">実測</span>1日の平均的な値動きは 3.20%、BTC との連動は 0.73 でした。動きの大きさは ETH より一段大きい程度です。</li>
   </ul>
 </div>
 
@@ -1148,8 +1149,8 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   </ul>
   <h4>取引するときのポイント</h4>
   <ul>
-    <li><span class="tag fact">実測</span>1日の平均的な値動きは LTC 2.57%、BCH 2.74% で、BTC の約1.6〜1.7倍でした。高値からの最大の下落は、どちらも約 -70% です。</li>
-    <li><span class="tag fact">実測</span>BCH の1日の売買代金の平均は約2,600万 USDT と、上の表の銘柄の中では少なめです。</li>
+    <li><span class="tag fact">実測</span>1日の平均的な値動きは LTC 2.55%、BCH 2.73% で、BTC の約1.6〜1.7倍でした。高値からの最大の下落は、どちらも約 -70% です。</li>
+    <li><span class="tag fact">実測</span>BCH の1日の売買代金の平均は約2,500万 USDT と、上の表の銘柄の中では少なめです。</li>
     <li><span class="tag idea">考え方</span>「ビットコインに似ている」ことは、「ビットコインと同じくらい安定している」ことを意味しません。値動きは BTC よりはっきり大きいと考えてください。</li>
   </ul>
 </div>
@@ -1161,8 +1162,8 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <p><span class="tag fact">事実</span>2016年10月28日に始まった通貨で、「ゼロ知識証明(zk-SNARKs)」という暗号の技術で、送り手・受け手・金額を隠した送金(シールド取引)ができます。隠さない普通の送金もできます。発行上限はビットコインと同じ2,100万枚です。<sup>[36]</sup></p>
   <h4>取引するときのポイント</h4>
   <ul>
-    <li><span class="tag fact">実測</span>上の表で、1日の平均的な値動き(4.93%)が PENGU に次いで大きく、5%以上動いた日は730日中264日ありました。ミームコイン並みの荒さです。</li>
-    <li><span class="tag fact">実測</span>BTC との連動は 0.43 と低めで、2025年10月1日には1日で +62.5% 上げました。独自の材料で動くことが多い銘柄です。</li>
+    <li><span class="tag fact">実測</span>上の表で、1日の平均的な値動き(4.93%)が PENGU に次いで大きく、5%以上動いた日は730日中267日ありました。ミームコイン並みの荒さです。</li>
+    <li><span class="tag fact">実測</span>BTC との連動は 0.45 と低めで、2025年10月1日には1日で +62.5% 上げました。独自の材料で動くことが多い銘柄です。</li>
   </ul>
   <h4>注意点</h4>
   <ul>
@@ -1177,15 +1178,15 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
     <thead><tr><th>銘柄</th><th>しくみと発行</th><th>実測(1日の平均的な値動き / 最大の下落)</th></tr></thead>
     <tbody>
       <tr><td>AVAX<br><small>アバランチ</small></td><td><span class="tag fact">事実</span>上限は7億2,000万枚。始まった時点で半分の3億6,000万枚が発行され、残りは承認者への報酬として出ていく<sup>[37]</sup></td><td class="num">3.24% / -89.1%</td></tr>
-      <tr><td>SUI<br><small>スイ</small></td><td><span class="tag fact">事実</span>Mysten Labs が中心となって開発。2023年5月3日に本番の台帳が始まった。上限は100億枚で、まだ多くがロックされている<sup>[38]</sup></td><td class="num">3.64% / -87.7%</td></tr>
-      <tr><td>NEAR<br><small>ニア</small></td><td><span class="tag fact">事実</span>2020年4月に始まり、台帳を分割して並行処理する「シャーディング」を段階的に入れてきた<sup>[39]</sup></td><td class="num">3.92% / -88.0%</td></tr>
-      <tr><td>DOT<br><small>ポルカドット</small></td><td><span class="tag fact">事実</span>2020年5月26日に最初の版が始まった。中心の台帳(リレーチェーン)に、用途別の台帳(パラチェーン)をつなぐ設計。2020年8月21日に単位を100分の1に変え、総量が1,000万枚から10億枚になった<sup>[40]</sup></td><td class="num">3.18% / -93.0%</td></tr>
-      <tr><td>HBAR<br><small>ヘデラ</small></td><td><span class="tag fact">事実</span>ブロックをつなぐ方式ではなく「ハッシュグラフ」という方式を使う。総量は500億枚で、配り方は大企業などで作る評議会が決める<sup>[41]</sup></td><td class="num">3.39% / -83.0%</td></tr>
-      <tr><td>XLM<br><small>ステラ</small></td><td><span class="tag fact">事実</span>2014年にジェド・マケーレブ氏らが始めた送金向けの台帳。2019年に55億枚を焼却し、総量は500億枚になった。非営利の財団が多くを保有している<sup>[42]</sup></td><td class="num">3.31% / -74.4%</td></tr>
+      <tr><td>SUI<br><small>スイ</small></td><td><span class="tag fact">事実</span>Mysten Labs が中心となって開発。2023年5月3日に本番の台帳が始まった。上限は100億枚で、まだ多くがロックされている<sup>[38]</sup></td><td class="num">3.65% / -87.7%</td></tr>
+      <tr><td>NEAR<br><small>ニア</small></td><td><span class="tag fact">事実</span>2020年4月に始まり、台帳を分割して並行処理する「シャーディング」を段階的に入れてきた<sup>[39]</sup></td><td class="num">3.93% / -88.0%</td></tr>
+      <tr><td>DOT<br><small>ポルカドット</small></td><td><span class="tag fact">事実</span>2020年5月26日に最初の版が始まった。中心の台帳(リレーチェーン)に、用途別の台帳(パラチェーン)をつなぐ設計。2020年8月21日に単位を100分の1に変え、総量が1,000万枚から10億枚になった<sup>[40]</sup></td><td class="num">3.15% / -93.8%</td></tr>
+      <tr><td>HBAR<br><small>ヘデラ</small></td><td><span class="tag fact">事実</span>ブロックをつなぐ方式ではなく「ハッシュグラフ」という方式を使う。総量は500億枚で、配り方は大企業などで作る評議会が決める<sup>[41]</sup></td><td class="num">3.26% / -86.2%</td></tr>
+      <tr><td>XLM<br><small>ステラ</small></td><td><span class="tag fact">事実</span>2014年にジェド・マケーレブ氏らが始めた送金向けの台帳。2019年に55億枚を焼却し、総量は500億枚になった。非営利の財団が多くを保有している<sup>[42]</sup></td><td class="num">3.20% / -77.2%</td></tr>
     </tbody>
   </table></div>
   <ul>
-    <li><span class="tag fact">実測</span>6銘柄とも1日の平均的な値動きは 3〜4% で、BTC の約2〜2.5倍でした。高値からの最大の下落は、XLM(-74.4%)を除いて -83% 以上でした。</li>
+    <li><span class="tag fact">実測</span>6銘柄とも1日の平均的な値動きは 3〜4% で、BTC の約2〜2.5倍でした。高値からの最大の下落は、XLM(-77.2%)を除いて -86% 以上でした。</li>
     <li><span class="tag idea">考え方</span><strong>ロック解除の予定</strong>を確かめる習慣をつけてください。SUI のように、まだ多くの枚数がロックされている銘柄は、決まった日に新しい売りが出る可能性があります。</li>
     <li><span class="tag idea">考え方</span>このグループは、この章の最初の表の SOL や XRP と同じく「BTC と同じ方向に、より大きく動く」と考えるのが基本です。何種類も持っても、分散にはなりにくい点は同じです。</li>
   </ul>
@@ -1202,7 +1203,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <ul>
     <li><span class="tag idea">考え方</span>サービスの利用(預けられた金額や取引量)に加えて、プログラムの欠陥を突かれる事故や、各国の規制が大きな材料になります。</li>
     <li><span class="tag idea">考え方</span>貸し借りの仕組みでは、担保の価格が下がると、担保が自動で売られます(清算)。相場が急落すると、この売りがさらに価格を押し下げることがあります。このあとの「強制決済の連鎖」と同じ構造です。</li>
-    <li><span class="tag fact">実測</span>1日の平均的な値動きは UNI 3.75%、AAVE 3.63% で、どちらも高値から -84% 以上下げた時期がありました。</li>
+    <li><span class="tag fact">実測</span>1日の平均的な値動きは UNI 3.76%、AAVE 3.64% で、どちらも高値から -84% 以上下げた時期がありました。</li>
   </ul>
 </div>
 
@@ -1213,7 +1214,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <p><span class="tag fact">事実</span>AI(人工知能)の計算やデータを提供した参加者に報酬を払う、分散型のネットワークです。「サブネット」と呼ばれる用途別の市場が100以上あると報じられています。発行上限は2,100万枚とされ、2025年12月中旬に最初の半減期を迎え、1日の新規発行が約7,200枚から約3,600枚になりました。<sup>[45]</sup></p>
   <h4>取引するときのポイント・注意点</h4>
   <ul>
-    <li><span class="tag fact">実測</span>1日の平均的な値動きは 3.83%、5%以上動いた日は730日中190日でした。</li>
+    <li><span class="tag fact">実測</span>1日の平均的な値動きは 3.84%、5%以上動いた日は730日中189日でした。</li>
     <li><span class="tag idea">考え方</span>「AI」という話題で買われやすい銘柄です。話題で上がった銘柄は、話題が移ると大きく下げやすい点は、ミームコインと同じです。</li>
     <li><span class="tag idea">考え方</span>半減期の前には「発行が減るので上がる」という予想が多く出ました。<sup>[45]</sup> ビットコインの半減期と同じく、予想が先に価格に織り込まれている可能性があります(第3章の「ビットコインの『4年周期』は本当か」も見てください)。</li>
   </ul>
@@ -1224,16 +1225,16 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <div class="tbl-wrap"><table>
     <thead><tr><th>銘柄</th><th>成り立ち</th><th>実測(1日の平均的な値動き / 最大の下落)</th></tr></thead>
     <tbody>
-      <tr><td>SHIB<br><small>柴犬コイン</small></td><td><span class="tag fact">事実</span>2020年8月、匿名の「Ryoshi」が 1,000兆枚で開始。半分がイーサリアム共同創業者ブテリン氏のアドレスに一方的に送られ、同氏はその大半(約410兆枚)を焼却した<sup>[46]</sup></td><td class="num">2.76% / -87.5%</td></tr>
-      <tr><td>BONK</td><td><span class="tag fact">事実</span>2022年12月に始まったソラナ上の犬のミームコイン。総量100兆枚の半分が、ソラナの利用者に無償で配られた<sup>[47]</sup></td><td class="num">4.40% / -95.8%</td></tr>
-      <tr><td>WIF<br><small>dogwifhat</small></td><td><span class="tag fact">事実</span>2023年11月に始まったソラナ上のミームコイン。総量は約9億9,900万枚で、追加発行はできない。使い道はない<sup>[48]</sup></td><td class="num">4.51% / -96.7%</td></tr>
+      <tr><td>SHIB<br><small>柴犬コイン</small></td><td><span class="tag fact">事実</span>2020年8月、匿名の「Ryoshi」が 1,000兆枚で開始。半分がイーサリアム共同創業者ブテリン氏のアドレスに一方的に送られ、同氏はその大半(約410兆枚)を焼却した<sup>[46]</sup></td><td class="num">2.75% / -89.1%</td></tr>
+      <tr><td>BONK</td><td><span class="tag fact">事実</span>2022年12月に始まったソラナ上の犬のミームコイン。総量100兆枚の半分が、ソラナの利用者に無償で配られた<sup>[47]</sup></td><td class="num">4.36% / -96.1%</td></tr>
+      <tr><td>WIF<br><small>dogwifhat</small></td><td><span class="tag fact">事実</span>2023年11月に始まったソラナ上のミームコイン。総量は約9億9,900万枚で、追加発行はできない。使い道はない<sup>[48]</sup></td><td class="num">4.45% / -96.9%</td></tr>
       <tr><td>PENGU</td><td><span class="tag fact">事実</span>NFT「Pudgy Penguins」の関連で、2024年12月17日にソラナ上で開始。総量は約888億枚で、その25.9%が関係者に配られた<sup>[47]</sup></td><td class="num">4.95% / -91.0%</td></tr>
-      <tr><td>TRUMP</td><td><span class="tag fact">事実</span>2025年1月17日に開始。10億枚のうち、始めに出回ったのは20%で、残りの80%はトランプ氏の関連会社などが持ち、2028年まで少しずつロック解除される<sup>[49]</sup></td><td class="num">3.61% / -97.6%</td></tr>
+      <tr><td>TRUMP</td><td><span class="tag fact">事実</span>2025年1月17日に開始。10億枚のうち、始めに出回ったのは20%で、残りの80%はトランプ氏の関連会社などが持ち、2028年まで少しずつロック解除される<sup>[49]</sup></td><td class="num">3.62% / -98.1%</td></tr>
     </tbody>
   </table></div>
   <ul>
-    <li><span class="tag fact">実測</span><strong>5銘柄とも、高値から 87% 以上下げています。</strong>TRUMP は取引開始の直後につけた高値から -97.6%、つまり100が2.4になる下げでした。</li>
-    <li><span class="tag fact">実測</span>PENGU の1日の高値と安値の差は平均 13.39% で、この教科書で扱う銘柄の中で最大です。1日の中で、それだけ上下に振られるということです。</li>
+    <li><span class="tag fact">実測</span><strong>5銘柄とも、高値から 89% 以上下げています。</strong>TRUMP は取引開始の直後につけた高値から -98.1%、つまり100が1.9になる下げでした。</li>
+    <li><span class="tag fact">実測</span>PENGU の1日の高値と安値の差は平均 13.35% で、この教科書で扱う銘柄の中で最大です。1日の中で、それだけ上下に振られるということです。</li>
     <li><span class="tag idea">考え方</span><strong>「誰がどれだけ持っているか」と「いつロック解除されるか」</strong>が、ミームコインの最大の材料です。TRUMP のように大半を特定の関係者が持つ銘柄は、解除のたびに売りが出る可能性を考えておきます。</li>
     <li><span class="tag idea">考え方</span>PEPE のカードと同じく、同じ金額を買うと、1日の平均的な値動きで比べて BTC の約1.7〜3倍の危険を取ることになります。練習でも、買う金額は第6章の方法で小さく計算してください。</li>
   </ul>
@@ -1257,15 +1258,15 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <h4>価格を動かす要因</h4>
   <ul>
     <li><span class="tag common">常識</span>基本は裏付けの株の値動きです。決算発表、米国の金利と物価、株式市場全体の流れで動きます。</li>
-    <li><span class="tag fact">実測</span>暗号資産に関係の深い会社の株は、BTC と強く連動しました。MSTRB(ストラテジー)は 0.83、COINB(コインベース)は 0.78、CRCLB(サークル)は 0.68 です。一方、AAPLB(アップル)は 0.09 でした(いずれも取引開始の2026年6〜7月から11月12日まで)。</li>
+    <li><span class="tag fact">実測</span>暗号資産に関係の深い会社の株は、BTC と強く連動しました。MSTRB(ストラテジー)は 0.84、COINB(コインベース)は 0.79、CRCLB(サークル)は 0.70 です。一方、AAPLB(アップル)は 0.10 でした(いずれも取引開始の2026年6〜7月から11月20日まで)。</li>
   </ul>
   <h4>取引するときのポイント</h4>
   <ul>
     <li><span class="tag fact">事実</span><strong>米国市場が閉まっている間も値段は付きますが、その値段は「本物の株の値段」ではありません。</strong>Binance 自身も、市場が閉まっている時間の価格は特に変動が大きく、取引には追加の危険があると注意しています。<sup>[51]</sup></li>
-    <li><span class="tag fact">実測</span>NVDAB の1日の高値と安値の差は、平日が平均 3.58%、土日が 1.04% でした。土日の売買代金の平均は約110万 USDT で、平日(約900万 USDT)の8分の1ほどです。</li>
+    <li><span class="tag fact">実測</span>NVDAB の1日の高値と安値の差は、平日が平均 3.87%、土日が 1.21% でした。土日の売買代金の平均は約220万 USDT で、平日(約1,450万 USDT)の7分の1ほどです。</li>
     <li><span class="tag idea">考え方</span>土日の値動きが小さいのは、裏付けの株が動いていないためと考えられます。週末に大きなニュースが出ると、本当の値動きは月曜の米国市場が開いた時点でまとめて起き、bStocks の価格もそこで大きく動く(窓を開ける)可能性があります。土日に置いた損切りは、月曜にその価格を飛び越えて約定することがあります。</li>
-    <li><span class="tag fact">実測</span>売買代金は少なめです。1日の平均は NVDAB で約680万 USDT、COINB で約80万 USDT でした。BTC(約18.5億 USDT)の数百分の1です。</li>
-    <li><span class="tag fact">実測</span>値動きの大きさは銘柄でさまざまです。1日の平均的な値動きは SPYB(S&amp;P500 ETF)0.49%、QQQB(ナスダック100 ETF)0.83%、NVDAB 1.50%、MSTRB 3.23% でした。</li>
+    <li><span class="tag fact">実測</span>売買代金は少なめです。1日の平均は NVDAB で約1,100万 USDT、COINB で約85万 USDT でした。BTC(約18.2億 USDT)の数百分の1です。</li>
+    <li><span class="tag fact">実測</span>値動きの大きさは銘柄でさまざまです。1日の平均的な値動きは SPYB(S&amp;P500 ETF)0.54%、QQQB(ナスダック100 ETF)0.90%、NVDAB 1.67%、MSTRB 3.36% でした。</li>
   </ul>
   <h4>注意点</h4>
   <ul>
@@ -1280,7 +1281,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <p><span class="tag common">常識</span>BTC/JPY は「1 BTC が何円か」を表します。BTC/USDT のドルの値段に、ドルと円の為替レートを掛けたものに近い値段になります。そのため、<strong>BTC の値動きと、ドル円の値動きの両方</strong>が入ります。</p>
   <h4>取引するときのポイント</h4>
   <ul>
-    <li><span class="tag fact">実測</span>BTC/JPY と BTC/USDT の1日の変化率の連動は 0.98 で、ほぼ同じ動きでした。ただし、2年間の高値からの最大の下落は、BTC/USDT の -53.0% に対して BTC/JPY は -49.4% と、為替の分だけ差が出ています。</li>
+    <li><span class="tag fact">実測</span>BTC/JPY と BTC/USDT の1日の変化率の連動は 0.98 で、ほぼ同じ動きでした。ただし、2年間の高値からの最大の下落は、BTC/USDT の -53.0% に対して BTC/JPY は -50.4% と、為替の分だけ差が出ています。</li>
     <li><span class="tag fact">実測</span>Binance での BTC/JPY の1日の売買代金の平均は約42億円でした。BTC/USDT と比べるとかなり少なく、価格の差(スプレッド)が広がりやすいと考えられます。</li>
     <li><span class="tag fact">事実</span>同じ暗号資産でも、国や通貨によって値段がずれることがあります。韓国のウォン建ての BTC が米国より大幅に高くなる「キムチ・プレミアム」は、数日にわたって 40% に達したと報告されています。研究では、資金を国の外に動かしにくい規制が、ずれが残る理由の1つと考えられています。<sup>[53]</sup></li>
   </ul>
@@ -1298,7 +1299,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <p><span class="tag fact">事実</span>Binance は2020年1月に EUR/USDT などのユーロの取引を始めました。2026年の報道では、ユーロ建ての売買は Binance の現物の売買全体の約1%とされています。<sup>[54]</sup></p>
   <h4>取引するときのポイント</h4>
   <ul>
-    <li><span class="tag fact">実測</span>1日の平均的な値動きは 0.28% で、この教科書で扱う銘柄の中でいちばん小さく、2年間の最大の下落も -8.1% でした。</li>
+    <li><span class="tag fact">実測</span>1日の平均的な値動きは 0.28% で、この教科書で扱う銘柄の中でいちばん小さく、2年間の最大の下落も -8.8% でした。</li>
     <li><span class="tag fact">実測</span><strong>それでも、2025年10月10日(日本時間では11日の早朝)には、1分足で 1.06 まで売られる瞬間がありました。</strong>その日の始値 1.1566 から約 -8.4% です。本物のユーロドルの相場が1分でこれほど動いたわけではありません。暗号資産の取引所の中で、売り注文が一気に出て、買い注文が足りなかったために起きた値動きと考えられます(このあとの「板の厚さ」)。</li>
     <li><span class="tag idea">考え方</span>動きが小さいので、取引の練習としては、手数料と比べて取れる幅が非常に小さくなります。「手数料 0.1% は、1日の平均的な値動きの3分の1以上にあたる」と計算できます。</li>
   </ul>
@@ -1312,7 +1313,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <button type="button" class="opt">金額が同じなので、危険も同じ</button>
   <button type="button" class="opt">値動きの幅が違うので、危険の大きさは違う</button>
   <button type="button" class="opt">価格の安い PEPE のほうが、危険は小さい</button>
-  <p class="ex"><strong>答え:値動きの幅が違うので、危険の大きさは違う</strong><br>1日の平均的な値動きは、PEPE が金の約4.7倍ありました。同じ金額でも、値動きの大きい銘柄のほうが、大きく損をする可能性があります。(→ <a href="#measured">値動きの実測</a>)</p>
+  <p class="ex"><strong>答え:値動きの幅が違うので、危険の大きさは違う</strong><br>1日の平均的な値動きは、PEPE が金の約4.6倍ありました。同じ金額でも、値動きの大きい銘柄のほうが、大きく損をする可能性があります。(→ <a href="#measured">値動きの実測</a>)</p>
 </div>
 <div class="q" data-a="0">
   <p class="qt">問2. アルトコインを5種類に分けて買いました。「分散」について、正しいものはどれですか。</p>
@@ -1333,7 +1334,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <button type="button" class="opt">どれも、高値から3分の2以上を失った時期がある</button>
   <button type="button" class="opt">どれも、金より値動きが小さい</button>
   <button type="button" class="opt">どれも、BTC と逆の向きに動く</button>
-  <p class="ex"><strong>答え:どれも、高値から3分の2以上を失った時期がある</strong><br>ETH で -67.6%、DOGE で -85.7%、PEPE で -91.2% でした。大きく上がる銘柄は、同じだけ大きく下がります。(→ <a href="#measured">値動きの実測</a>)</p>
+  <p class="ex"><strong>答え:どれも、高値から3分の2以上を失った時期がある</strong><br>ETH で -67.6%、DOGE で -88.3%、PEPE で -91.2% でした。大きく上がる銘柄は、同じだけ大きく下がります。(→ <a href="#measured">値動きの実測</a>)</p>
 </div>
 <p class="qres" role="status" aria-live="polite"></p>
 <button type="button" class="qagain" hidden>もう一度やる</button>
@@ -1351,7 +1352,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 
 <h3 id="hours">24時間動く市場の「時間帯」</h3>
 <p><span class="tag common">常識</span>暗号資産は土日も含めて24時間取引されますが、参加者の多い時間帯と少ない時間帯があります。欧州と米国の市場が開いている時間帯(日本時間の夕方〜深夜)に売買が増える、とされます。実際に多い時間は、下の実測で確かめます。米国の経済指標の発表(雇用統計、物価、金利の発表など)の直後は、特に急な動きが出やすい時間です。</p>
-<p><span class="tag fact">実測</span>BTC/USDT の過去2年分で、日本時間の1時間ごとの売買代金を比べました(全体の平均を1とした倍率)。いちばん多いのは <strong>23時台(1.79倍)と0時台(1.76倍)</strong>、次が22時台(1.39倍)と1時台(1.38倍)です。米国の株式市場が開く時間と重なります。少ないのは <strong>13〜15時台(0.74〜0.78倍)</strong>と、6〜8時台(0.77〜0.81倍)でした。「夜8〜10時がいちばん活発」と教えられることがありますが、20時台は 0.78倍と、むしろ少ない時間でした。増えはじめるのは22時からです。</p>
+<p><span class="tag fact">実測</span>BTC/USDT の過去2年分で、日本時間の1時間ごとの売買代金を比べました(全体の平均を1とした倍率)。いちばん多いのは <strong>23時台(1.79倍)と0時台(1.77倍)</strong>、次が22時台(1.38倍)と1時台(1.38倍)です。米国の株式市場が開く時間と重なります。少ないのは <strong>13〜15時台(0.75〜0.79倍)</strong>と、6〜8時台(0.77〜0.81倍)でした。「夜8〜10時がいちばん活発」と教えられることがありますが、20時台は 0.78倍と、むしろ少ない時間でした。増えはじめるのは22時からです。</p>
 <p><span class="tag idea">考え方</span>初めのうちは、重要な発表の直前直後には新しく入らない、と決めておくと、理由の分からない急な動きに巻き込まれにくくなります。</p>
 
 <div class="try" data-id="hours">
@@ -1408,7 +1409,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 </ul>
 
 <h3 id="perp">先物の市場が、現物の価格を動かす — 無期限先物と資金調達率</h3>
-<p><span class="tag idea">考え方</span>このサイトのデモは、現物の価格を使って売買しますが、暗号資産の売買の多くは「先物」で行われています。先物の市場で起きることは、現物の価格にも直接響きます。現物しか取引しない人も、しくみを知っておく価値があります。</p>
+<p><span class="tag idea">考え方</span>このサイトのデモは、現物の価格を使って売買します(レバレッジをかけたときだけ、下で説明する資金調達料の目安がかかります)。ただ、暗号資産の売買の多くは「先物」で行われています。先物の市場で起きることは、現物の価格にも直接響きます。現物しか取引しない人も、しくみを知っておく価値があります。</p>
 <h4>無期限先物(パーペチュアル)</h4>
 <p><span class="tag common">常識</span>ふつうの先物には「いつ決済するか」の期限がありますが、暗号資産の取引所では、期限のない「無期限先物」が主流です。レバレッジをかけて、買いでも売りでも入れます。</p>
 <h4>資金調達率(ファンディングレート)</h4>
@@ -1457,7 +1458,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 <h3 id="weekend">週末と祝日の、薄い市場</h3>
 <ul>
   <li><span class="tag fact">事実</span>BTC の売買のうち週末が占める割合は、2018年の約24%から、2024年には約13%まで下がったと報告されています。現物 ETF の開始で、機関投資家の売買が米国の平日に集中したことが理由とされます。<sup>[64]</sup></li>
-  <li><span class="tag fact">実測</span>このサイトのデータでも、BTC の1日の売買代金の平均は、平日 約21.5億 USDT に対して土日 約11.1億 USDT と、ほぼ半分でした。1日の高値と安値の差も、平日 3.83%、土日 2.27% です。</li>
+  <li><span class="tag fact">実測</span>このサイトのデータでも、BTC の1日の売買代金の平均は、平日 約21.1億 USDT に対して土日 約11.1億 USDT と、ほぼ半分でした。1日の高値と安値の差も、平日 3.83%、土日 2.32% です(2024年11月21日〜2026年11月20日)。</li>
   <li><span class="tag idea">考え方</span>週末は「動きが小さい」ことが多い一方で、板が薄いため、まとまった注文やニュースが出たときには、少ない量で大きく動きやすくなります。週末に入る取引は、ふだんより金額を小さめにする、という考え方もあります。</li>
 </ul>
 
@@ -1471,10 +1472,10 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <tbody>
     <tr><td>0.2〜1%</td><td class="num">91%(156回)</td><td class="num">90%(255回)</td></tr>
     <tr><td>1〜2%</td><td class="num">80%(107回)</td><td class="num">75%(268回)</td></tr>
-    <tr><td>2%以上</td><td class="num">59%(161回)</td><td class="num">42%(854回)</td></tr>
+    <tr><td>2%以上</td><td class="num">59%(162回)</td><td class="num">42%(854回)</td></tr>
   </tbody>
 </table></div>
-<p class="src">BTC/USDT の1時間足、2017年8月〜2026年11月。金曜 21:00(UTC)から日曜 22:00(UTC)までを週末としました。CME の実際の取引時間とは少しずれるため、目安です。</p>
+<p class="src">BTC/USDT の1時間足、2017年8月〜2026年11月20日。金曜 21:00(UTC)から日曜 22:00(UTC)までを週末としました。CME の実際の取引時間とは少しずれるため、目安です。</p>
 <ul>
   <li><span class="tag fact">実測</span><strong>小さな値動きは、週末でなくても、ほとんど戻ります。</strong>1%未満の動きは、平日でも90%が5日以内に元の価格に触れました。「窓は9割埋まる」が本当でも、それは窓に特別な力があるからではなく、小さな値動きがもともと戻りやすいからです。</li>
   <li><span class="tag fact">実測</span><strong>大きな値動きでは、週末のほうが戻りやすい傾向がありました</strong>(59% 対 42%)。週末は売買が少なく、行きすぎた動きが出やすいため、と考えると筋が通ります。それでも、4割は戻っていません。</li>
@@ -1589,7 +1590,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
     <tr><td>2025年10月28日<br>(112,898)</td><td>112,000〜113,000 で浅く押したあと上昇。上値のめどは 114,000〜115,000</td><td>7日後の11月4日に、98,944 まで下落</td></tr>
     <tr><td>11月5日<br>(103,885)</td><td>100,000 を保てなければ 95,000 まで。95,000 を割ると、長い下降の流れへの転換に注意</td><td>11月18日に 90,000 割れ</td></tr>
     <tr><td>11月10日<br>(106,011)</td><td>100,000 は底値に近い。悪くても 86,000〜87,000 まで</td><td>11日後の11月21日に、80,600 まで下落</td></tr>
-    <tr><td>11月18日<br>(92,961)</td><td>次に守るのは 85,000。最後の防衛線は 72,000〜74,000</td><td>3日後に 85,000 割れ。2026年1月に 97,924 まで戻したあと、2月に 72,000 割れ。7月には 57,800 まで下落</td></tr>
+    <tr><td>11月18日<br>(92,961)</td><td>次に守るのは 85,000。最後の防衛線は 72,000〜74,000</td><td>3日後に 85,000 割れ。2026年1月に 97,924 まで戻したあと、2月に 72,000 割れ。7月には 57,800 まで下落(2026年11月には、その安値もさらに下回った)</td></tr>
   </tbody>
 </table></div>
 <ul>
@@ -1634,7 +1635,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 <div class="tbl-wrap"><table>
   <thead><tr><th>よく聞く話</th><th>確かめた結果</th></tr></thead>
   <tbody>
-    <tr><td>「暗号資産は1日に 5〜10% 動く。株の約5倍」</td><td><span class="tag fact">実測</span>ふつうの日の値動き(始値から終値まで。まん中の値)は、BTC 1.47%、ETH 2.04%、SOL 2.92%、PEPE 3.36% でした。1日に 5% 以上動いた日は、BTC で 11.7%、PEPE で 32.1% です。「5〜10%」は、ふつうの日ではなく、<strong>荒れた日の数字</strong>です。株との比較では、S&amp;P 500 の ETF のトークン(SPYB)が 0.49%、BTC が 1.59% で、約3倍でした(第2章の最初の表と同じ測り方)</td></tr>
+    <tr><td>「暗号資産は1日に 5〜10% 動く。株の約5倍」</td><td><span class="tag fact">実測</span>ふつうの日の値動き(始値から終値まで。まん中の値)は、BTC 1.47%、ETH 2.04%、SOL 2.92%、PEPE 3.36% でした。1日に 5% 以上動いた日は、BTC で 11.7%、PEPE で 32.2% です。「5〜10%」は、ふつうの日ではなく、<strong>荒れた日の数字</strong>です。株との比較では、S&amp;P 500 の ETF のトークン(SPYB)が 0.54%、BTC が 1.60% で、約3倍でした(第2章の最初の表と同じ測り方)</td></tr>
     <tr><td>「夜8〜10時がいちばん活発」</td><td><span class="tag fact">実測</span>BTC の売買がいちばん多いのは、日本時間の23時〜1時でした。20時台は、むしろ少ない時間です(この章の<a href="#hours">「時間帯」の実測</a>)</td></tr>
     <tr><td>「アフリカでは 66% の人が銀行口座を持っていない」</td><td><span class="tag fact">事実</span>世界銀行の調査では、サハラ以南のアフリカで、金融機関や携帯電話の口座を持つ大人は、2021年の 49% から、2024年には <strong>58%</strong> に増えました。持っていない人は約 42% です。携帯電話を使った送金サービスが広がったためです<sup>[89]</sup></td></tr>
     <tr><td>「暗号資産は約25,000種あり、9割以上は消える」</td><td><span class="tag fact">事実</span>価格情報サイト CoinGecko の調査では、2014年以降に掲載した24,000種あまりのうち、<strong>14,039種</strong>がすでに取引されなくなっていました(2024年の調査)。2021年7月〜2025年末に取引所以外で生まれた約2,020万種では、<strong>53.2%</strong> が消えています。<sup>[90]</sup> 「9割」という数字は確認できませんでしたが、<strong>半分以上が消える</strong>のは事実です</td></tr>
@@ -1654,11 +1655,11 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
     <tr><td>ETH</td><td class="num">2.04%</td><td class="num">18.8%</td><td class="num up">+26%</td><td class="num down">-45%</td><td class="num">82日/65日</td></tr>
     <tr><td>XRP</td><td class="num">1.95%</td><td class="num">18.2%</td><td class="num up">+78%</td><td class="num down">-42%</td><td class="num">86日/60日</td></tr>
     <tr><td>SOL</td><td class="num">2.92%</td><td class="num">27.5%</td><td class="num up">+46%</td><td class="num down">-42%</td><td class="num">117日/59日</td></tr>
-    <tr><td>PEPE</td><td class="num">3.36%</td><td class="num">32.1%</td><td class="num up">+89%</td><td class="num down">-30%</td><td class="num">84日/52日</td></tr>
+    <tr><td>PEPE</td><td class="num">3.36%</td><td class="num">32.2%</td><td class="num up">+89%</td><td class="num down">-30%</td><td class="num">84日/52日</td></tr>
     <tr><td>金(PAXG)</td><td class="num">0.41%</td><td class="num">0.3%</td><td class="num up">+7%</td><td class="num down">-10%</td><td class="num">0日/1日</td></tr>
   </tbody>
 </table></div>
-<p class="src">Binance の日足(UTC の1日)、各銘柄の取引開始から2026年11月18日まで。値動きは、始値から終値までの変化率。「ふつうの日」は、大きさの順に並べたまん中の値。第2章の最初の表とは、測り方が違います(あちらは直近2年間の、前の日の終値からの変化の平均)。そのため、数字は一致しません。</p>
+<p class="src">Binance の日足(UTC の1日)、各銘柄の取引開始から2026年11月20日まで。値動きは、始値から終値までの変化率。「ふつうの日」は、大きさの順に並べたまん中の値。第2章の最初の表とは、測り方が違います(あちらは直近2年間の、前の日の終値からの変化の平均)。そのため、数字は一致しません。</p>
 <ul>
   <li><span class="tag fact">実測</span><strong>1日で 10% 以上「上がった」日は、「下がった」日より多くありました。</strong>PEPE は1日で +89%、XRP は +78% 上がった日があります。</li>
   <li><span class="tag idea">考え方</span><strong>「売り(ショート)」は、急に上がったときの損が大きくなります。</strong>買いの損は、最悪でも買った金額までです。売りは、価格が2倍になれば、売った金額と同じだけ損をします。売買の少ない銘柄は、まとまった買いで急に跳ね上がります。「暗号資産では売りから入らない」と決めている人が多いのは、このためです。</li>
@@ -1817,7 +1818,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
     <li><span class="tag common">常識</span>強い上昇の最中は、70 より上に張り付いたまま上がり続けます。「70 を超えたから売り」は、強い流れの中では負けやすい使い方です。</li>
     <li><span class="tag common">常識</span>ダイバージェンスは、出てからも価格がしばらく上がり続けることがよくあります。それだけで売買する根拠にはなりません。</li>
   </ul>
-  <p><span class="tag fact">実測</span>第5章の検証では、「RSI が 30 を下回ったら買い、50 を上回ったら売る」という単純な使い方は、金と BTC ではプラスでしたが、ETH では -75% の大きなマイナスでした。同じ使い方でも、銘柄と時期によって結果が正反対になります。</p>
+  <p><span class="tag fact">実測</span>第5章の検証では、「RSI が 30 を下回ったら買い、50 を上回ったら売る」という単純な使い方は、金と BTC ではプラスでしたが、ETH では -80% の大きなマイナスでした。同じ使い方でも、銘柄と時期によって結果が正反対になります。</p>
 </div>
 
 <div class="try" data-id="rsi">
@@ -2282,31 +2283,31 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <thead><tr><th>銘柄・期間</th><th>ルール</th><th>回数</th><th>勝率</th><th>平均の勝ち</th><th>平均の負け</th><th>累計の損益</th><th>最大の下落</th></tr></thead>
   <tbody>
     <tr><td rowspan="4">BTC<br>2017年8月〜</td><td>平均線の交差</td><td class="num">37</td><td class="num">40.5%</td><td class="num">+58.5%</td><td class="num">-10.3%</td><td class="num up">+1,524%</td><td class="num down">-74.9%</td></tr>
-    <tr><td>RSI の逆張り</td><td class="num">21</td><td class="num">61.9%</td><td class="num">+14.1%</td><td class="num">-7.5%</td><td class="num up">+155%</td><td class="num down">-47.1%</td></tr>
+    <tr><td>RSI の逆張り</td><td class="num">21</td><td class="num">61.9%</td><td class="num">+14.1%</td><td class="num">-7.5%</td><td class="num up">+111%</td><td class="num down">-47.1%</td></tr>
     <tr><td>高値の更新</td><td class="num">44</td><td class="num">47.7%</td><td class="num">+39.9%</td><td class="num">-8.3%</td><td class="num up">+3,074%</td><td class="num down">-54.0%</td></tr>
-    <tr><td><em>買って持ち続けた場合</em></td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num up">+1,568%</td><td class="num down">-83%</td></tr>
+    <tr><td><em>買って持ち続けた場合</em></td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num up">+1,276%</td><td class="num down">-83%</td></tr>
     <tr><td rowspan="4">ETH<br>2017年8月〜</td><td>平均線の交差</td><td class="num">31</td><td class="num">51.6%</td><td class="num">+67.6%</td><td class="num">-13.8%</td><td class="num up">+3,344%</td><td class="num down">-67.8%</td></tr>
-    <tr><td>RSI の逆張り</td><td class="num">16</td><td class="num">31.2%</td><td class="num">+21.9%</td><td class="num">-17.7%</td><td class="num down">-75%</td><td class="num down">-77.7%</td></tr>
+    <tr><td>RSI の逆張り</td><td class="num">16</td><td class="num">31.2%</td><td class="num">+21.9%</td><td class="num">-17.7%</td><td class="num down">-80%</td><td class="num down">-80.3%</td></tr>
     <tr><td>高値の更新</td><td class="num">48</td><td class="num">47.9%</td><td class="num">+35.5%</td><td class="num">-10.8%</td><td class="num up">+1,225%</td><td class="num down">-67.8%</td></tr>
-    <tr><td><em>買って持ち続けた場合</em></td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num up">+569%</td><td class="num down">-94%</td></tr>
+    <tr><td><em>買って持ち続けた場合</em></td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num up">+437%</td><td class="num down">-94%</td></tr>
     <tr><td rowspan="4">XRP<br>2018年5月〜</td><td>平均線の交差</td><td class="num">34</td><td class="num">38.2%</td><td class="num">+33.0%</td><td class="num">-11.1%</td><td class="num up">+18%</td><td class="num down">-70.1%</td></tr>
-    <tr><td>RSI の逆張り</td><td class="num">19</td><td class="num">68.4%</td><td class="num">+16.4%</td><td class="num">-15.7%</td><td class="num up">+95%</td><td class="num down">-52.4%</td></tr>
+    <tr><td>RSI の逆張り</td><td class="num">19</td><td class="num">68.4%</td><td class="num">+16.4%</td><td class="num">-15.7%</td><td class="num up">+71%</td><td class="num down">-52.4%</td></tr>
     <tr><td>高値の更新</td><td class="num">38</td><td class="num">39.5%</td><td class="num">+46.6%</td><td class="num">-12.3%</td><td class="num up">+192%</td><td class="num down">-76.4%</td></tr>
-    <tr><td><em>買って持ち続けた場合</em></td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num up">+17%</td><td class="num down">-85%</td></tr>
+    <tr><td><em>買って持ち続けた場合</em></td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num up">+2%</td><td class="num down">-85%</td></tr>
     <tr><td rowspan="4">金 (PAXG)<br>2020年8月〜</td><td>平均線の交差</td><td class="num">26</td><td class="num">46.2%</td><td class="num">+6.8%</td><td class="num">-2.5%</td><td class="num up">+51%</td><td class="num down">-25.0%</td></tr>
-    <tr><td>RSI の逆張り</td><td class="num">16</td><td class="num">75.0%</td><td class="num">+1.9%</td><td class="num">-1.7%</td><td class="num up">+17%</td><td class="num down">-9.4%</td></tr>
+    <tr><td>RSI の逆張り</td><td class="num">16</td><td class="num">75.0%</td><td class="num">+1.9%</td><td class="num">-1.7%</td><td class="num up">+15%</td><td class="num down">-9.4%</td></tr>
     <tr><td>高値の更新</td><td class="num">30</td><td class="num">36.7%</td><td class="num">+7.4%</td><td class="num">-2.3%</td><td class="num up">+39%</td><td class="num down">-22.7%</td></tr>
-    <tr><td><em>買って持ち続けた場合</em></td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num up">+96%</td><td class="num down">-30%</td></tr>
+    <tr><td><em>買って持ち続けた場合</em></td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num up">+79%</td><td class="num down">-36%</td></tr>
   </tbody>
 </table></div>
-<p class="src">期間はいずれも、Binance でその銘柄の取引が始まった日から2026年11月12日まで。「累計の損益」は、毎回、全資金で売買を続けた場合の増減です。「最大の下落」は、資金がいちばん多かった時点からの最大の減少率です。この表は、合図が出た日の終値で売買できたと仮定しています。第9章の「過去データで試す」は、次の足の始値で売買するので、同じルールでも数字は一致しません。</p>
+<p class="src">期間はいずれも、Binance でその銘柄の取引が始まった日から2026年11月20日まで。「累計の損益」は、毎回、全資金で売買を続けた場合の増減です。「最大の下落」は、資金がいちばん多かった時点からの最大の減少率です。この表は、合図が出た日の終値で売買できたと仮定しています。第9章の「過去データで試す」は、次の足の始値で売買するので、同じルールでも数字は一致しません。</p>
 <h4>この結果から分かること</h4>
 <ul>
   <li><span class="tag fact">実測</span><strong>流れに乗るルールは、勝率が半分前後か、それ以下でもプラスになりました。</strong>平均線の交差と高値の更新は、勝率 37〜52% です。それでもすべてプラスだったのは、平均の勝ちが平均の負けの約3〜6倍あったためです。</li>
-  <li><span class="tag fact">実測</span><strong>勝率の高さと成績は一致しません。</strong>金の RSI の逆張りは勝率 75% ですが、累計は +17% にとどまりました。勝ちの幅(+1.9%)が小さいためです。</li>
-  <li><span class="tag fact">実測</span><strong>同じルールでも、銘柄で結果が正反対になります。</strong>RSI の逆張りは、BTC で +155%、ETH で -75% でした。</li>
-  <li><span class="tag fact">実測</span><strong>どのルールでも、途中で資金が大きく減る時期がありました。</strong>暗号資産では、最大の下落が -47% 〜 -78% です。成績がプラスのルールでも、資金が半分になる時期を耐える必要がありました。</li>
-  <li><span class="tag fact">実測</span><strong>何もせず持ち続けるより良かったとは限りません。</strong>金では、3つのルールすべてが「買って持ち続けた場合」(+96%)を下回りました。BTC の平均線の交差(+1,524%)も、持ち続けた場合(+1,568%)とほぼ同じです。ただし、最大の下落は小さくなっています。</li>
+  <li><span class="tag fact">実測</span><strong>勝率の高さと成績は一致しません。</strong>金の RSI の逆張りは勝率 75% ですが、累計は +15% にとどまりました。勝ちの幅(+1.9%)が小さいためです。</li>
+  <li><span class="tag fact">実測</span><strong>同じルールでも、銘柄で結果が正反対になります。</strong>RSI の逆張りは、BTC で +111%、ETH で -80% でした。</li>
+  <li><span class="tag fact">実測</span><strong>どのルールでも、途中で資金が大きく減る時期がありました。</strong>暗号資産では、最大の下落が -47% 〜 -80% です。成績がプラスのルールでも、資金が半分になる時期を耐える必要がありました。</li>
+  <li><span class="tag fact">実測</span><strong>何もせず持ち続けるより良かったとは限りません。</strong>金では、3つのルールすべてが「買って持ち続けた場合」(+79%)を下回りました。BTC の平均線の交差(+1,524%)は、持ち続けた場合(+1,276%)を上回り、最大の下落も小さくなっています。ただし、11月12日までで計算したときは、持ち続けた場合も +1,568% で、ほとんど差がありませんでした。<strong>終わりの日が1週間あまりずれるだけで、比べた結果は大きく変わります。</strong></li>
 </ul>
 <div class="warn">
   <p><strong>この検証の限界</strong> <span class="tag idea">考え方</span></p>
@@ -2336,40 +2337,40 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <thead><tr><th rowspan="2">合図</th><th colspan="2">日足(5日後)</th><th colspan="2">4時間足(20時間後)</th></tr>
   <tr><th>合った割合</th><th>回数</th><th>合った割合</th><th>回数</th></tr></thead>
   <tbody>
-    <tr><td colspan="5"><strong>買いの合図</strong>(何もしないとき、5本後に上がっていた割合:日足 50.7%、4時間足 50.3%)</td></tr>
-    <tr><td>包み足(陰線を包む陽線)</td><td class="num">49.5%</td><td class="num">1,180</td><td class="num">49.3%</td><td class="num">7,347</td></tr>
-    <tr><td>ハンマー・下ヒゲのピンバー</td><td class="num">50.8%</td><td class="num">185</td><td class="num">50.7%</td><td class="num">1,388</td></tr>
-    <tr><td>赤三兵</td><td class="num">56.7%</td><td class="num">201</td><td class="num">51.0%</td><td class="num">1,343</td></tr>
+    <tr><td colspan="5"><strong>買いの合図</strong>(何もしないとき、5本後に上がっていた割合:日足 50.7%、4時間足 50.2%)</td></tr>
+    <tr><td>包み足(陰線を包む陽線)</td><td class="num">49.5%</td><td class="num">1,180</td><td class="num">49.3%</td><td class="num">7,350</td></tr>
+    <tr><td>ハンマー・下ヒゲのピンバー</td><td class="num">50.8%</td><td class="num">185</td><td class="num">50.7%</td><td class="num">1,389</td></tr>
+    <tr><td>赤三兵</td><td class="num">56.7%</td><td class="num">201</td><td class="num">50.9%</td><td class="num">1,345</td></tr>
     <tr><td>明けの明星</td><td class="num">50.0%</td><td class="num">196</td><td class="num">49.6%</td><td class="num">1,229</td></tr>
     <tr><td>はらみ足(陰線のあとの小さな陽線)</td><td class="num">47.1%</td><td class="num">635</td><td class="num">53.7%</td><td class="num">3,726</td></tr>
-    <tr><td>切り込み線</td><td class="num">45.9%</td><td class="num">242</td><td class="num">53.7%</td><td class="num">1,573</td></tr>
+    <tr><td>切り込み線</td><td class="num">45.9%</td><td class="num">242</td><td class="num">53.6%</td><td class="num">1,577</td></tr>
     <tr><td>陽の丸坊主</td><td class="num">53.3%</td><td class="num">30</td><td class="num">49.5%</td><td class="num">202</td></tr>
     <tr><td>MACD のゴールデンクロス</td><td class="num">51.2%</td><td class="num">492</td><td class="num">49.0%</td><td class="num">3,322</td></tr>
     <tr><td>移動平均線のゴールデンクロス(25・75)</td><td class="num">52.3%</td><td class="num">107</td><td class="num">51.4%</td><td class="num">659</td></tr>
-    <tr><td>ボリンジャーバンド -2σ 割れ(反発を狙う買い)</td><td class="num">54.8%</td><td class="num">376</td><td class="num">51.9%</td><td class="num">2,566</td></tr>
+    <tr><td>ボリンジャーバンド -2σ 割れ(反発を狙う買い)</td><td class="num">54.9%</td><td class="num">379</td><td class="num">51.9%</td><td class="num">2,570</td></tr>
     <tr><td>一目均衡表の雲を上に抜けた</td><td class="num">49.0%</td><td class="num">286</td><td class="num">50.3%</td><td class="num">2,068</td></tr>
-    <tr><td>RSI が 50 を上に抜けた</td><td class="num">48.4%</td><td class="num">692</td><td class="num">49.7%</td><td class="num">4,619</td></tr>
-    <tr><td colspan="5"><strong>売りの合図</strong>(何もしないとき、5本後に下がっていた割合:日足 49.3%、4時間足 49.7%)</td></tr>
-    <tr><td>包み足(陽線を包む陰線)</td><td class="num">47.3%</td><td class="num">1,230</td><td class="num">47.7%</td><td class="num">7,611</td></tr>
+    <tr><td>RSI が 50 を上に抜けた</td><td class="num">48.4%</td><td class="num">692</td><td class="num">49.7%</td><td class="num">4,622</td></tr>
+    <tr><td colspan="5"><strong>売りの合図</strong>(何もしないとき、5本後に下がっていた割合:日足 49.3%、4時間足 49.8%)</td></tr>
+    <tr><td>包み足(陽線を包む陰線)</td><td class="num">47.3%</td><td class="num">1,230</td><td class="num">47.8%</td><td class="num">7,616</td></tr>
     <tr><td>流れ星・上ヒゲのピンバー</td><td class="num">43.8%</td><td class="num">137</td><td class="num">52.8%</td><td class="num">974</td></tr>
-    <tr><td>黒三兵(三羽烏)</td><td class="num">51.1%</td><td class="num">188</td><td class="num">45.0%</td><td class="num">1,221</td></tr>
-    <tr><td>宵の明星</td><td class="num">51.1%</td><td class="num">221</td><td class="num">48.3%</td><td class="num">1,277</td></tr>
-    <tr><td>はらみ足(陽線のあとの小さな陰線)</td><td class="num">47.0%</td><td class="num">642</td><td class="num">51.6%</td><td class="num">3,720</td></tr>
+    <tr><td>黒三兵(三羽烏)</td><td class="num">51.1%</td><td class="num">190</td><td class="num">45.0%</td><td class="num">1,226</td></tr>
+    <tr><td>宵の明星</td><td class="num">51.1%</td><td class="num">221</td><td class="num">48.4%</td><td class="num">1,278</td></tr>
+    <tr><td>はらみ足(陽線のあとの小さな陰線)</td><td class="num">47.0%</td><td class="num">642</td><td class="num">51.6%</td><td class="num">3,721</td></tr>
     <tr><td>かぶせ線</td><td class="num">47.4%</td><td class="num">251</td><td class="num">50.3%</td><td class="num">1,550</td></tr>
     <tr><td>陰の丸坊主</td><td class="num">36.4%</td><td class="num">11</td><td class="num">40.3%</td><td class="num">149</td></tr>
-    <tr><td>MACD のデッドクロス</td><td class="num">52.5%</td><td class="num">495</td><td class="num">47.6%</td><td class="num">3,318</td></tr>
+    <tr><td>MACD のデッドクロス</td><td class="num">52.6%</td><td class="num">496</td><td class="num">47.6%</td><td class="num">3,319</td></tr>
     <tr><td>移動平均線のデッドクロス(25・75)</td><td class="num">48.6%</td><td class="num">109</td><td class="num">46.2%</td><td class="num">663</td></tr>
-    <tr><td>ボリンジャーバンド +2σ 超え(反落を狙う売り)</td><td class="num">46.3%</td><td class="num">482</td><td class="num">47.5%</td><td class="num">2,725</td></tr>
-    <tr><td>一目均衡表の雲を下に抜けた</td><td class="num">49.9%</td><td class="num">371</td><td class="num">45.3%</td><td class="num">2,217</td></tr>
-    <tr><td>RSI が 50 を下に抜けた</td><td class="num">52.9%</td><td class="num">695</td><td class="num">48.6%</td><td class="num">4,621</td></tr>
+    <tr><td>ボリンジャーバンド +2σ 超え(反落を狙う売り)</td><td class="num">46.3%</td><td class="num">482</td><td class="num">47.5%</td><td class="num">2,726</td></tr>
+    <tr><td>一目均衡表の雲を下に抜けた</td><td class="num">49.9%</td><td class="num">371</td><td class="num">45.4%</td><td class="num">2,218</td></tr>
+    <tr><td>RSI が 50 を下に抜けた</td><td class="num">52.9%</td><td class="num">695</td><td class="num">48.6%</td><td class="num">4,625</td></tr>
   </tbody>
 </table></div>
-<p class="src">対象は BTC・ETH・XRP・SOL・金(PAXG)の5銘柄(いずれも USDT 建て)を合わせた数字。期間は、Binance で各銘柄の取引が始まった日から2026年11月18日まで。手数料は入れていません。切り込み線・かぶせ線は、窓がほとんど空かない市場なので、「前の足の終値と同じか、それより不利な価格で始まった」ものを数えました。形の決め方を変えれば、数字は少し変わります。</p>
+<p class="src">対象は BTC・ETH・XRP・SOL・金(PAXG)の5銘柄(いずれも USDT 建て)を合わせた数字。期間は、Binance で各銘柄の取引が始まった日から2026年11月20日まで。手数料は入れていません。切り込み線・かぶせ線は、窓がほとんど空かない市場なので、「前の足の終値と同じか、それより不利な価格で始まった」ものを数えました。形の決め方を変えれば、数字は少し変わります。</p>
 <ul>
   <li><span class="tag fact">実測</span><strong>合った割合は、回数が100回以上ある合図では 40.3〜56.7% でした。</strong>「何もしないとき」の約50%と、ほとんど変わりません。</li>
-  <li><span class="tag fact">実測</span><strong>売りの合図は、むしろ裏目に出たものが多くありました。</strong>4時間足では、売りの合図12種類のうち9種類が、基準の 49.7% を下回りました。この期間は全体として値上がりしていたので、「売り」は不利だった、というだけのことかもしれません。</li>
-  <li><span class="tag fact">実測</span><strong>日足と4時間足で、結果が逆になる形があります。</strong>切り込み線は、日足では 45.9%、4時間足では 53.7% でした。「この形は効く」と言い切れるほど、安定していません。</li>
-  <li><span class="tag fact">実測</span><strong>いちばん良かったのは、日足の赤三兵(56.7%)でした。</strong>平均の値動きも +2.69% で、何もしないとき(+0.78%)を上回りました。「3日続けて上がった銘柄は、その後も上がりやすかった」という意味で、この章の「流れに乗る」手法と同じ性質です。それでも、図にあるような「AAA」と呼べる数字ではありません。</li>
+  <li><span class="tag fact">実測</span><strong>売りの合図は、むしろ裏目に出たものが多くありました。</strong>4時間足では、売りの合図12種類のうち9種類が、基準の 49.8% を下回りました。この期間は全体として値上がりしていたので、「売り」は不利だった、というだけのことかもしれません。</li>
+  <li><span class="tag fact">実測</span><strong>日足と4時間足で、結果が逆になる形があります。</strong>切り込み線は、日足では 45.9%、4時間足では 53.6% でした。「この形は効く」と言い切れるほど、安定していません。</li>
+  <li><span class="tag fact">実測</span><strong>いちばん良かったのは、日足の赤三兵(56.7%)でした。</strong>平均の値動きも +2.69% で、何もしないとき(+0.77%)を上回りました。「3日続けて上がった銘柄は、その後も上がりやすかった」という意味で、この章の「流れに乗る」手法と同じ性質です。それでも、図にあるような「AAA」と呼べる数字ではありません。</li>
   <li><span class="tag idea">考え方</span><strong>回数の少ない数字は、信用できません。</strong>陰の丸坊主(日足)は11回しかなく、36.4% という数字に意味はありません。5銘柄は同じ日に同じ向きへ動くことが多いので、見かけの回数ほど、独立した証拠にはなっていない点にも注意が必要です。</li>
   <li><span class="tag fact">事実</span>米国株で同じような検証をした研究でも、ローソク足の形に価値は認められませんでした。<sup>[22]</sup> 今回の結果は、それと合っています。</li>
 </ul>
@@ -2388,7 +2389,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 
 <h4>3. 「◯時は買い」「◯曜日は売り」 — 時間の決まりは本当か</h4>
 <p>「金は月曜は買い、火曜は売り」「ドル円は10時に売り」のように、月・曜日・時刻ごとに売り買いを決めた図があります。これも数えました。</p>
-<p><span class="tag fact">実測</span><strong>金(PAXG)の月ごとの値動き</strong>(2020年8月〜2026年11月)と、手書きの図によくある決まりを比べました。</p>
+<p><span class="tag fact">実測</span><strong>金(PAXG)の月ごとの値動き</strong>(2020年8月〜2026年11月20日)と、手書きの図によくある決まりを比べました。</p>
 <div class="tbl-wrap"><table>
   <thead><tr><th>月</th><th>図の決まり</th><th>上がった年の数</th><th>平均の値動き</th><th>決まりと合ったか</th></tr></thead>
   <tbody>
@@ -2402,7 +2403,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
     <tr><td>8月</td><td>買い</td><td class="num">7回中 4回</td><td class="num">+2.0%</td><td>合った</td></tr>
     <tr><td>9月</td><td>売り</td><td class="num">7回中 2回</td><td class="num">-0.1%</td><td>合った</td></tr>
     <tr><td>10月</td><td>買い</td><td class="num">7回中 4回</td><td class="num">+1.0%</td><td>合った</td></tr>
-    <tr><td>11月</td><td>売り</td><td class="num">7回中 4回</td><td class="num">+0.3%</td><td>逆</td></tr>
+    <tr><td>11月</td><td>売り</td><td class="num">7回中 4回</td><td class="num">-0.3%</td><td>逆</td></tr>
     <tr><td>12月</td><td>買い</td><td class="num">6回中 5回</td><td class="num">+2.5%</td><td>合った</td></tr>
   </tbody>
 </table></div>
@@ -2419,24 +2420,24 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
     <tr><td>月曜</td><td>買い</td><td class="num">50.5%</td><td class="num">323</td></tr>
     <tr><td>火曜</td><td>売り</td><td class="num">52.9%</td><td class="num">323</td></tr>
     <tr><td>水曜</td><td>買い</td><td class="num">51.2%</td><td class="num">324</td></tr>
-    <tr><td>木曜</td><td>売り</td><td class="num">48.9%</td><td class="num">323</td></tr>
-    <tr><td>金曜</td><td>買い</td><td class="num">52.0%</td><td class="num">321</td></tr>
-    <tr><td>8:00〜10:00</td><td>売り</td><td class="num">51.3%</td><td class="num">1,483</td></tr>
-    <tr><td>16:00〜21:00</td><td>買い</td><td class="num">53.9%</td><td class="num">1,556</td></tr>
-    <tr><td>21:00〜24:00</td><td>買い</td><td class="num">48.9%</td><td class="num">1,569</td></tr>
-    <tr><td>2:00〜5:00</td><td>売り</td><td class="num">50.9%</td><td class="num">1,529</td></tr>
+    <tr><td>木曜</td><td>売り</td><td class="num">48.8%</td><td class="num">324</td></tr>
+    <tr><td>金曜</td><td>買い</td><td class="num">51.9%</td><td class="num">322</td></tr>
+    <tr><td>8:00〜10:00</td><td>売り</td><td class="num">51.3%</td><td class="num">1,484</td></tr>
+    <tr><td>16:00〜21:00</td><td>買い</td><td class="num">53.9%</td><td class="num">1,558</td></tr>
+    <tr><td>21:00〜24:00</td><td>買い</td><td class="num">48.9%</td><td class="num">1,571</td></tr>
+    <tr><td>2:00〜5:00</td><td>売り</td><td class="num">50.9%</td><td class="num">1,530</td></tr>
   </tbody>
 </table></div>
 <ul>
-  <li><span class="tag fact">実測</span><strong>どの曜日も、上がった割合は 49〜53% でした。</strong>「売り」とされる火曜は、むしろ上がった日のほうが多くなっています。</li>
+  <li><span class="tag fact">実測</span><strong>どの曜日も、上がった割合は 49〜53% ほどでした。</strong>「売り」とされる火曜は、むしろ上がった日のほうが多くなっています。</li>
   <li><span class="tag fact">実測</span>16:00〜21:00 の 53.9% は、偶然とは言いにくい偏りです。ただし平均の値動きは <strong>+0.010%</strong> しかありません。10万円分を買って、10円です。</li>
-  <li><span class="tag fact">実測</span><strong>1日を14の時間に分けて、銘柄ごとに売り買いを決めた図</strong>も確かめました。ドル円(計算値)・BTC・金・ユーロの4銘柄、合わせて56個の決まりのうち、その時間に実際に多かった向きと合っていたのは <strong>31個(55%)</strong> でした。でたらめに決めたときの期待(28個)と、偶然の範囲で変わりません。図は「この時間に、この形が出たら」という条件つきですが、土台になる時間の偏りが、そもそも見当たりません。</li>
+  <li><span class="tag fact">実測</span><strong>1日を14の時間に分けて、銘柄ごとに売り買いを決めた図</strong>も確かめました。ドル円(計算値)・BTC・金・ユーロの4銘柄、合わせて56個の決まりのうち、その時間に実際に多かった向きと合っていたのは <strong>31個(55%)</strong> でした。でたらめに決めたときの期待(28個)と、偶然の範囲で変わりません(この数え方だけは、2026年11月18日までのデータです)。図は「この時間に、この形が出たら」という条件つきですが、土台になる時間の偏りが、そもそも見当たりません。</li>
 </ul>
 <div class="note">
   <p><strong>本当にある偏りも、見つかりました</strong></p>
   <ul>
-    <li><span class="tag fact">実測</span>ユーロ(EUR/USDT)は、日本時間の 9〜12時に上がった日が 56.8%(平均 +0.021%)、15〜20時に上がった日は 44.0%(平均 -0.039%)でした(2020年1月〜、約1,700日)。</li>
-    <li><span class="tag fact">実測</span>ドル円(このサイトの計算値)は、9〜12時に上がった日が 64.4%(平均 +0.070%)でした(2024年3月〜、702日)。</li>
+    <li><span class="tag fact">実測</span>ユーロ(EUR/USDT)は、日本時間の 9〜12時に上がった日が 56.8%(平均 +0.021%)、15〜20時に上がった日は 44.0%(平均 -0.038%)でした(2020年1月〜2026年11月20日、約1,700日)。</li>
+    <li><span class="tag fact">実測</span>ドル円(このサイトの計算値)は、9〜12時に上がった日が 64.3%(平均 +0.070%)でした(2024年3月〜2026年11月20日、703日)。</li>
     <li><span class="tag fact">事実</span>これは、為替の研究で知られている性質と合っています。通貨は、その国の取引時間のあいだは値下がりしやすい(ユーロは欧州の時間に、円は東京の時間に売られやすい)、という報告です。その国の人たちが、自分の取引時間に外貨を買うためと説明されています。<sup>[79]</sup> 東京では、銀行がその日の基準の為替レート(仲値)を決める 9時55分に向けて、ドルが買われやすいとも言われます(<span class="tag common">常識</span>)。</li>
     <li><span class="tag idea">考え方</span><strong>ただし、小さすぎて利益になりません。</strong>偏りの大きさは 0.01〜0.07% です。このサイトのデモトレードの手数料は片道 0.1% なので、往復で 0.2% かかります。いちばん大きい偏りと比べても、約3倍です。「本当にある」ことと「儲かる」ことは、別の話です。</li>
     <li><span class="tag idea">考え方</span>ここで使ったのは、暗号資産の取引所の価格です。本物の為替市場の価格とは少し違い、特にドル円は計算で作った値なので、参考としてください。</li>
@@ -2461,7 +2462,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 <ul>
   <li><span class="tag fact">実測</span><strong>7回ともプラス、という点は確かめられました。</strong>ただし、数字は図とかなり違うものがあります(新型コロナ:図 +21%、実測 +10%)。図には、暦の60日か、取引日の60日か、どの時刻の価格かが書かれていないので、どちらが正しいとは言えません。</li>
   <li><span class="tag fact">実測</span><strong>起点を1日ずらすだけで、結果が大きく変わります。</strong>新型コロナの例では、起点を3月11日にすると +10%、暴落した翌日の3月12日にすると +78% です。「60日後に◯%」という数字は、起点の選び方しだいで、どうにでも見せられます。</li>
-  <li><span class="tag fact">実測</span><strong>ビットコインは、何もなくても上がっていた期間です。</strong>2017年8月から2026年11月までの、すべての60日間(3,322通り)を数えると、プラスだった割合は 53.8%、平均は +10.7% でした。「有事のあとは平均 +18%」は、ふだんの平均(+10.7%)より高いものの、7回だけでは偶然との区別がつきません。</li>
+  <li><span class="tag fact">実測</span><strong>ビットコインは、何もなくても上がっていた期間です。</strong>2017年8月から2026年11月20日までの、すべての60日間(3,323通り)を数えると、プラスだった割合は 53.7%、平均は +10.7% でした。「有事のあとは平均 +18%」は、ふだんの平均(+10.7%)より高いものの、7回だけでは偶然との区別がつきません。</li>
   <li><span class="tag fact">事実</span>同じ出来事でも、作る人によって数字が違います。2020年1月の例は、River の図では BTC +20%・金 +6%・S&amp;P 500 -7% ですが、資産運用会社ブラックロックの分析として報じられた数字は、BTC 約 +26%・金 約 +7%・S&amp;P 500 約 -8% です。<sup>[80]</sup></li>
   <li><span class="tag idea">考え方</span><strong>誰が作った図かを見ます。</strong>ビットコインを売る会社が作った表で、ビットコインがいちばん良く見えるのは、不思議ではありません。うそが書かれていなくても、「どの出来事を選ぶか」「何日後で区切るか」で、印象は変えられます。</li>
   <li><span class="tag fact">実測</span>「有事の金」も、いつも当てはまるわけではありません。2026年2月の例では、金(PAXG)は60日間で 15% 下がりました。</li>
@@ -2505,11 +2506,11 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 <div class="tbl-wrap"><table>
   <thead><tr><th>条件</th><th>5日後に上がっていた割合</th><th>5日間の値動きの平均</th><th>回数</th></tr></thead>
   <tbody>
-    <tr><td><em>何もしないとき(すべての日)</em></td><td class="num">50.3%</td><td class="num">+0.86%</td><td class="num">15,046</td></tr>
+    <tr><td><em>何もしないとき(すべての日)</em></td><td class="num">50.2%</td><td class="num">+0.85%</td><td class="num">15,058</td></tr>
     <tr><td colspan="4"><strong>大きな足と、出来高</strong></td></tr>
     <tr><td>大きな陽線 + 出来高が多い</td><td class="num">53.4%</td><td class="num up">+3.38%</td><td class="num">727</td></tr>
     <tr><td>大きな陽線 + 出来高が少ない</td><td class="num">46.7%</td><td class="num">+1.27%</td><td class="num">422</td></tr>
-    <tr><td>大きな陰線 + 出来高が多い</td><td class="num">48.7%</td><td class="num down">-0.31%</td><td class="num">602</td></tr>
+    <tr><td>大きな陰線 + 出来高が多い</td><td class="num">48.4%</td><td class="num down">-0.33%</td><td class="num">609</td></tr>
     <tr><td>大きな陰線 + 出来高が少ない</td><td class="num">47.1%</td><td class="num">+0.01%</td><td class="num">399</td></tr>
     <tr><td colspan="4"><strong>高値の更新(20日間の高値を、終値で上回った日)</strong></td></tr>
     <tr><td>出来高が多い</td><td class="num">55.2%</td><td class="num up">+3.42%</td><td class="num">279</td></tr>
@@ -2517,24 +2518,24 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
     <tr><td colspan="4"><strong>移動平均線(5日線と20日線)</strong></td></tr>
     <tr><td>ゴールデンクロスだけ</td><td class="num">50.6%</td><td class="num">+0.79%</td><td class="num">427</td></tr>
     <tr><td>ゴールデンクロス + 出来高が多い</td><td class="num">62.0%</td><td class="num up">+2.97%</td><td class="num">71</td></tr>
-    <tr><td>デッドクロス</td><td class="num">48.1%</td><td class="num">+0.18%</td><td class="num">428</td></tr>
+    <tr><td>デッドクロス</td><td class="num">47.9%</td><td class="num">+0.16%</td><td class="num">430</td></tr>
     <tr><td colspan="4"><strong>日足と週足の向き</strong></td></tr>
     <tr><td>日足が上向き(5日線が20日線の上で、どちらも右上がり)</td><td class="num">52.5%</td><td class="num">+2.15%</td><td class="num">4,404</td></tr>
     <tr><td>日足も週足も上向き</td><td class="num">54.3%</td><td class="num up">+2.62%</td><td class="num">2,257</td></tr>
     <tr><td>日足は上向き、週足は下向き</td><td class="num">52.6%</td><td class="num">+1.96%</td><td class="num">1,751</td></tr>
-    <tr><td>日足も週足も下向き</td><td class="num">51.4%</td><td class="num">+0.63%</td><td class="num">4,087</td></tr>
+    <tr><td>日足も週足も下向き</td><td class="num">51.3%</td><td class="num">+0.62%</td><td class="num">4,096</td></tr>
     <tr><td colspan="4"><strong>「実体も出来高も、14日平均の2倍以上」という合図</strong></td></tr>
     <tr><td>陽線で出た</td><td class="num">60.5%</td><td class="num up">+6.41%</td><td class="num">324</td></tr>
-    <tr><td>陰線で出た</td><td class="num">50.0%</td><td class="num down">-0.62%</td><td class="num">222</td></tr>
+    <tr><td>陰線で出た</td><td class="num">49.6%</td><td class="num down">-0.64%</td><td class="num">228</td></tr>
   </tbody>
 </table></div>
-<p class="src">BTC・ETH・XRP・SOL・PEPE・金(PAXG)の日足を合わせた数字。各銘柄の取引開始から2026年11月18日まで。条件がそろった日の翌日の始値で買い、5日後の終値で比べています。手数料は入れていません。「大きな足」は実体が14日平均の1.5倍以上、「出来高が多い」は平均の1.5倍以上、「少ない」は平均以下。週足の向きは、25日線と100日線という、長めの日足の平均線で代用しました。</p>
+<p class="src">BTC・ETH・XRP・SOL・PEPE・金(PAXG)の日足を合わせた数字。各銘柄の取引開始から2026年11月20日まで。条件がそろった日の翌日の始値で買い、5日後の終値で比べています。手数料は入れていません。「大きな足」は実体が14日平均の1.5倍以上、「出来高が多い」は平均の1.5倍以上、「少ない」は平均以下。週足の向きは、25日線と100日線という、長めの日足の平均線で代用しました。</p>
 <ul>
   <li><span class="tag fact">実測</span><strong>「出来高をともなう上昇は続きやすい」は、データでも確かめられました。</strong>大きな陽線のあとの5日間は、出来高が多いと平均 +3.38%、少ないと +1.27% でした。高値の更新でも、出来高が多いほうが成績が上です。</li>
   <li><span class="tag fact">実測</span><strong>「ゴールデンクロスだけで入るのは危ない」も、そのとおりでした。</strong>5日線と20日線の交差だけでは、上がった割合 50.6%、平均 +0.79% で、何もしないときと変わりません。出来高の条件を足すと 62.0% になりましたが、71回しかないので、まだ確かとは言えません。</li>
   <li><span class="tag fact">実測</span><strong>「日足と週足の向きがそろったときに入る」には、少しだけ効果がありました</strong>(54.3%、平均 +2.62%)。ただし、週足が下向きのとき(52.6%、+1.96%)との差は、わずかです。</li>
   <li><span class="tag fact">実測</span><strong>「実体も出来高も2倍」の合図は、陽線では目立って良い数字でした</strong>(60.5%、平均 +6.41%)。銘柄ごとでは、BTC 67.4%(43回)、ETH 63.3%(49回)、SOL 71.7%(46回)、PEPE 58.1%(43回)、金 56.5%(46回)、XRP 53.6%(97回)です。銘柄によって差があります。</li>
-  <li><span class="tag fact">実測</span><strong>同じ合図でも、陰線(下げ)では役に立ちませんでした。</strong>5日後に下がっていたのは、ちょうど半分です。この期間、暗号資産は全体として値上がりしていたため、下げは続きにくかった、と考えられます。</li>
+  <li><span class="tag fact">実測</span><strong>同じ合図でも、陰線(下げ)では役に立ちませんでした。</strong>5日後に下がっていたのは、ほぼ半分です。この期間、暗号資産は全体として値上がりしていたため、下げは続きにくかった、と考えられます。</li>
 </ul>
 <div class="warn">
   <p><strong>この数字を、そのまま信じてはいけない理由</strong> <span class="tag idea">考え方</span></p>
@@ -2574,15 +2575,15 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 <div class="tbl-wrap"><table>
   <thead><tr><th>銘柄</th><th>ATR の2倍</th><th>ATR の3倍</th><th>買って持ち続けた場合</th><th>勝率(3倍)</th><th>最大の下落(3倍)</th></tr></thead>
   <tbody>
-    <tr><td>BTC</td><td class="num up">+1,105%</td><td class="num up">+1,047%</td><td class="num up">+439%</td><td class="num">52%</td><td class="num down">-50%</td></tr>
-    <tr><td>ETH</td><td class="num up">+3,079%</td><td class="num up">+4,336%</td><td class="num up">+293%</td><td class="num">54%</td><td class="num down">-66%</td></tr>
-    <tr><td>SOL</td><td class="num up">+1,197%</td><td class="num up">+2,875%</td><td class="num up">+3,739%</td><td class="num">50%</td><td class="num down">-66%</td></tr>
-    <tr><td>XRP</td><td class="num down">-23%</td><td class="num down">-49%</td><td class="num up">+204%</td><td class="num">26%</td><td class="num down">-91%</td></tr>
-    <tr><td>PEPE</td><td class="num up">+43%</td><td class="num down">-38%</td><td class="num up">+238%</td><td class="num">25%</td><td class="num down">-82%</td></tr>
-    <tr><td>金(PAXG)</td><td class="num up">+38%</td><td class="num up">+48%</td><td class="num up">+100%</td><td class="num">50%</td><td class="num down">-18%</td></tr>
+    <tr><td>BTC</td><td class="num up">+1,105%</td><td class="num up">+1,047%</td><td class="num up">+404%</td><td class="num">52%</td><td class="num down">-50%</td></tr>
+    <tr><td>ETH</td><td class="num up">+3,079%</td><td class="num up">+4,336%</td><td class="num up">+259%</td><td class="num">54%</td><td class="num down">-66%</td></tr>
+    <tr><td>SOL</td><td class="num up">+1,197%</td><td class="num up">+2,875%</td><td class="num up">+3,490%</td><td class="num">50%</td><td class="num down">-66%</td></tr>
+    <tr><td>XRP</td><td class="num down">-23%</td><td class="num down">-49%</td><td class="num up">+186%</td><td class="num">26%</td><td class="num down">-91%</td></tr>
+    <tr><td>PEPE</td><td class="num up">+43%</td><td class="num down">-38%</td><td class="num up">+214%</td><td class="num">25%</td><td class="num down">-82%</td></tr>
+    <tr><td>金(PAXG)</td><td class="num up">+38%</td><td class="num up">+48%</td><td class="num up">+89%</td><td class="num">50%</td><td class="num down">-18%</td></tr>
   </tbody>
 </table></div>
-<p class="src">各銘柄の取引開始の約110日後から2026年11月18日まで。毎回、全資金で売買を続けた場合。「買って持ち続けた場合」は、同じ期間の最初の日に買って最後まで持った場合です。前の「過去のデータで試してみる」の表とは、始まりの日が約110日おそく、終わりの日も6日ちがうので、数字は一致しません。たとえば BTC は、2017年12月の高値に近いところから数えるため、+1,568% ではなく +439% になります。</p>
+<p class="src">各銘柄の取引開始の約110日後から2026年11月20日まで。毎回、全資金で売買を続けた場合。「買って持ち続けた場合」は、同じ期間の最初の日に買って最後まで持った場合です。前の「過去のデータで試してみる」の表とは、始まりの日が約110日おそいので、数字は一致しません。たとえば BTC は、2017年12月の高値に近いところから数えるため、+1,276% ではなく +404% になります。</p>
 <ul>
   <li><span class="tag fact">実測</span><strong>BTC と ETH では、持ち続けるより良い結果でした。</strong>大きな下げの前に降りられたためです。</li>
   <li><span class="tag fact">実測</span><strong>XRP と PEPE では、損をしました。</strong>急に上がっては急に下がる銘柄では、上がってから買い、下がってから売ることのくり返しになります。持ち続けていればプラスだった銘柄で、マイナスになっています。</li>
@@ -2607,17 +2608,17 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
     <tr><td>ブレイクアウト(すべて)</td><td class="num">39.8%</td><td class="num">59.1%</td><td class="num up">+0.20R</td><td class="num">591</td></tr>
     <tr><td>　長い足の流れが上向きのとき</td><td class="num">41.6%</td><td class="num">57.3%</td><td class="num up">+0.26R</td><td class="num">361</td></tr>
     <tr><td>　長い足の流れが下向きのとき</td><td class="num">37.0%</td><td class="num">61.7%</td><td class="num up">+0.12R</td><td class="num">230</td></tr>
-    <tr><td>押し目買い(上昇中に20日線まで下がって、陽線で終わった)</td><td class="num">33.3%</td><td class="num">61.0%</td><td class="num">+0.06R</td><td class="num">210</td></tr>
-    <tr><td><em>比べる相手:でたらめな日に買う</em></td><td class="num">33.3%</td><td class="num">61.3%</td><td class="num">+0.05R</td><td class="num">4,985</td></tr>
+    <tr><td>押し目買い(上昇中に20日線まで下がって、陽線で終わった)</td><td class="num">33.2%</td><td class="num">61.1%</td><td class="num">+0.05R</td><td class="num">211</td></tr>
+    <tr><td><em>比べる相手:でたらめな日に買う</em></td><td class="num">33.3%</td><td class="num">61.4%</td><td class="num">+0.05R</td><td class="num">4,989</td></tr>
     <tr><td colspan="5"><strong>4時間足</strong></td></tr>
     <tr><td>ブレイクアウト(すべて)</td><td class="num">34.3%</td><td class="num">63.1%</td><td class="num">+0.05R</td><td class="num">3,255</td></tr>
     <tr><td>　長い足の流れが上向きのとき</td><td class="num">35.2%</td><td class="num">62.7%</td><td class="num">+0.08R</td><td class="num">1,953</td></tr>
     <tr><td>　長い足の流れが下向きのとき</td><td class="num">32.9%</td><td class="num">63.7%</td><td class="num">+0.02R</td><td class="num">1,302</td></tr>
     <tr><td>押し目買い(上と同じ条件を4時間足で)</td><td class="num">33.5%</td><td class="num">63.6%</td><td class="num">+0.03R</td><td class="num">1,595</td></tr>
-    <tr><td><em>比べる相手:でたらめな足で買う</em></td><td class="num">29.6%</td><td class="num">64.3%</td><td class="num down">-0.05R</td><td class="num">31,207</td></tr>
+    <tr><td><em>比べる相手:でたらめな足で買う</em></td><td class="num">29.6%</td><td class="num">64.3%</td><td class="num down">-0.05R</td><td class="num">31,229</td></tr>
   </tbody>
 </table></div>
-<p class="src">BTC・ETH・XRP・SOL・PEPE・金(PAXG)を合わせた数字。各銘柄の取引開始から2026年11月18日まで。手数料は入れていません。「長い足の流れ」は、25本線が100本線の上にあるかどうか。R は、損切りまでの幅を1とした単位です(第8章)。成功と失敗を足しても100%にならないのは、20本以内にどちらにも届かなかった分です。</p>
+<p class="src">BTC・ETH・XRP・SOL・PEPE・金(PAXG)を合わせた数字。各銘柄の取引開始から2026年11月20日まで。手数料は入れていません。「長い足の流れ」は、25本線が100本線の上にあるかどうか。R は、損切りまでの幅を1とした単位です(第8章)。成功と失敗を足しても100%にならないのは、20本以内にどちらにも届かなかった分です。</p>
 <ul>
   <li><span class="tag fact">実測</span><strong>「成功は3割ほど」は、だいたい合っていました。</strong>損益比 1:2 で数えると、成功は 34〜40% です。</li>
   <li><span class="tag fact">実測</span><strong>けれども、「3割しか成功しない = 損をする」ではありません。</strong>勝ちが負けの2倍あれば、成功が 33.3% でトントンです(第6章の<a href="#expect">「期待値」</a>)。日足のブレイクアウトは、成功 39.8% で、1回あたり +0.20R でした。</li>
@@ -2750,7 +2751,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <button type="button" class="opt">8割以上の確率で上がった</button>
   <button type="button" class="opt">何もしないときと、ほとんど変わらなかった</button>
   <button type="button" class="opt">ほとんどの場合、下がった</button>
-  <p class="ex"><strong>答え:何もしないときと、ほとんど変わらなかった</strong><br>5日後に上がっていた割合は 50.6% で、すべての日の 50.3% と変わりませんでした。出来高などの条件と組み合わせる必要があります。(→ <a href="#volcheck">出来高で確かめる</a>)</p>
+  <p class="ex"><strong>答え:何もしないときと、ほとんど変わらなかった</strong><br>5日後に上がっていた割合は 50.6% で、すべての日の 50.2% と変わりませんでした。出来高などの条件と組み合わせる必要があります。(→ <a href="#volcheck">出来高で確かめる</a>)</p>
 </div>
 <div class="q" data-a="2">
   <p class="qt">問5. 大きな陽線が出ましたが、出来高はいつもより少なめでした。どう考えますか。</p>
@@ -2896,11 +2897,11 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 <div class="tbl-wrap"><table>
   <thead><tr><th>銘柄</th><th>損切りの幅(1日の値幅の平均)</th><th>100 を失う設定で買える金額</th><th>資金 10,000 に対する割合</th></tr></thead>
   <tbody>
-    <tr><td>金 (PAXG)</td><td class="num">1.75%</td><td class="num">約 5,710</td><td class="num">57%</td></tr>
-    <tr><td>BTC</td><td class="num">3.39%</td><td class="num">約 2,950</td><td class="num">30%</td></tr>
-    <tr><td>ETH</td><td class="num">5.25%</td><td class="num">約 1,900</td><td class="num">19%</td></tr>
+    <tr><td>金 (PAXG)</td><td class="num">1.76%</td><td class="num">約 5,680</td><td class="num">57%</td></tr>
+    <tr><td>BTC</td><td class="num">3.40%</td><td class="num">約 2,940</td><td class="num">29%</td></tr>
+    <tr><td>ETH</td><td class="num">5.27%</td><td class="num">約 1,900</td><td class="num">19%</td></tr>
     <tr><td>SOL</td><td class="num">6.03%</td><td class="num">約 1,660</td><td class="num">17%</td></tr>
-    <tr><td>PEPE</td><td class="num">8.76%</td><td class="num">約 1,140</td><td class="num">11%</td></tr>
+    <tr><td>PEPE</td><td class="num">8.60%</td><td class="num">約 1,160</td><td class="num">12%</td></tr>
   </tbody>
 </table></div>
 <p><span class="tag idea">考え方</span>同じ危険の大きさにそろえると、PEPE で買える金額は金の5分の1です。「どの銘柄も同じ金額で買う」のは、気づかないうちに、荒い銘柄で大きな賭けをしていることになります。</p>
@@ -2917,7 +2918,8 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 </div>
 
 <h3 id="leverage">レバレッジと強制決済</h3>
-<p><span class="tag common">常識</span>レバレッジは、元手(証拠金)の何倍もの金額を取引するしくみです。利益も損失も、倍率の分だけ大きくなります。含み損が証拠金に近づくと、取引所が強制的に決済し(ロスカット)、証拠金のほとんどを失います。ふつうは証拠金の範囲で止まりますが、価格が一気に飛んだときは強制決済が間に合わず、取引所や商品によっては、証拠金より大きい損失を求められることがあります。このサイトのデモトレードでは、1〜100倍のレバレッジを試せます(損失は証拠金までで止まる設定で、強制決済の価格がチャートに出ます)。</p>
+<p><span class="tag common">常識</span>レバレッジは、元手(証拠金)の何倍もの金額を取引するしくみです。利益も損失も、倍率の分だけ大きくなります。含み損が証拠金に近づくと、取引所が強制的に決済し(ロスカット)、証拠金の大半、または全部を失います。ふつうは証拠金の範囲で止まりますが、価格が一気に飛んだときは強制決済が間に合わず、取引所や商品によっては、証拠金より大きい損失を求められることがあります。</p>
+<p><span class="tag fact">事実</span>このサイトのデモトレードでは、1〜100倍のレバレッジを試せます。強制決済の価格はチャートに出ます。強制決済になると、そのポジションの<strong>証拠金をすべて失います</strong>(それより大きな損失にはなりません)。また、2倍以上のポジションには、8時間ごとに<strong>資金調達料の目安</strong>(ポジションの金額の 0.01%)がかかります。実際の率ではなく、基準の率を使った目安です(第3章の<a href="#perp">「資金調達率」</a>)。</p>
 <p><span class="tag fact">事実</span>手数料などを無視すると、証拠金がなくなる値動きの幅は、次のように計算できます。</p>
 <div class="tbl-wrap"><table>
   <thead><tr><th>レバレッジ</th><th>証拠金 1,000 で取引できる金額</th><th>証拠金がなくなる逆方向の値動き</th></tr></thead>
@@ -2945,10 +2947,10 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
 
 <h3 id="diversify">分散 — 複数の銘柄を持つときの注意</h3>
 <p><span class="tag common">常識</span>別々の動きをする資産を組み合わせると、全体の値動きを小さくできます。これが分散の考え方です。</p>
-<p><span class="tag fact">実測</span>ただし第2章の表のとおり、暗号資産どうしは強く連動しています(BTC との連動が 0.67〜0.84)。BTC・ETH・SOL を同時に買うと、3つに分けたつもりでも、ほぼ同じものを3倍買っているのに近い状態になります。</p>
+<p><span class="tag fact">実測</span>ただし第2章の表のとおり、暗号資産どうしは強く連動しています(BTC との連動が 0.70〜0.85)。BTC・ETH・SOL を同時に買うと、3つに分けたつもりでも、ほぼ同じものを3倍買っているのに近い状態になります。</p>
 <ul>
   <li><span class="tag idea">考え方</span>同じ向きのポジションを複数持つときは、「1回の損失 1%」ではなく、<strong>全部が同時に損切りになった場合の合計</strong>で考えます。3銘柄を 1% ずつなら、合計 3% を1回で失う可能性があると見ます。</li>
-  <li><span class="tag fact">実測</span>第2章の最初の表の中で、暗号資産と別の動きをするのは金(0.28)だけです。ただし、2026年3月以降に限ると 0.52 まで上がっています(第2章)。金を足せば必ず分散になる、とは言えません。</li>
+  <li><span class="tag fact">実測</span>第2章の最初の表の中で、暗号資産と別の動きをするのは金(0.29)だけです。ただし、2026年3月以降に限ると 0.53 まで上がっています(第2章)。金を足せば必ず分散になる、とは言えません。</li>
 </ul>
 
 <h3 id="platform-risk">チャートに出ない危険 — ステーブルコイン・取引所・詐欺</h3>
@@ -3312,8 +3314,8 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <li>売買は、合図が出た足の<strong>次の足の始値</strong>で行います。合図は足が確定してからでないと分からないので、同じ足の終値で買えたことにはしません。</li>
   <li>まだ確定していない、いちばん新しい足の合図は使いません。</li>
   <li>売買のたびに、手数料 0.1% を引きます。さらに、「すべり」(初期値は片道 0.05%)を、入るときも出るときも不利な向きに引きます。</li>
-    <li>利確は、窓を開けて飛びこえても、利確の価格より良い価格にはしません。損切りは、窓を開けて飛びこえたら、その足の始値で約定します(損切りの価格より悪くなります)。</li>
-    <li>「持ち続けた場合」も、同じ最初の足と最後の足を使い、同じ手数料とすべりを引きます。</li>
+  <li>利確は、窓を開けて飛びこえても、利確の価格より良い価格にはしません。損切りは、窓を開けて飛びこえたら、その足の始値で約定します(損切りの価格より悪くなります)。</li>
+  <li>「持ち続けた場合」も、同じ最初の足と最後の足を使い、同じ手数料とすべりを引きます。</li>
   <li>損切り・利確を指定した場合、1本の足の中で両方に届いたときは、損切りが先だったとして計算します。足の中でどちらが先だったかは分からないので、成績を良く見せないほうを採っています。</li>
 </ul>
 
@@ -3325,6 +3327,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <li><strong>売買の回数が30回以上あるか。</strong>回数が少ないと、たまたま当たった数回で成績が決まってしまいます。日足で回数が足りないときは、短い時間足や別の銘柄でも試します。</li>
   <li><strong>最大ドローダウンに耐えられるか。</strong>最終的にプラスでも、途中で資金が 40% 減る手法を、実際に続けられる人は多くありません(第7章)。</li>
 </ol>
+<p><span class="tag fact">事実</span>結果のいちばん下には、<strong>「たまたまではないか」</strong>の欄が出ます。同じ回数・同じ向き・同じ保有期間の売買を、でたらめな時点で始めた場合を 500 通り作り、合図どおりの成績が、その中でどのあたりかを示します。でたらめな売買の 95% より良くなければ、合図に意味があるとは言いにくい、と考えてください。</p>
 <div class="tbl-wrap"><table>
   <thead><tr><th>数字</th><th>意味</th><th>見るときの注意</th></tr></thead>
   <tbody>
@@ -3346,7 +3349,7 @@ mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--
   <li><strong>条件を増やしすぎない。</strong>条件を足すたびに過去には合いやすくなりますが、売買の回数が減り、偶然の影響が大きくなります。</li>
   <li><strong>理由を説明できる条件だけを使う。</strong>「なぜこの条件で上がりやすいのか」を言葉で説明できない条件は、数字合わせになりがちです。</li>
 </ul>
-<p><span class="tag fact">実測</span>このサイトで実際に試した例です。BTC/USDT の日足(1,000本)で、短期10・長期30の平均線の交差を合図にした場合、合図どおりの損益は +28.03%、何もせず持ち続けた場合は +28.67% でした。損切り5%・利確15%を付けると +19.05% に下がりました。<strong>損切りを付ければ成績が良くなる、とは限らない</strong>ことが分かります。この数字は計算した時点のもので、期間が変われば結果も変わります。</p>
+<p><span class="tag fact">実測</span>このサイトで実際に試した例です。BTC/USDT の日足(1,000本)で、短期10・長期30の平均線の交差を合図にした場合、合図どおりの損益は +28.03%、何もせず持ち続けた場合は +28.67% でした。損切り5%・利確15%を付けると +19.05% に下がりました。<strong>損切りを付ければ成績が良くなる、とは限らない</strong>ことが分かります。この数字は計算した時点のもので、期間が変われば結果も変わります。また、「すべり」の設定が入る前の計算なので、いまの試算(すべり 0.05%)で同じ期間を計算しても、少し低い数字になります。</p>
 
 <h3>試算と実際の売買の違い</h3>
 <ul>
