@@ -24,27 +24,39 @@ const nans = n => new Array(n).fill(NaN);
 const int = (v, d) => Math.max(1, Math.round(+v) || d || 1);
 
 // ---------------------------------------------------------------- 基本の計算
+// 足し引きで失われる端数も別に持っておく合計(Neumaier の方法)。
+// 単純に足し引きを続けると誤差がたまり、同じ値が並んでも平均がその値と一致せず、
+// 「終値 > 平均」のような比べ方の結果が変わってしまうため
+function exactSum() {
+  let s = 0, e = 0;
+  return {
+    add(x) { const t = s + x; e += Math.abs(s) >= Math.abs(x) ? (s - t) + x : (x - t) + s; s = t; },
+    get() { return s + e; },
+  };
+}
 function sma(a, n) {
   const out = nans(a.length);
-  let sum = 0, cnt = 0;
+  let sum = exactSum(), cnt = 0, same = 0;
   for (let i = 0; i < a.length; i++) {
-    if (!isFinite(a[i])) { sum = 0; cnt = 0; continue; }
-    sum += a[i]; cnt++;
-    if (cnt > n) { sum -= a[i - n]; cnt--; }
-    if (cnt === n) out[i] = sum / n;
+    if (!isFinite(a[i])) { sum = exactSum(); cnt = 0; same = 0; continue; }
+    sum.add(a[i]); cnt++;
+    same = same && a[i] === a[i - 1] ? same + 1 : 1; // 同じ値が何本続いているか
+    if (cnt > n) { sum.add(-a[i - n]); cnt--; }
+    if (cnt === n) out[i] = same >= n ? a[i] : sum.get() / n; // 全部同じ値なら、平均はその値そのもの(割り算の丸めでずれないように)
   }
   return out;
 }
 // alpha を省略すると RMA(Wilder の平滑化、alpha = 1/n)。最初の値は n 本の単純平均
 function rma(a, n, alpha) {
   const k = alpha || 1 / n, out = nans(a.length);
-  let prev = NaN, sum = 0, cnt = 0;
+  let prev = NaN, sum = exactSum(), cnt = 0, first = NaN, same = true;
   for (let i = 0; i < a.length; i++) {
     if (!isFinite(a[i])) continue;
     if (!isFinite(prev)) {
-      sum += a[i]; cnt++;
-      if (cnt === n) { prev = sum / n; out[i] = prev; }
-    } else { prev = k * a[i] + (1 - k) * prev; out[i] = prev; }
+      sum.add(a[i]); cnt++;
+      if (cnt === 1) first = a[i]; else if (a[i] !== first) same = false;
+      if (cnt === n) { prev = same ? first : sum.get() / n; out[i] = prev; }
+    } else { prev += k * (a[i] - prev); out[i] = prev; } // この形なら、同じ値が続くとき値がまったく動かない
   }
   return out;
 }
@@ -71,9 +83,20 @@ function rolling(a, n, fn) {
 const highest = (a, n) => rolling(a, n, (x, s, e) => { let m = -Infinity; for (let k = s; k <= e; k++) if (x[k] > m) m = x[k]; return m; });
 const lowest = (a, n) => rolling(a, n, (x, s, e) => { let m = Infinity; for (let k = s; k <= e; k++) if (x[k] < m) m = x[k]; return m; });
 const sum = (a, n) => rolling(a, n, (x, s, e) => { let t = 0; for (let k = s; k <= e; k++) t += x[k]; return t; });
-// 標準偏差(母集団:n で割る)
+// 窓の平均。全部同じ値ならその値そのものを返す(0.1 を 20 個足して 20 で割ると 0.1 にならないことがあり、
+// ばらつきが 0 ではなく小さな値になって Zスコア・%B・CCI がでたらめな値になるのを防ぐ)。そうでなければ1回補正する
+function winMean(x, s, e) {
+  const n = e - s + 1;
+  let t = exactSum(), same = true;
+  for (let k = s; k <= e; k++) { t.add(x[k]); if (x[k] !== x[s]) same = false; }
+  if (same) return x[s];
+  let m = t.get() / n, d = 0;
+  for (let k = s; k <= e; k++) d += x[k] - m;
+  return m + d / n;
+}
+// 標準偏差(母集団:n で割る。TradingView の ta.stdev と同じ)
 const stdev = (a, n) => rolling(a, n, (x, s, e) => {
-  let m = 0; for (let k = s; k <= e; k++) m += x[k]; m /= n;
+  const m = winMean(x, s, e);
   let v = 0; for (let k = s; k <= e; k++) v += (x[k] - m) * (x[k] - m);
   return Math.sqrt(v / n);
 });
@@ -98,8 +121,9 @@ function trueRange(bars) {
   });
 }
 const atr = (bars, n) => rma(trueRange(bars), n);
+const lead = len => (len ? [NaN] : []); // 1本目は前の足がないので NaN。足が0本なら空のまま(長さを足の数とそろえる)
 function rsi(a, n) {
-  const up = [NaN], dn = [NaN];
+  const up = lead(a.length), dn = lead(a.length);
   for (let i = 1; i < a.length; i++) { const d = a[i] - a[i - 1]; up.push(Math.max(d, 0)); dn.push(Math.max(-d, 0)); }
   const au = rma(up, n), ad = rma(dn, n);
   return au.map((u, i) => (!isFinite(u) ? NaN : ad[i] === 0 ? 100 : 100 - 100 / (1 + u / ad[i])));
@@ -217,7 +241,7 @@ DEFS.supertrend = {
       const nfu = !isFinite(fu) || bu < fu || pc > fu ? bu : fu;
       const nfl = !isFinite(fl) || bl > fl || pc < fl ? bl : fl;
       if (isFinite(fu)) dir = dir < 0 ? (bars[i].c > nfu ? 1 : -1) : (bars[i].c < nfl ? -1 : 1);
-      else dir = bars[i].c >= hl2 ? 1 : -1;
+      else dir = -1; // ATR が出た最初の足は下降から始める(TradingView の ta.supertrend と同じ)
       fu = nfu; fl = nfl;
       if (dir > 0) upL[i] = fl; else dnL[i] = fu;
     }
@@ -293,7 +317,8 @@ DEFS.stoch = {
     P.color('cK', '%K の色', '#2f80ed'), P.color('cD', '%D の色', '#f5a623')],
   compute(bars, p) {
     const n = int(p.kLen, 14), hh = highest(col(bars, 'high'), n), ll = lowest(col(bars, 'low'), n);
-    const raw = bars.map((b, i) => (!isFinite(hh[i]) ? NaN : hh[i] === ll[i] ? 50 : 100 * (b.c - ll[i]) / (hh[i] - ll[i])));
+    // 高値と安値が同じ(値動きがない)ときは位置が決まらないので空ける(TradingView と同じ。50 などの仮の値は出さない)
+    const raw = bars.map((b, i) => (!isFinite(hh[i]) || hh[i] === ll[i] ? NaN : 100 * (b.c - ll[i]) / (hh[i] - ll[i])));
     const k = sma(raw, int(p.kSmooth, 1)), d = sma(k, int(p.dLen, 3));
     return { lines: [{ name: '%K', val: k, color: p.cK }, { name: '%D', val: d, color: p.cD }], bands: [+p.upper, +p.lower], fixed: [0, 100], label: `${p.kLen} ${p.kSmooth} ${p.dLen}` };
   },
@@ -305,7 +330,7 @@ DEFS.stochrsi = {
     P.source(), P.color('cK', '%K の色', '#2f80ed'), P.color('cD', '%D の色', '#f5a623')],
   compute(bars, p) {
     const r = rsi(col(bars, p.source), int(p.rsiLen, 14)), n = int(p.stLen, 14), hh = highest(r, n), ll = lowest(r, n);
-    const raw = r.map((v, i) => (!isFinite(hh[i]) ? NaN : hh[i] === ll[i] ? 50 : 100 * (v - ll[i]) / (hh[i] - ll[i])));
+    const raw = r.map((v, i) => (!isFinite(hh[i]) || hh[i] === ll[i] ? NaN : 100 * (v - ll[i]) / (hh[i] - ll[i])));
     const k = sma(raw, int(p.kLen, 3)), d = sma(k, int(p.dLen, 3));
     return { lines: [{ name: '%K', val: k, color: p.cK }, { name: '%D', val: d, color: p.cD }], bands: [80, 20], fixed: [0, 100], label: `${p.rsiLen} ${p.stLen} ${p.kLen} ${p.dLen}` };
   },
@@ -316,7 +341,7 @@ DEFS.cci = {
   params: [P.len(20), P.color('color', '線の色', '#16a085')],
   compute(bars, p) {
     const n = int(p.len, 20), tp = col(bars, 'hlc3'), ma = sma(tp, n);
-    const md = rolling(tp, n, (x, s, e) => { let m = 0; for (let k = s; k <= e; k++) m += x[k]; m /= n; let t = 0; for (let k = s; k <= e; k++) t += Math.abs(x[k] - m); return t / n; });
+    const md = rolling(tp, n, (x, s, e) => { const m = winMean(x, s, e); let t = 0; for (let k = s; k <= e; k++) t += Math.abs(x[k] - m); return t / n; });
     return { lines: [{ name: 'CCI', val: tp.map((v, i) => (isFinite(ma[i]) && md[i] > 0 ? (v - ma[i]) / (0.015 * md[i]) : NaN)), color: p.color }], bands: [100, -100], label: String(n) };
   },
 };
@@ -326,7 +351,7 @@ DEFS.willr = {
   params: [P.len(14), P.color('color', '線の色', '#8e44ad')],
   compute(bars, p) {
     const n = int(p.len, 14), hh = highest(col(bars, 'high'), n), ll = lowest(col(bars, 'low'), n);
-    return { lines: [{ name: '%R', val: bars.map((b, i) => (!isFinite(hh[i]) ? NaN : hh[i] === ll[i] ? -50 : -100 * (hh[i] - b.c) / (hh[i] - ll[i]))), color: p.color }], bands: [-20, -80], fixed: [-100, 0], label: String(n) };
+    return { lines: [{ name: '%R', val: bars.map((b, i) => (!isFinite(hh[i]) || hh[i] === ll[i] ? NaN : -100 * (hh[i] - b.c) / (hh[i] - ll[i]))), color: p.color }], bands: [-20, -80], fixed: [-100, 0], label: String(n) };
   },
 };
 DEFS.roc = {
@@ -353,16 +378,17 @@ DEFS.ao = {
   params: [P.int('fast', '短期の期間', 5), P.int('slow', '長期の期間', 34)],
   compute(bars, p) {
     const m = col(bars, 'hl2'), v = map2(sma(m, int(p.fast, 5)), sma(m, int(p.slow, 34)), (x, y) => x - y);
-    return { lines: [], hist: v, histDir: v.map((x, i) => (x >= v[i - 1] ? 1 : -1)), histName: 'AO', bands: [0], label: `${p.fast} ${p.slow}` };
+    return { lines: [], hist: v, histDir: v.map((x, i) => (x > v[i - 1] ? 1 : -1)), histName: 'AO', bands: [0], label: `${p.fast} ${p.slow}` }; // 前と同じなら下げの色(TradingView と同じ)
   },
 };
 DEFS.trix = {
   name: 'TRIX', short: 'TRIX', group: 'momentum',
-  desc: '3回ならした平均線の変化率。細かい上下を取り除いた勢い',
+  desc: '3回ならした平均線の変化率(1万倍。TradingView と同じ目盛り)。細かい上下を取り除いた勢い',
   params: [P.len(15), P.int('signal', 'シグナルの期間', 9), P.color('color', 'TRIX の色', '#c0392b'), P.color('cSig', 'シグナルの色', '#f5a623')],
   compute(bars, p) {
-    const n = int(p.len, 15), e3 = ema(ema(ema(col(bars, 'close'), n), n), n);
-    const t = e3.map((v, i) => (i && isFinite(e3[i - 1]) && e3[i - 1] ? (v - e3[i - 1]) / e3[i - 1] * 100 : NaN));
+    // TradingView の TRIX:終値の対数を3回 EMA でならし、1本前との差を 1万倍する(%で表す昔の式の約100倍の目盛り)
+    const n = int(p.len, 15), e3 = ema(ema(ema(col(bars, 'close').map(v => (v > 0 ? Math.log(v) : NaN)), n), n), n);
+    const t = e3.map((v, i) => (i && isFinite(e3[i - 1]) ? 10000 * (v - e3[i - 1]) : NaN));
     return { lines: [{ name: 'TRIX', val: t, color: p.color }, { name: 'シグナル', val: ema(t, int(p.signal, 9)), color: p.cSig }], bands: [0], label: `${n} ${p.signal}` };
   },
 };
@@ -372,13 +398,16 @@ DEFS.adx = {
   params: [P.len(14), P.num('level', '基準線', 25, 0, 100, 1, 'ADX がこれより上なら、流れがはっきりしている目安'),
     P.color('cAdx', 'ADX の色', '#f5a623'), P.color('cPlus', '+DI の色', UP), P.color('cMinus', '-DI の色', DOWN)],
   compute(bars, p) {
-    const n = int(p.len, 14), len = bars.length, pdm = [NaN], mdm = [NaN], tr = trueRange(bars);
+    const n = int(p.len, 14), len = bars.length, pdm = lead(len), mdm = lead(len), tr = trueRange(bars);
     tr[0] = NaN;
     for (let i = 1; i < len; i++) {
       const up = bars[i].h - bars[i - 1].h, dn = bars[i - 1].l - bars[i].l;
       pdm.push(up > dn && up > 0 ? up : 0); mdm.push(dn > up && dn > 0 ? dn : 0);
     }
-    const trS = rma(tr, n), pdi = map2(rma(pdm, n), trS, (x, t) => (t ? 100 * x / t : 0)), mdi = map2(rma(mdm, n), trS, (x, t) => (t ? 100 * x / t : 0));
+    // 値幅の平均が 0(値動きなし)のときは割れないので、直前の値を使い続ける(TradingView の fixnan と同じ)
+    const fixnan = a => { let last = NaN; return a.map(v => (isFinite(v) ? (last = v) : last)); };
+    const trS = rma(tr, n), di = dm => fixnan(map2(rma(dm, n), trS, (x, t) => (t ? 100 * x / t : NaN)));
+    const pdi = di(pdm), mdi = di(mdm);
     const dx = map2(pdi, mdi, (x, y) => (x + y ? 100 * Math.abs(x - y) / (x + y) : 0));
     return {
       lines: [{ name: 'ADX', val: rma(dx, n), color: p.cAdx, width: 2 }, { name: '+DI', val: pdi, color: p.cPlus, width: 1.2 }, { name: '-DI', val: mdi, color: p.cMinus, width: 1.2 }],
@@ -459,7 +488,7 @@ DEFS.cmf = {
   params: [P.len(20), P.color('color', '線の色', '#16a085')],
   compute(bars, p) {
     const n = int(p.len, 20), a = sum(mfv(bars), n), b = sum(bars.map(x => x.v), n);
-    return { lines: [{ name: 'CMF', val: map2(a, b, (x, y) => (y ? x / y : 0)), color: p.color }], bands: [0], label: String(n) };
+    return { lines: [{ name: 'CMF', val: map2(a, b, (x, y) => (y ? x / y : NaN)), color: p.color }], bands: [0], label: String(n) }; // 出来高が 0 なら割合は決まらない
   },
 };
 DEFS.mfi = {
@@ -467,9 +496,10 @@ DEFS.mfi = {
   desc: '出来高を加味した RSI。0〜100',
   params: [P.len(14), P.num('upper', '上の基準線', 80, 50, 100, 1), P.num('lower', '下の基準線', 20, 0, 50, 1), P.color('color', '線の色', '#8e44ad')],
   compute(bars, p) {
-    const n = int(p.len, 14), tp = col(bars, 'hlc3'), pos = [NaN], neg = [NaN];
+    const n = int(p.len, 14), tp = col(bars, 'hlc3'), pos = lead(bars.length), neg = lead(bars.length);
     for (let i = 1; i < bars.length; i++) { const f = tp[i] * bars[i].v; pos.push(tp[i] > tp[i - 1] ? f : 0); neg.push(tp[i] < tp[i - 1] ? f : 0); }
-    return { lines: [{ name: 'MFI', val: map2(sum(pos, n), sum(neg, n), (x, y) => (y === 0 ? 100 : 100 - 100 / (1 + x / y))), color: p.color }], bands: [+p.upper, +p.lower], fixed: [0, 100], label: String(n) };
+    // 上げ・下げのお金の流れがどちらも 0 なら決まらないので空ける(TradingView と同じ)
+    return { lines: [{ name: 'MFI', val: map2(sum(pos, n), sum(neg, n), (x, y) => (y === 0 ? (x ? 100 : NaN) : 100 - 100 / (1 + x / y))), color: p.color }], bands: [+p.upper, +p.lower], fixed: [0, 100], label: String(n) };
   },
 };
 
@@ -501,11 +531,13 @@ function linreg(a, n) {
   const val = nans(a.length), slope = nans(a.length);
   const sx = n * (n - 1) / 2, sxx = (n - 1) * n * (2 * n - 1) / 6, den = n * sxx - sx * sx;
   for (let i = n - 1; i < a.length; i++) {
-    let sy = 0, sxy = 0, ok = true;
-    for (let k = 0; k < n; k++) { const y = a[i - n + 1 + k]; if (!isFinite(y)) { ok = false; break; } sy += y; sxy += k * y; }
+    // 窓の最初の値を引いてから計算する(価格が大きいときの桁落ちを減らし、横ばいなら傾きがちょうど 0 になる)
+    const y0 = a[i - n + 1];
+    let sy = 0, sxy = 0, ok = isFinite(y0);
+    for (let k = 0; k < n && ok; k++) { const y = a[i - n + 1 + k] - y0; if (!isFinite(y)) { ok = false; break; } sy += y; sxy += k * y; }
     if (!ok || !den) continue;
     const b = (n * sxy - sx * sy) / den;
-    slope[i] = b; val[i] = (sy - b * sx) / n + b * (n - 1);
+    slope[i] = b; val[i] = y0 + (sy - b * sx) / n + b * (n - 1);
   }
   return { val, slope };
 }
@@ -562,9 +594,9 @@ DEFS.cmo = {
   desc: '上げ幅の合計と下げ幅の合計の差を、-100〜100 で表す',
   params: [P.len(9), P.source(), P.color('color', '線の色', '#2f80ed')],
   compute(bars, p) {
-    const a = col(bars, p.source), n = int(p.len, 9), up = [NaN], dn = [NaN];
+    const a = col(bars, p.source), n = int(p.len, 9), up = lead(a.length), dn = lead(a.length);
     for (let i = 1; i < a.length; i++) { const d = a[i] - a[i - 1]; up.push(Math.max(d, 0)); dn.push(Math.max(-d, 0)); }
-    return pane1('CMO', map2(sum(up, n), sum(dn, n), (x, y) => (x + y ? 100 * (x - y) / (x + y) : 0)), p.color, { bands: [50, -50], fixed: [-100, 100], label: String(n) });
+    return pane1('CMO', map2(sum(up, n), sum(dn, n), (x, y) => (x + y ? 100 * (x - y) / (x + y) : NaN)), p.color, { bands: [50, -50], fixed: [-100, 100], label: String(n) });
   },
 };
 DEFS.ultosc = {
@@ -572,9 +604,9 @@ DEFS.ultosc = {
   desc: '3つの期間の買いの強さを合わせた指標(0〜100)',
   params: [P.int('a', '短期', 7), P.int('b', '中期', 14), P.int('c', '長期', 28), P.color('color', '線の色', '#c0392b')],
   compute(bars, p) {
-    const bp = [NaN], tr = [NaN];
+    const bp = lead(bars.length), tr = lead(bars.length);
     for (let i = 1; i < bars.length; i++) { const pc = bars[i - 1].c, lo = Math.min(bars[i].l, pc); bp.push(bars[i].c - lo); tr.push(Math.max(bars[i].h, pc) - lo); }
-    const avg = n => map2(sum(bp, n), sum(tr, n), (x, y) => (y ? x / y : 0));
+    const avg = n => map2(sum(bp, n), sum(tr, n), (x, y) => (y ? x / y : NaN)); // 値動きが 0 なら決まらない(TradingView と同じ)
     const A = avg(int(p.a, 7)), B = avg(int(p.b, 14)), C = avg(int(p.c, 28));
     return pane1('UO', A.map((x, i) => (isFinite(C[i]) ? 100 * (4 * x + 2 * B[i] + C[i]) / 7 : NaN)), p.color, { bands: [70, 30], fixed: [0, 100], label: `${p.a} ${p.b} ${p.c}` });
   },
@@ -594,7 +626,9 @@ DEFS.fisher = {
     let v = 0, prev = 0;
     for (let i = 0; i < bars.length; i++) {
       if (!isFinite(hh[i])) continue;
-      v = 0.66 * ((hh[i] > ll[i] ? (m[i] - ll[i]) / (hh[i] - ll[i]) : 0.5) - 0.5) + 0.67 * v;
+      // 期間中の値動きがないときは位置が決まらないので空け、次の足から 0 で計算し直す(TradingView と同じ)
+      if (!(hh[i] > ll[i])) { v = 0; prev = 0; continue; }
+      v = 0.66 * ((m[i] - ll[i]) / (hh[i] - ll[i]) - 0.5) + 0.67 * v;
       if (v > 0.99) v = 0.999; else if (v < -0.99) v = -0.999; // 対数が発散しないよう、端は 0.999 に丸める(TradingView と同じ扱い)
       prev = 0.5 * Math.log((1 + v) / (1 - v)) + 0.5 * prev;
       f[i] = prev;
@@ -635,10 +669,11 @@ DEFS.rci = {
         const v = c[i - k]; // k = 0 がいちばん新しい(日付の順位 1)
         let higher = 0, same = 0;
         for (let j = 0; j < n; j++) { const w = c[i - j]; if (w > v) higher++; else if (w === v) same++; }
+        if (same === n) { d2 = NaN; break; } // 全部同じ値なら順位の相関は決まらない(50 などの仮の値は出さない)
         const rank = higher + (same + 1) / 2; // 同じ値は順位を平均する
         d2 += (k + 1 - rank) * (k + 1 - rank);
       }
-      out[i] = (1 - 6 * d2 / (n * (n * n - 1))) * 100;
+      if (isFinite(d2)) out[i] = (1 - 6 * d2 / (n * (n * n - 1))) * 100;
     }
     return pane1('RCI', out, p.color, { bands: [80, -80], fixed: [-100, 100], label: String(n) });
   },
@@ -693,7 +728,7 @@ DEFS.vortex = {
   desc: '上向きの動き(+VI)と下向きの動き(-VI)の強さを比べる',
   params: [P.len(14), P.color('cPlus', '+VI の色', UP), P.color('cMinus', '-VI の色', DOWN)],
   compute(bars, p) {
-    const n = int(p.len, 14), vp = [NaN], vm = [NaN], tr = trueRange(bars);
+    const n = int(p.len, 14), vp = lead(bars.length), vm = lead(bars.length), tr = trueRange(bars);
     tr[0] = NaN;
     for (let i = 1; i < bars.length; i++) { vp.push(Math.abs(bars[i].h - bars[i - 1].l)); vm.push(Math.abs(bars[i].l - bars[i - 1].h)); }
     const st = sum(tr, n);
@@ -816,11 +851,22 @@ DEFS.fractal = {
   desc: '前後2本より高い山に▼、前後2本より低い谷に▲を付ける(2本あとに確定)',
   params: [],
   compute(bars) {
-    const n = bars.length, top = nans(n), bot = nans(n);
-    for (let i = 2; i < n - 2; i++) {
-      const h = bars[i].h, l = bars[i].l;
-      top[i] = h > bars[i - 1].h && h > bars[i - 2].h && h > bars[i + 1].h && h > bars[i + 2].h ? 1 : 0;
-      bot[i] = l < bars[i - 1].l && l < bars[i - 2].l && l < bars[i + 1].l && l < bars[i + 2].l ? 1 : 0;
+    const n = bars.length, top = nans(n), bot = nans(n), N = 2;
+    // TradingView の Williams Fractals と同じ判定:あとの2本は必ず低い(谷なら高い)。
+    // 前は、同じ高さの足が4本まで続いていてもよく、その先の2本が低ければ山とする(平らな天井も山として拾う)
+    const isPeak = (i, v) => {
+      for (let k = 1; k <= N; k++) if (!(v(i + k) < v(i))) return false;
+      for (let e = 0; e <= 4 && i - e - N >= 0; e++) {
+        let ok = true;
+        for (let k = 1; k <= e && ok; k++) if (v(i - k) > v(i)) ok = false;
+        for (let k = 1; k <= N && ok; k++) if (!(v(i - e - k) < v(i))) ok = false;
+        if (ok) return true;
+      }
+      return false;
+    };
+    for (let i = N; i < n - N; i++) {
+      top[i] = isPeak(i, j => bars[j].h) ? 1 : 0;
+      bot[i] = isPeak(i, j => -bars[j].l) ? 1 : 0;
     }
     return { lines: [], marks: [{ name: '山', dir: 'down', val: top }, { name: '谷', dir: 'up', val: bot }], label: '' };
   },
@@ -831,7 +877,7 @@ DEFS.alma = {
   desc: '新しい足に重みを寄せた、なめらかで遅れの少ない移動平均線',
   params: [P.len(9), P.num('offset', '重みの位置(0〜1、1に近いほど新しい足)', 0.85, 0, 1, 0.01), P.num('sigma', 'なめらかさ', 6, 0.1, 50, 0.1), P.source(), P.color('color', '線の色', '#00acc1')],
   compute(bars, p) {
-    const n = int(p.len, 9), a = col(bars, p.source), out = nans(a.length), m = Math.floor(p.offset * (n - 1)), s = n / p.sigma, w = []; // m は切り捨て(TradingView と同じ)
+    const n = int(p.len, 9), a = col(bars, p.source), out = nans(a.length), m = p.offset * (n - 1), s = n / p.sigma, w = []; // m は切り捨てない(TradingView の ta.alma の既定。もとの ALMA の式も同じ)
     let ws = 0;
     for (let k = 0; k < n; k++) { const v = Math.exp(-((k - m) * (k - m)) / (2 * s * s)); w.push(v); ws += v; }
     for (let i = n - 1; i < a.length; i++) {
@@ -848,12 +894,13 @@ DEFS.mcginley = {
   desc: '値動きが速いときは速く、遅いときはゆっくり追いかける移動平均線',
   params: [P.len(14), P.source(), P.color('color', '線の色', '#795548')],
   compute(bars, p) {
-    const n = int(p.len, 14), a = col(bars, p.source), out = nans(a.length);
+    const n = int(p.len, 14), a = col(bars, p.source), out = nans(a.length), e = ema(a, n);
     let md = NaN;
     for (let i = 0; i < a.length; i++) {
       const x = a[i];
       if (!isFinite(x)) continue;
-      md = isFinite(md) && md !== 0 ? md + (x - md) / (n * Math.pow(x / md, 4)) : x;
+      // 最初の値は EMA(= 最初の n 本の単純平均)から始める(TradingView と同じ。1本目の価格から始めると、しばらく値がずれる)
+      md = isFinite(md) && md !== 0 ? md + (x - md) / (n * Math.pow(x / md, 4)) : e[i];
       out[i] = md;
     }
     return { lines: [{ name: 'MD', val: out, color: p.color }], label: String(n) };
@@ -866,10 +913,10 @@ DEFS.tsi = {
   params: [P.int('long', '1回目にならす期間', 25), P.int('short', '2回目にならす期間', 13), P.int('signal', 'シグナルの期間', 13), P.source(),
     P.color('color', 'TSI の色', '#2f80ed'), P.color('cSig', 'シグナルの色', '#f5a623')],
   compute(bars, p) {
-    const a = col(bars, p.source), m = [NaN], am = [NaN];
+    const a = col(bars, p.source), m = lead(a.length), am = lead(a.length);
     for (let i = 1; i < a.length; i++) { const d = a[i] - a[i - 1]; m.push(d); am.push(Math.abs(d)); }
     const L = int(p.long, 25), S = int(p.short, 13);
-    const v = map2(ema(ema(m, L), S), ema(ema(am, L), S), (x, y) => (y ? 100 * x / y : 0)), sg = ema(v, int(p.signal, 13));
+    const v = map2(ema(ema(m, L), S), ema(ema(am, L), S), (x, y) => (y ? 100 * x / y : NaN)), sg = ema(v, int(p.signal, 13)); // 値動きなしは決まらない
     return { lines: [{ name: 'TSI', val: v, color: p.color }, { name: 'シグナル', val: sg, color: p.cSig }], bands: [25, 0, -25], label: `${L} ${S} ${p.signal}` };
   },
 };
@@ -891,15 +938,16 @@ DEFS.crsi = {
   desc: '短い RSI・連続して上げ下げした日数・値動きの大きさの順位を平均した、短期の行きすぎの指標(0〜100)',
   params: [P.int('rsiLen', '価格の RSI の期間', 3), P.int('streakLen', '連続日数の RSI の期間', 2), P.int('rankLen', '順位を見る期間', 100), P.color('color', '線の色', '#c0392b')],
   compute(bars, p) {
-    const c = col(bars, 'close'), n = c.length, streak = [0], roc = [NaN], rank = nans(n), R = int(p.rankLen, 100);
+    const c = col(bars, 'close'), n = c.length, streak = n ? [0] : [], roc = lead(n), rank = nans(n), R = int(p.rankLen, 100);
     for (let i = 1; i < n; i++) {
       const s = streak[i - 1];
       streak.push(c[i] > c[i - 1] ? (s > 0 ? s + 1 : 1) : c[i] < c[i - 1] ? (s < 0 ? s - 1 : -1) : 0);
-      roc.push(c[i - 1] ? (c[i] / c[i - 1] - 1) * 100 : NaN);
+      roc.push(c[i - 1] ? 100 * (c[i] - c[i - 1]) / c[i - 1] : NaN); // ta.roc と同じ式の順(同じ値どうしの比べ方を揃える)
     }
     for (let i = R + 1; i < n; i++) {
       let below = 0;
-      for (let k = i - R; k < i; k++) if (roc[k] < roc[i]) below++;
+      // 過去 R 本のうち、今の変化率「以下」だった割合(TradingView の ta.percentrank と同じ。同じ値も数える)
+      for (let k = i - R; k < i; k++) if (roc[k] <= roc[i]) below++;
       rank[i] = below / R * 100;
     }
     const r1 = rsi(c, int(p.rsiLen, 3)), r2 = rsi(streak, int(p.streakLen, 2));
