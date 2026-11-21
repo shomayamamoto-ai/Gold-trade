@@ -1280,13 +1280,19 @@ function makeCustom(def) {
  *   ・合図は、足が確定してから分かるものとして扱う。売買は「次の足の始値」で行う(先読みをしない)
  *   ・いちばん新しい足はまだ確定していないので、その足の合図では売買しない
  *   ・毎回、手持ちの全額で売買する(複利)。手数料は売買のたびに fee の割合を引く
+ *   ・すべり(slip。片道の割合)は、入るときも出るときも、いつも不利な向きに価格をずらす
+ *     (買うときは高く、売るときは安く約定したものとする)
  * marks: [{ dir: 'up' | 'down', val: [...] }]
- *   ・損切り・利確(sl / tp。入った価格からの割合)を指定すると、足の高値・安値がそこに届いた時点で手じまう。
+ *   ・損切り・利確(sl / tp。実際に入った価格からの割合)を指定すると、足の高値・安値がそこに届いた時点で手じまう。
  *     同じ足の中で両方に届いた場合は、どちらが先か分からないので、不利なほう(損切り)が先だったとみなす。
- *     窓を開けて飛びこえた場合は、その足の始値で手じまう
- * opts: { side: 'long' | 'short' | 'both', exit: 'signal' | 'bars', hold: 本数, fee: 割合, sl: 割合, tp: 割合 } */
+ *     損切りは、窓を開けて飛びこえた場合は、その足の始値で手じまう(損切りの価格より悪くなる)。
+ *     利確は指値と同じで、届いても利確の価格より良い価格にはしない
+ *   ・売りから入って価格が2倍になると、資金がすべてなくなる(強制決済)。利確より先に判定する
+ *   ・最後に手じまっていないポジションは、最後の足の終値で手じまったものとして(手数料とすべりも引いて)成績に入れる。
+ *     「何もせず持ち続けた場合」も、同じ最初の足の始値で買い、同じ最後の足の終値で売り、同じ手数料とすべりを引く
+ * opts: { side: 'long' | 'short' | 'both', exit: 'signal' | 'bars', hold: 本数, fee: 割合, slip: 割合, sl: 割合, tp: 割合 } */
 function backtest(bars, marks, opts) {
-  const n = bars.length, o = opts || {}, fee = o.fee >= 0 ? o.fee : 0.001;
+  const n = bars.length, o = opts || {}, fee = o.fee >= 0 ? o.fee : 0.001, slip = o.slip >= 0 && o.slip < 0.5 ? o.slip : 0;
   const side = ['long', 'short', 'both'].includes(o.side) ? o.side : 'long';
   const hold = Math.max(1, Math.min(1000, Math.round(o.hold) || 10));
   const sl = o.sl > 0 && o.sl < 1 ? o.sl : 0, tp = o.tp > 0 && o.tp <= 100 ? o.tp : 0;
@@ -1296,10 +1302,13 @@ function backtest(bars, marks, opts) {
   const exitMode = o.exit === 'bars' || !hasOpp ? 'bars' : 'signal';
   let eq = 1, pos = 0, entry = 0, entryI = 0, eqAtEntry = 1, inBars = 0;
   const trades = [], curve = [];
+  // 手じまったときの資金(px は手じまう価格。すべりは、ここで不利な向きに足す)
+  const valueAt = px => { const fill = px * (1 - pos * slip); return { fill, v: eqAtEntry * Math.max(0, pos > 0 ? fill / entry : 2 - fill / entry) * (1 - fee) }; };
   const closeAt = (i, px, why) => {
-    const gross = pos > 0 ? px / entry : 2 - px / entry; // 売りから入った場合は、下がった分が利益
-    eq = eqAtEntry * Math.max(0, gross) * (1 - fee);
-    trades.push({ dir: pos, t0: bars[entryI].t, t1: bars[i].t, p0: entry, p1: px, ret: eq / (eqAtEntry / (1 - fee)) - 1, bars: i - entryI, why: why || 'rule' });
+    const x = valueAt(px);
+    eq = why === 'liq' ? 0 : x.v;
+    if (eq <= 0) why = 'liq'; // 窓を開けて2倍を超えた場合も、資金がなくなる
+    trades.push({ dir: pos, t0: bars[entryI].t, t1: bars[i].t, p0: entry, p1: x.fill, ret: eq / (eqAtEntry / (1 - fee)) - 1, bars: i - entryI, i0: entryI, i1: i, why: why || 'rule' });
     pos = 0;
   };
   for (let i = 0; i < n; i++) {
@@ -1308,33 +1317,39 @@ function backtest(bars, marks, opts) {
       if (pos && (exitMode === 'signal' ? (pos > 0 ? d : u) : i - entryI >= hold)) closeAt(i, px);
       if (!pos && px > 0 && eq > 0) {
         const want = u && side !== 'short' ? 1 : d && side !== 'long' ? -1 : 0;
-        if (want) { pos = want; entry = px; entryI = i; eq *= 1 - fee; eqAtEntry = eq; }
+        if (want) { pos = want; entry = px * (1 + want * slip); entryI = i; eq *= 1 - fee; eqAtEntry = eq; }
       }
     }
-    if (pos && (sl || tp)) {
-      // 損切り・利確:入った足も含めて、足の中の高値・安値で届いたかを見る
+    if (pos) {
+      // 損切り・強制決済・利確:入った足も含めて、足の中の高値・安値で届いたかを見る。不利なものから先に判定する
       const b = bars[i], later = i > entryI;
-      const slPx = entry * (1 - pos * sl), tpPx = entry * (1 + pos * tp);
+      const slPx = entry * (1 - pos * sl), tpPx = entry * (1 + pos * tp), liqPx = entry * 2;
       const hitSl = sl && (pos > 0 ? b.l <= slPx : b.h >= slPx), hitTp = tp && (pos > 0 ? b.h >= tpPx : b.l <= tpPx);
+      const hitLiq = pos < 0 && b.h >= liqPx;
       if (hitSl) closeAt(i, later && (pos > 0 ? b.o < slPx : b.o > slPx) ? b.o : slPx, 'sl');
-      else if (hitTp) closeAt(i, later && (pos > 0 ? b.o > tpPx : b.o < tpPx) ? b.o : tpPx, 'tp');
+      else if (hitLiq) closeAt(i, later && b.o > liqPx ? b.o : liqPx, 'liq'); // 資金がゼロになる。以後は売買しない
+      else if (hitTp) closeAt(i, tpPx, 'tp');
     }
-    // 売りから入って価格が2倍以上になると、資金がすべてなくなる。その時点で強制的に手じまい、以後は売買しない
-    if (pos < 0 && bars[i].h >= entry * 2) { closeAt(i, entry * 2, 'liq'); eq = 0; }
     if (pos) inBars++;
     const c = bars[i].c; // その足の終値で評価した資金
     curve.push(pos ? eqAtEntry * Math.max(0, pos > 0 ? c / entry : 2 - c / entry) : eq);
   }
-  const open = pos ? { dir: pos, t0: bars[entryI].t, p0: entry, ret: curve[n - 1] / (eqAtEntry / (1 - fee)) - 1 } : null;
+  // 手じまっていないポジションは、最後の足の終値で手じまったものとして数える(手数料・すべりも引く)
+  const open = pos ? { dir: pos, t0: bars[entryI].t, p0: entry, i0: entryI, ret: valueAt(bars[n - 1].c).v / (eqAtEntry / (1 - fee)) - 1 } : null;
+  if (pos) curve[n - 1] = valueAt(bars[n - 1].c).v;
   let peak = 1, maxDD = 0;
   curve.forEach(v => { peak = Math.max(peak, v); maxDD = Math.max(maxDD, 1 - v / peak); });
   const wins = trades.filter(t => t.ret > 0), losses = trades.filter(t => t.ret <= 0);
   const sumW = wins.reduce((a, t) => a + t.ret, 0), sumL = losses.reduce((a, t) => a - t.ret, 0);
-  const hold0 = n ? bars[0].o : NaN, holdRet = n && hold0 > 0 ? bars[n - 1].c / hold0 * (1 - fee) - 1 : NaN;
+  // 持ち続けた場合:最初の足の始値で買い、最後の足の終値で売る。手数料もすべりも、合図どおりの場合と同じだけ引く
+  const hold0 = n ? bars[0].o * (1 + slip) : NaN;
+  const holdCurve = bars.map((b, i) => (hold0 > 0 ? b.c / hold0 * (1 - fee) * (i === n - 1 ? (1 - slip) * (1 - fee) : 1) : 1));
+  const holdRet = n && hold0 > 0 ? holdCurve[n - 1] - 1 : NaN;
   return {
     trades, open, curve, exitMode, n: trades.length, wins: wins.length, losses: losses.length,
-    total: (n ? curve[n - 1] : 1) - 1, holdRet, holdCurve: bars.map(b => (hold0 > 0 ? b.c / hold0 : 1)), maxDD,
+    total: (n ? curve[n - 1] : 1) - 1, holdRet, holdCurve, maxDD, fee, slip,
     pf: sumL > 0 ? sumW / sumL : NaN, avgWin: wins.length ? sumW / wins.length : NaN, avgLoss: losses.length ? -sumL / losses.length : NaN,
+    avgRet: trades.length ? trades.reduce((a, t) => a + t.ret, 0) / trades.length : NaN,
     exposure: n ? inBars / n : 0, nSl: trades.filter(t => t.why === 'sl').length, nTp: trades.filter(t => t.why === 'tp').length,
   };
 }

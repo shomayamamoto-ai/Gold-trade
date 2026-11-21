@@ -365,6 +365,9 @@ body {
 .tr-btn:disabled { opacity: .45; cursor: default; filter: none; }
 .tr-dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0 0 6px; }
 .tr-dl dt { color: var(--muted); }
+.tr-dl dt small { display: block; font-size: 10px; line-height: 1.2; }
+.tr-fill { margin: 2px 0 6px; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.tr-fill:empty { display: none; }
 .tr-dl dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .up { color: #1a9d8a; }
 .down { color: #e0463f; }

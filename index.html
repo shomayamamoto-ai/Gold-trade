@@ -108,6 +108,7 @@
         <input id="trAmt" class="ctl" type="number" inputmode="decimal" min="0" step="any">
       </label>
       <div class="tr-unit"><span id="trAmtEst" class="dim"></span><button id="trUnit" class="tr-link" type="button">数量で入力</button></div>
+      <p id="trFillEst" class="tr-fill dim" aria-live="polite"></p>
       <div class="tr-quick" role="group" aria-label="使える金額に対する割合">
         <button type="button" data-pct="0.1">10%</button>
         <button type="button" data-pct="0.25">25%</button>
@@ -156,7 +157,8 @@
         <dt>平均取得価格</dt><dd id="pAvg"></dd>
         <dt>レバレッジ</dt><dd id="pLev"></dd>
         <dt>強制決済の価格</dt><dd id="pLiq"></dd>
-        <dt>評価損益</dt><dd id="pPnl"></dd>
+        <dt>評価損益<small>手数料を引く前</small></dt><dd id="pPnl"></dd>
+        <dt>いま決済すると<small>手数料込み</small></dt><dd id="pNet"></dd>
       </dl>
       <div id="pSparkBox" class="tr-spark" hidden>
         <canvas id="pSpark" role="img" aria-label="建ててからの含み損益の推移"></canvas>
@@ -208,8 +210,8 @@
     </section>
 
     <p class="tr-note">
-      約定は、気配値(買いは「買える価格」、売りは「売れる価格」)で即時に行う簡易的な計算です。気配値が取れないときは最新の価格を使います。手数料は売買金額の 0.1% として差し引いています。
-      利確・損切り・指値は、ページを閉じていた間の分も、次に開いたときにまとめて判定します。実際の取引とは結果が異なります。
+      成行は、板(上位5段)を注文の大きさの分だけ食っていった平均の価格で約定します(板がない銘柄は、買える価格・売れる価格)。損切り・強制決済は届いた瞬間の決済できる価格、利確・指値はその価格ちょうどで約定します。手数料は売買金額の 0.1%(片道)です。レバレッジのポジションには、8時間ごとに資金調達料の目安(0.01%)がかかります。
+      利確・損切り・指値は、ページを閉じていた間の分も、次に開いたときにまとめて判定します。くわしくは<a href="manual.html#fills">デモの約定のきまり</a>を見てください。実際の取引とは結果が異なります。
       手法や資金管理は<a href="guide.html">教科書</a>で解説しています。
     </p>
   </div>
