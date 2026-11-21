@@ -3977,7 +3977,10 @@ function checkTriggers(sym, lo, hi, path) {
   let reason = null, fill = 0;
   if (path && path.length) {
     // 約定を届いた順にたどる。最後に、いまの価格(足の終値)も1件として見る
-    const pts = path.concat([{ p: px, b: lq ? lq.bid : NaN, a: lq ? lq.ask : NaN }]);
+    // ポジションを持つ前・利確/損切りを置く前の約定は数えない(取引所でも、置く前の約定では発動しない)。
+    // いまの価格は最後の約定の価格なので、その約定と同じ時刻として扱う
+    const start = Math.max(p.opened || 0, p.levelsAt || 0), lastT = path[path.length - 1].t;
+    const pts = path.concat([{ p: px, b: lq ? lq.bid : NaN, a: lq ? lq.ask : NaN, t: lastT }]).filter(x => !(x.t < start));
     for (const x of pts) {
       reason = hitAt(x.p, x.p);
       if (reason) { fill = reason === 'tp' ? p.tp : exitPx(x.p, x.b, x.a); break; }
