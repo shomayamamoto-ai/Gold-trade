@@ -641,11 +641,13 @@ function groupBars(raw, group, ms) {
   }
   return out;
 }
-async function fetchKlines(symbol, api, limit, endTime, startTime) {
-  const sy = SYNTH[symbol];
-  if (!sy) return fetchKlinesRaw(symbol, api, limit, endTime, startTime);
-  // 計算値の銘柄:2つの足を同じ時刻どうしで割る。高値・安値は、足の中の割り算の値からの目安
-  const [a, b] = await Promise.all([fetchKlinesRaw(sy.num, api, limit, endTime, startTime), fetchKlinesRaw(sy.den, api, limit, endTime, startTime)]);
+/* 計算値の銘柄の足を作る。2つの銘柄の足を、同じ時刻どうしで割る。
+ * 高値・安値は、2つの銘柄の高値(安値)どうしの割り算で目安を出すが、2つの高値がつく時刻はずれるので、
+ * そのままだと値幅が実際の半分くらいに狭く出る(2026年11月、1時間足で約47%)。
+ * そこで、1段細かい足(1時間足なら15分足)も取り寄せ、その範囲の高値・安値を細かい足から作り直す(約71〜82%まで近づく)。
+ * 細かい足は1回の取り寄せ分(1000本)だけ使い、それより古い足は、目安のままにする */
+const SYNTH_FINER = { '5m': ['1m', 5], '15m': ['5m', 3], '30m': ['5m', 6], '1h': ['15m', 4], '4h': ['1h', 4], '1d': ['1h', 24], '1w': ['4h', 42], '1M': ['1d', 31] }; // [細かい足, 1本に入る本数]
+function ratioBars(a, b) {
   const den = new Map(b.map(x => [x.t, x]));
   const out = [];
   for (const x of a) {
@@ -654,7 +656,30 @@ async function fetchKlines(symbol, api, limit, endTime, startTime) {
     const o = x.o / y.o, c = x.c / y.c, p = x.h / y.h, q = x.l / y.l;
     out.push({ t: x.t, o, h: Math.max(o, c, p, q), l: Math.min(o, c, p, q), c, v: x.v * y.c });
   }
+  return out;
+}
+async function fetchKlines(symbol, api, limit, endTime, startTime) {
+  const sy = SYNTH[symbol];
+  if (!sy) return fetchKlinesRaw(symbol, api, limit, endTime, startTime);
+  // 細かい足は、必要な本数だけ取る(最新の数本だけを取り直すときに、毎回1000本を取らないように)
+  const fz = SYNTH_FINER[api], fineN = fz ? Math.min(1000, (limit + 1) * fz[1]) : 0;
+  const fineLeg = s => (fz ? fetchKlinesRaw(s, fz[0], fineN, endTime, startTime).catch(() => []) : Promise.resolve([]));
+  const [a, b, fa, fb] = await Promise.all([fetchKlinesRaw(sy.num, api, limit, endTime, startTime), fetchKlinesRaw(sy.den, api, limit, endTime, startTime), fineLeg(sy.num), fineLeg(sy.den)]);
+  const out = ratioBars(a, b);
   if (!out.length) throw new Error('empty');
+  const fine = ratioBars(fa, fb);
+  if (fine.length) {
+    // 細かい足が、その足の始まりからそろっているものだけ作り直す(途中から始まる足は、目安のまま)
+    let k = 0;
+    for (let i = 0; i < out.length; i++) {
+      const t0 = out[i].t, t1 = i + 1 < out.length ? out[i + 1].t : Infinity;
+      if (t0 < fine[0].t) continue;
+      while (k < fine.length && fine[k].t < t0) k++;
+      let hi = -Infinity, lo = Infinity;
+      for (let j = k; j < fine.length && fine[j].t < t1; j++) { if (fine[j].h > hi) hi = fine[j].h; if (fine[j].l < lo) lo = fine[j].l; }
+      if (hi > 0) { out[i].h = Math.max(out[i].o, out[i].c, hi); out[i].l = Math.min(out[i].o, out[i].c, lo); }
+    }
+  }
   return out;
 }
 async function fetchKlinesRaw(symbol, api, limit, endTime, startTime) {
