@@ -831,15 +831,22 @@ async function loadData() {
 }
 // 新しく届いた足を末尾に反映する
 function mergeTail(tail, light) {
-  const raw = state.raw.slice();
-  if (!raw.length) return;
+  const raw0 = state.raw;
+  if (!raw0.length || !tail.length) return;
   const atEnd = state.end >= state.bars.length - 0.01;
   const before = state.bars.length;
-  for (const b of tail) {
-    const last = raw[raw.length - 1];
-    if (b.t === last.t) raw[raw.length - 1] = b;
-    else if (b.t > last.t) raw.push(b);
-    else if (raw.length > 1 && b.t === raw[raw.length - 2].t) raw[raw.length - 2] = b;
+  let raw;
+  const last = raw0[raw0.length - 1];
+  if (tail.length === 1 && tail[0].t >= last.t) {
+    // 配信で届いた1本(いちばん多い場合)。同じ足なら置きかえ、新しい足なら足す
+    raw = raw0.slice();
+    if (tail[0].t === last.t) raw[raw.length - 1] = tail[0]; else raw.push(tail[0]);
+  } else {
+    // 取り寄せた何本か。重なる足は置きかえ(途中のままだった足も直る)、抜けていた足は差し込む
+    const t0 = tail[0].t, have = new Set(tail.map(b => b.t));
+    let k = raw0.length;
+    while (k > 0 && raw0[k - 1].t >= t0) k--;
+    raw = raw0.slice(0, k).concat(raw0.slice(k).filter(b => !have.has(b.t)), tail).sort((a, b) => a.t - b.t);
   }
   setBars(raw, false, light);
   if (atEnd) state.end += state.bars.length - before; // 最新を見ているときは追従する
@@ -850,17 +857,37 @@ const STREAMS = ['wss://data-stream.binance.vision/stream?streams=', 'wss://stre
 const mono = () => performance.now(); // 端末の時計を変えても巻き戻らない経過時間。価格の鮮度はこれで測る
 let clockOffset = 0, clockReady = false; // 取引所の時計 − 端末の時計
 const tnow = () => Date.now() + clockOffset; // 取引所の時計での現在時刻(取引の記録に使う)
-const feed = { lo: Infinity, hi: -Infinity, okAt: -1e9, lastMsg: -1e9, lastTick: 0, tick: null, timer: 0, vol: 0, cost: 0, qRaf: 0, n: 0, msgs: 0, rate: 0, bid: NaN, ask: NaN, quoteAt: 0, quoteSym: '', book: null, path: [], pathFull: false }; // 配信の状態
+const feed = { lo: Infinity, hi: -Infinity, okAt: -1e9, lastMsg: -1e9, lastTick: 0, tick: null, timer: 0, vol: 0, cost: 0, qRaf: 0, n: 0, msgs: 0, rate: 0, bid: NaN, ask: NaN, quoteAt: 0, quoteSym: '', book: null, path: [], pathFull: false, upSince: Infinity, covers: new Set(), rec: [], gapFrom: Infinity, legK: {} }; // 配信の状態
 /* book: 板の上位5段 { sym, bids: [[価格, 数量]…], asks, at }。成行注文の平均の約定価格を見積もるのに使う。
  * path: 前回の判定から届いた約定の列 [{ p: 価格, b: そのときの売れる価格, a: 買える価格, q: 数量, t: 時刻 }]。
- * 利確・損切り・強制決済が「どの約定で」「どちらが先に」届いたかを、順番どおりに調べるために覚えておく */
+ * 利確・損切り・強制決済が「どの約定で」「どちらが先に」届いたかを、順番どおりに調べるために覚えておく
+ * upSince: いまの配信が、途切れずに届き始めた時刻(取引所の時刻)。これより前に最後に確かめた銘柄は、間の約定を取り寄せて調べる
+ * covers: いまの配信で約定が届く銘柄。rec: 直近30秒の約定の高値・安値(1秒ごと)。板の見えない先を見積もるときの上限に使う
+ * gapFrom: 足が抜けているかもしれない時刻。次の取り寄せで、ここから先を取り直す
+ * legK: 計算値の銘柄の、2つの銘柄の足の更新(出来高を出すのに使う) */
 const PATH_MAX = 5000;
+// 配信がいま届いているか(2.5秒以上なにも届かなければ、止まっているとみなす)
+const streamLive = () => !!ws && ws.readyState === 1 && mono() - feed.lastMsg < 2500;
+// 直近30秒に実際にあった約定の、いちばん高い価格(買い)/安い価格(売り)。分からなければ NaN
+function recentExtreme(side) {
+  const now = Math.floor(mono() / 1000);
+  let v = side === 'buy' ? -Infinity : Infinity;
+  feed.rec.forEach(x => { if (now - x.s <= 30) v = side === 'buy' ? Math.max(v, x.hi) : Math.min(v, x.lo); });
+  return isFinite(v) ? v : NaN;
+}
+function noteRecent(p) {
+  const s = Math.floor(mono() / 1000), r = feed.rec, last = r[r.length - 1];
+  if (last && last.s === s) { last.lo = Math.min(last.lo, p); last.hi = Math.max(last.hi, p); return; }
+  r.push({ s, lo: p, hi: p });
+  while (r.length && s - r[0].s > 30) r.shift();
+}
 function closeStream() {
   const s = ws;
   ws = null;
   clearTimeout(feed.timer); feed.timer = 0; feed.tick = null; feed.vol = 0;
   feed.bid = feed.ask = NaN; feed.quoteAt = -1e9; feed.lo = Infinity; feed.hi = -Infinity;
   feed.book = null; feed.path = []; feed.pathFull = false;
+  feed.upSince = Infinity; feed.covers = new Set(); feed.rec = []; feed.legK = {};
   renderQuote();
   if (s) { try { s.close(); } catch (e) { /* 何もしない */ } }
 }
@@ -889,7 +916,11 @@ function applyTick() {
     let nt = last.t;
     if (iv.month) { while (barEnd(nt, iv) <= tk.t) nt = barEnd(nt, iv); }
     else nt = last.t + Math.floor((tk.t - last.t) / iv.ms) * iv.ms;
+    // 1本以上とばして新しい足を始めたら(通信が途切れていた)、抜けた足をあとで取り寄せる
+    if (nt > barEnd(last.t, iv)) { feed.gapFrom = Math.min(feed.gapFrom, last.t); queueSync(); }
     mergeTail([{ t: nt, o: tk.p, h: tk.p, l: tk.p, c: tk.p, v: vol }]);
+    // 計算値の銘柄は、気配値から作った足なので、確定した足を、取り寄せた足(チャートを開いたときと同じ作り方)に置きかえる
+    if (SYNTH[state.symbol]) { const tok = state.loadToken, closedT = last.t; setTimeout(() => refreshSynth(tok, closedT), 1500); }
   }
   else mergeTail([{ t: last.t, o: last.o, h: Math.max(last.h, tk.p), l: Math.min(last.l, tk.p), c: tk.p, v: last.v + vol }], true);
   feed.cost = feed.cost * 0.7 + (mono() - t0) * 0.3; // 反映にかかった時間(ならした値)
@@ -905,9 +936,11 @@ function noteTick(dir) {
   clearTimeout(flashTimer);
   flashTimer = setTimeout(() => el.classList.remove('tick-up', 'tick-down'), 700);
 }
-// いま有効な気配値(売れる価格 bid と、買える価格 ask)。古いものや別の銘柄のものは使わない
-function liveQuote(sym) {
-  if (feed.quoteSym !== sym || mono() - feed.quoteAt > 5000 || !(feed.bid > 0) || !(feed.ask > 0)) return null;
+// いま有効な気配値(売れる価格 bid と、買える価格 ask)。古いものや別の銘柄のものは使わない。
+// 表示には5秒まで使う。成行の約定には、もっと新しいもの(QUOTE_TRADE_MS)だけを使う
+const QUOTE_TRADE_MS = 2000;
+function liveQuote(sym, maxAge) {
+  if (feed.quoteSym !== sym || mono() - feed.quoteAt > (maxAge || 5000) || !(feed.bid > 0) || !(feed.ask > 0)) return null;
   return { bid: feed.bid, ask: feed.ask };
 }
 /* チャートの左上の売買ボタン(幅の広い画面だけ)。売れる価格・買える価格を出し、押せるかどうかは、注文画面のボタンに合わせる。
@@ -977,26 +1010,43 @@ function openStream() {
   const others = [...new Set(Object.keys(T.positions).concat(T.orders.map(o => o.sym)))].filter(x => x !== state.symbol && !SYNTH[x] && /^[A-Z0-9]{5,20}$/.test(x)).slice(0, 10);
   const syn = SYNTH[state.symbol];
   const leg = { n: NaN, d: NaN, nb: NaN, na: NaN, db: NaN, da: NaN }; // 計算値の銘柄:2つの銘柄の気配値
-  const name = syn ? `${syn.num.toLowerCase()}@bookTicker/${syn.den.toLowerCase()}@bookTicker` : `${sym}@kline_${curInterval().api}/${sym}@aggTrade/${sym}@bookTicker/${sym}@depth5@100ms` + others.map(x => `/${x.toLowerCase()}@aggTrade`).join('');
+  // 計算値の銘柄は、2つの銘柄の気配値に加えて、足の更新も受け取る(いま動いている足の出来高と始値を、取り寄せた足と同じ作り方にするため)
+  const name = syn ? [syn.num, syn.den].map(x => `${x.toLowerCase()}@bookTicker/${x.toLowerCase()}@kline_${curInterval().api}`).join('/') : `${sym}@kline_${curInterval().api}/${sym}@aggTrade/${sym}@bookTicker/${sym}@depth5@100ms` + others.map(x => `/${x.toLowerCase()}@aggTrade`).join('');
+  feed.covers = new Set([state.symbol].concat(others));
   const pend = {}; let pendTimer = 0;
   const flushOthers = () => {
     pendTimer = 0;
     if (token !== state.loadToken) return;
-    let any = false;
+    let any = false, wait = false;
     Object.keys(pend).forEach(x => {
       const t = pend[x];
-      delete pend[x];
       T.last[x] = t.p; otherFresh[x] = mono(); delete dead[x];
-      if (reconciled[x] !== true || !clockReady) return; // 閉じていた間の確認は、定期的な取得のほうに任せる
-      if (fin(T.seen[x]) && tnow() - T.seen[x] > 90000) { delete reconciled[x]; return; }
+      if (!clockReady) { delete pend[x]; return; }
+      // 最後に確かめた時刻から、配信が途切れずに届いていなければ、その間の約定を取り寄せて調べる(下の reconcile)
+      if (reconciled[x] === true && needsScan(x)) delete reconciled[x];
+      if (reconciled[x] !== true) {
+        // 調べ終わるまで、届いた約定は捨てずにためておく(調べ終えたあと、その続きから判定する)
+        if (!reconciled[x]) reconcile(x);
+        wait = true; return;
+      }
+      delete pend[x];
+      let { lo, hi, path } = t;
+      const done = recEnd[x];
+      if (done !== undefined) {
+        // 取り寄せて調べ終えた時刻より前の約定は、もう調べてあるので使わない(同じ値動きで二度約定させない)
+        delete recEnd[x];
+        path = path ? path.filter(y => !(y.t < done)) : null;
+        lo = hi = NaN;
+      }
       T.seen[x] = tnow();
       if (settleFunding(x, tnow(), t.p)) saveTrade();
-      checkTriggers(x, t.lo, t.hi, t.path);
-      checkOrders(x, t.lo, t.hi, t.path);
+      checkTriggers(x, lo, hi, path);
+      checkOrders(x, lo, hi, path);
       stopOut(quoteOf(x));
       any = true;
     });
     if (any) { renderTrade(); draw(); }
+    if (wait && !pendTimer) pendTimer = setTimeout(flushOthers, 500);
   };
   let klineE = 0; // 最後に届いた足の更新の時刻。これより後の約定だけ、出来高に足す(二重に数えない)
   const quoteIn = (bid, ask) => {
@@ -1017,13 +1067,27 @@ function openStream() {
     s.onopen = () => { opened = true; feed.lastMsg = mono(); };
     s.onmessage = ev => {
       if (token !== state.loadToken) return;
+      const gapped = mono() - feed.lastMsg > 2500 || !isFinite(feed.upSince);
       feed.lastMsg = feed.okAt = mono();
       try {
         const d = JSON.parse(ev.data).data;
         if (!d) return;
         // 取引所の時計とのずれを覚えておく(端末の時計を変えても、記録の時刻が狂わないようにする)
         if (typeof d.E === 'number' && isFinite(d.E)) { clockOffset = d.E - Date.now(); clockReady = true; }
+        // つながった直後(または、しばらく止まっていたあと)は、ここから「途切れずに届いている」ことになる。
+        // その前の足は、取り寄せて直す(途中のままの足や、抜けた足を残さない)
+        if (gapped) { feed.upSince = tnow(); queueSync(); }
         feed.msgs++;
+        if (syn && d.e === 'kline' && d.k && (d.s === syn.num || d.s === syn.den)) {
+          // 計算値の銘柄:2つの銘柄の、いま動いている足。出来高は「分子の銘柄の出来高 × 分母の銘柄の終値」(取り寄せた足と同じ作り方)
+          feed.legK[d.s] = { t: +d.k.t, o: +d.k.o, c: +d.k.c, v: +d.k.v };
+          const a = feed.legK[syn.num], b = feed.legK[syn.den], last = state.raw[state.raw.length - 1];
+          if (a && b && last && a.t === b.t && a.t === last.t && b.o > 0 && b.c > 0 && a.o > 0) {
+            const o = a.o / b.o, v = a.v * b.c;
+            if (o !== last.o || v !== last.v) mergeTail([{ t: last.t, o, h: Math.max(last.h, o), l: Math.min(last.l, o), c: last.c, v }], true);
+          }
+          return;
+        }
         if (syn && d.s && d.b !== undefined && d.a !== undefined && (d.s === syn.num || d.s === syn.den)) {
           // 計算値の銘柄:気配値の中間どうしを割って、いまの価格にする。買い・売りの気配は、不利な側どうしで割る
           const bb = +d.b, aa = +d.a;
@@ -1032,7 +1096,7 @@ function openStream() {
           if (!(leg.nb > 0) || !(leg.db > 0)) return;
           const p = (leg.nb + leg.na) / (leg.db + leg.da);
           quoteIn(leg.nb / leg.da, leg.na / leg.db);
-          pushPath(p, feed.bid, feed.ask);
+          pushPath(p, feed.bid, feed.ask, undefined, tnow());
           feed.tick = { t: tnow(), p };
           feed.lo = Math.min(feed.lo, p); feed.hi = Math.max(feed.hi, p);
           queueTick();
@@ -1058,6 +1122,7 @@ function openStream() {
           feed.lo = Math.min(feed.lo, +d.p); feed.hi = Math.max(feed.hi, +d.p); // 間引いている間の高値・安値も覚えておく
           const lq = liveQuote(streamSym);
           pushPath(+d.p, lq ? lq.bid : NaN, lq ? lq.ask : NaN, +d.q, +d.T);
+          noteRecent(+d.p);
           if (+d.T > klineE && +d.q > 0) feed.vol += +d.q;
           queueTick();
         } else if (d.b !== undefined && d.a !== undefined && !d.bids) quoteIn(+d.b, +d.a);
@@ -1077,9 +1142,13 @@ function openStream() {
   };
   connect();
 }
-let probeAt = -1e9;
+let probeAt = -1e9, hiddenPollAt = -1e9;
 async function poll() {
-  if (document.hidden) return;
+  if (document.hidden) {
+    // 裏に回っている間も、配信が切れていたらつなぎ直す(利確・損切り・指値の判定を続けるため)。取りにいくのは10秒に1回まで
+    if (!state.live || state.loading || (ws && ws.readyState <= 1) || mono() - hiddenPollAt < 10000) return;
+    hiddenPollAt = mono();
+  }
   if (!state.live) {
     // デモ表示のまま止まらないよう、ときどき取得を試し、取れたら読み込み直す
     if (state.loading || mono() - probeAt < 30000) return;
@@ -1093,16 +1162,46 @@ async function poll() {
   if (ws && ws.readyState <= 1 && quiet < 2500) return;
   // 1分以上なにも届かなければ、つなぎ直す
   if (ws && quiet > 60000) closeStream();
-  const token = state.loadToken, iv = curInterval();
   try {
-    const tail = await fetchKlines(state.symbol, iv.api, 3);
-    if (token !== state.loadToken) return;
-    feed.okAt = mono();
-    const prev = state.raw[state.raw.length - 1], now = tail[tail.length - 1];
-    if (prev && now && now.c !== prev.c) noteTick(now.c > prev.c ? 1 : -1);
-    mergeTail(tail);
+    if (!(await syncTail(state.loadToken))) return;
     if (!ws) openStream();
   } catch (e) { /* 次の周期でやり直す */ }
+}
+/* いちばん新しい足の始まり(足が抜けているかもしれないときは、その時刻)から先を取り寄せて、重なる足は置きかえる。
+ * 以前は最新の3本だけを取っていたため、長く途切れたあとは、途中の足が抜けたり、途中のままの足が残ったりしていた。
+ * 取れたら true。あまりに長く途切れていたら(900本より多い)、全部を読み込み直す */
+async function syncTail(token) {
+  const iv = curInterval(), last = state.raw[state.raw.length - 1];
+  if (!last) return false;
+  const from = Math.min(last.t, feed.gapFrom);
+  if (tnow() - from > 900 * iv.ms) { loadData(); return false; }
+  const want = Math.min(1000, Math.ceil((tnow() - from) / iv.ms) + 2);
+  const rows = await fetchKlines(state.symbol, iv.api, want, 0, from);
+  if (token !== state.loadToken) return false;
+  feed.okAt = mono();
+  if (from <= feed.gapFrom) feed.gapFrom = Infinity;
+  const prev = state.raw[state.raw.length - 1], now = rows[rows.length - 1];
+  if (prev && now && now.c !== prev.c) noteTick(now.c > prev.c ? 1 : -1);
+  mergeTail(rows.filter(b => b.t >= from));
+  return true;
+}
+// 配信がつながり直したときや、足が抜けたときに、少し待ってから取り寄せる(何度も続けて呼ばれても、1回にまとめる)
+let syncTimer = 0;
+function queueSync() {
+  if (syncTimer) return;
+  const token = state.loadToken;
+  syncTimer = setTimeout(() => { syncTimer = 0; if (token === state.loadToken && state.live) syncTail(token).catch(() => { /* 次の取り寄せで直す */ }); }, 1500);
+}
+// 計算値の銘柄:確定した足を、取り寄せた足に置きかえる(いま動いている足は、気配値からの価格のまま。表示の速さを保つため)
+async function refreshSynth(token, fromT) {
+  if (token !== state.loadToken || !SYNTH[state.symbol]) return;
+  try {
+    const rows = await fetchKlines(state.symbol, curInterval().api, 4, 0, fromT);
+    if (token !== state.loadToken) return;
+    const cur = state.raw[state.raw.length - 1];
+    const done = rows.filter(b => b.t >= fromT && cur && b.t < cur.t);
+    if (done.length) mergeTail(done);
+  } catch (e) { /* 次に足が確定したときに、もう一度取り寄せる */ }
 }
 // 取引所の時計を取り寄せる
 async function syncClock() {
@@ -3246,14 +3345,30 @@ const fundLabel = h => (h.fund === 'real' ? '実際の率' : h.fund === 'mix' ? 
 function fundNowText(sym) {
   const f = fundReal[sym];
   if (!perpOf(sym) || (f && f.st === 'none')) return '0.01%の目安(この銘柄は実際の率がありません)';
-  if (f && f.next) return `次回 ${pctRate(f.next.rate)}(実際の率。+は買いが払う)`;
+  if (f && f.next) return `次回 ${pctRate(f.next.rate)}(実際の率。+は買いが払う)${fundYearText(f.next.rate)}`;
   if (f && (f.nextBusy || f.busy)) return '実際の率を取り寄せています…';
   return '0.01%の目安(実際の率を取れませんでした)';
 }
 const pctRate = v => `${v >= 0 ? '+' : ''}${(v * 100).toFixed(4)}%`;
-/* 成行注文が板(上位5段)を食っていくときの、5段目より先の分の上乗せ。5段より先の板は見えないので、
- * 5段目の価格から、さらに 0.1% 不利な価格で約定したものとする */
-const BOOK_PENALTY = 0.001;
+/* 資金調達料の率を年率に直す(8時間ごと = 1日3回 × 365日。4時間ごとの銘柄では実際はこの2倍)。
+ * 年率 30% を超えるほど買いに偏っているときは、落ち着いて知らせる。Schmeling・Schrimpf・Todorov(BIS WP 1087)は、
+ * 先物と現物の価格差(キャリー)が大きいと、そのあとに急落が起きやすく、レバレッジを求める個人の買いが原因の一つだと報告している */
+const FUND_WARN = 0.3;
+const fundYear = rate => rate * 3 * 365;
+function fundYearText(rate) {
+  if (!fin(rate)) return '';
+  const y = fundYear(rate);
+  return ` ・ 年率にすると約 ${y >= 0 ? '+' : ''}${(y * 100).toFixed(1)}%` +
+    (Math.abs(y) >= FUND_WARN ? `。年率 ${FUND_WARN * 100}% を超える率は、過去には、そのあとの急な値下がりと結びつきやすかったと報告されています(Schmeling・Schrimpf・Todorov、BIS WP 1087)` : '');
+}
+/* 成行注文が板(上位5段)を食っていくときの、5段目より先の分。5段より先の板は見えないので、見積もる。
+ * 見えている5段と同じ厚さ(価格 1 あたりの数量)が、その先にも続いているとして、足りない分の平均の価格を出す
+ * (足りない分が多いほど不利になる)。ただし、
+ *   ・5段目の価格から BOOK_PENALTY(0.1%)より不利にはしない(以前は、足りない分をすべて 0.1% 不利にしていた。
+ *     小さな不足でも 0.1% 不利になり、実際のどの約定より悪い価格になることがあった)
+ *   ・全体の平均は、直近30秒に実際にあった約定のいちばん不利な価格から RECENT_CAP(0.05%)より不利にはしない
+ *     (5段目そのものがそれより不利なら、5段目まで) */
+const BOOK_PENALTY = 0.001, RECENT_CAP = 0.0005;
 /* 板(上位5段)を使って、成行注文の平均の約定価格を見積もる。want: { qty } か { notional }。
  * 板が取れていない(古い・別の銘柄・計算値の銘柄)ときは null */
 function bookFill(sym, side, want) {
@@ -3271,10 +3386,24 @@ function bookFill(sym, side, want) {
     qty += take; cost += take * p;
   }
   const left = byQty ? goal - qty : goal - cost;
-  const worst = lv[lv.length - 1][0] * (side === 'buy' ? 1 + BOOK_PENALTY : 1 - BOOK_PENALTY);
+  const dir = side === 'buy' ? 1 : -1, p1 = lv[0][0], p5 = lv[lv.length - 1][0];
   const over = left > goal * 1e-9; // 5段では足りなかった
-  if (over) { const take = byQty ? left : left / worst; qty += take; cost += take * worst; }
-  return { px: cost / qty, qty, notional: cost, top: lv[0][0], over, worst };
+  let worst = p5, capped = false;
+  if (over) {
+    const depth = lv.reduce((a, x) => a + x[1], 0), width = Math.max(Math.abs(p5 - p1), p1 * 1e-4); // 1段しかないときは、幅を 0.01% とみる
+    const lq = byQty ? left : left / p5; // 足りない数量(金額のときは、5段目の価格で数量に直す)
+    const extra = Math.min(lq / (depth / width) / 2, p5 * BOOK_PENALTY); // 足りない分の平均が、5段目からどれだけ不利か
+    const avg = p5 + dir * extra;
+    worst = p5 + dir * Math.min(2 * extra, p5 * BOOK_PENALTY);
+    const take = byQty ? left : left / avg; qty += take; cost += take * avg;
+  }
+  let px = cost / qty;
+  const ext = over ? recentExtreme(side) : NaN;
+  if (ext > 0) {
+    const bound = dir > 0 ? Math.max(ext * (1 + RECENT_CAP), p5) : Math.min(ext * (1 - RECENT_CAP), p5);
+    if (dir > 0 ? px > bound : px < bound) { px = bound; capped = true; if (byQty) cost = qty * px; else qty = cost / px; }
+  }
+  return { px, qty, notional: cost, top: p1, over, worst, capped };
 }
 /* 指値を置くときに、同じ価格で前に並んでいる数量を、板(上位5段)から読む。
  * 買いの指値は買いの板(bids)、売りの指値は売りの板(asks)に並ぶ。その価格が見えている板になければ null(分からない) */
@@ -3480,12 +3609,15 @@ function execute(sym, side, notional, reason, qty, opts) {
     syncIfStale();
     if (!priceOk(sym)) return STALE_MSG;
     // 閉じていた間の利確・損切りの確認が済むまでは、売買させない(先に買い増したり、条件を変えたりできないようにする)
-    if (reconciled[sym] !== true || !clockReady) return '開いていなかった間の値動きを確認しています。数秒待ってから、もう一度お試しください。';
+    if (reconciled[sym] !== true || !clockReady) return '開いていなかった間・通信が途切れていた間の値動きを確認しています。数秒待ってから、もう一度お試しください。';
   }
-  // 気配値が取れているときは、買いは売り注文の価格(ask)、売りは買い注文の価格(bid)で約定させる。
-  // 板(上位5段)も取れていれば、注文の大きさの分だけ板を食っていった平均の価格にする(大きな注文ほど不利になる)
-  const quote = fixed ? null : liveQuote(sym);
-  let px = fixed ? opts.price : quote ? (side === 'buy' ? quote.ask : quote.bid) : T.last[sym];
+  // 買いは売り注文の価格(ask)、売りは買い注文の価格(bid)で約定させる。
+  // 板(上位5段)も取れていれば、注文の大きさの分だけ板を食っていった平均の価格にする(大きな注文ほど不利になる)。
+  // 気配値が2秒より古いとき(配信が途切れた直後・つなぎ直した直後など)は、断る。
+  // 以前は最後の約定の価格で約定させていたが、それは数秒前の価格のことがあり、実際の取引所より有利になりうる
+  const quote = fixed ? null : liveQuote(sym, QUOTE_TRADE_MS);
+  if (!fixed && !quote) return STALE_MSG;
+  let px = fixed ? opts.price : side === 'buy' ? quote.ask : quote.bid;
   if (!(px > 0)) return '価格を取得できていません。';
   let bf = quote ? bookFill(sym, side, qty === undefined ? { notional } : { qty }) : null;
   if (bf) px = bf.px;
@@ -3569,7 +3701,7 @@ function execute(sym, side, notional, reason, qty, opts) {
   T.history.length = Math.min(T.history.length, 3000);
   // 板の5段では足りなかったことを、注文した人に伝える
   lastFill = bf ? { over: bf.over, top: bf.top, px } : null;
-  if (bf && bf.over) toast(`${labelOf(sym)}:板の上位5段では足りなかったため、足りない分は5段目より 0.1% 不利な価格で約定したものとしました(平均 ${fmtPrice(px)})。`);
+  if (bf && bf.over) toast(`${labelOf(sym)}:板の上位5段では足りなかったため、足りない分は、見えている板と同じ厚さが先にも続くとして見積もりました(5段目から最大 0.1%)。平均 ${fmtPrice(px)}。`);
   saveTrade();
   return null;
 }
@@ -3589,14 +3721,15 @@ function dataAt(sym) {
   if (feed.quoteSym === sym) t = Math.max(t, feed.quoteAt);
   return t;
 }
-// 注文が取引所に届くまで待つ。取り消すときは、その理由の文を返す
+// 注文が取引所に届くまで待つ。取り消すときは、その理由の文を返す。
+// 押したあとの板・気配値が届くまで待つ(配信が止まっているときは、1秒で取り消す。古い価格では約定させない)
 async function afterLatency(sym) {
-  const t0 = mono(), live = !!liveQuote(sym); // 気配値がない(配信が止まって取りにいっている)ときは、最新の価格で約定する
+  const t0 = mono();
   for (;;) {
     await new Promise(r => setTimeout(r, 20));
     const dt = mono() - t0;
     if (state.symbol !== sym) return '注文を送っている間に銘柄が切りかわったため、注文を取り消しました。';
-    if (dt >= LATENCY_MS && (!live || dataAt(sym) > t0)) return null;
+    if (dt >= LATENCY_MS && dataAt(sym) > t0) return null;
     if (dt >= LATENCY_MAX) return STALE_MSG;
   }
 }
@@ -3613,10 +3746,24 @@ function closePosition(sym, reason, opts) {
  * (あとから条件を書き換えて、過去の値動きに当てはめることはできない) */
 const reconciled = {}; // sym -> true: 確認済み / 'busy': 確認中 / なし: これから
 const recRetryAt = {};
+/* 開いたままでも、通信が途切れた・配信が止まった間の約定は、配信では届かない。
+ * 最後に確かめた時刻(T.seen)から GAP_MS より長く間があいたら、その間の約定を取り寄せて、同じように調べる。
+ * 以前は 90 秒より長い場合だけ調べていたので、短い通信断の間に指値や損切りの価格を通っても、見逃していた */
+const GAP_MS = 3000;
+const recEnd = {}; // sym -> 取り寄せて調べ終えた時刻(取引所の時刻)。これより前の約定は、配信で届いても二度は使わない
+// その銘柄で、最後に確かめた時刻から今までの約定を、取り寄せて調べる必要があるか
+function needsScan(sym) {
+  if (!clockReady || !fin(T.seen[sym])) return false;
+  const gap = tnow() - T.seen[sym];
+  // 配信で約定が届いている銘柄は、配信が途切れずに届き始めた時刻より前に確かめたものだけ。
+  // それより後の約定は、すべて配信で届いて、ためてある(調べるのに時間がかかっても、調べ直しをくり返さない)
+  if (streamLive() && feed.covers.has(sym)) return T.seen[sym] < feed.upSince;
+  return gap > GAP_MS;
+}
 // ある時間帯の約定を取り寄せて、その間の最初の価格・安値・高値を返す(1分足より細かい端数を調べるため)
 async function tradeRange(sym, from, to) {
   if (SYNTH[sym]) return null; // 計算値の銘柄には約定の記録がないので、分の端数は調べない
-  let lo = Infinity, hi = -Infinity, first = NaN, cur = from;
+  let lo = Infinity, hi = -Infinity, first = NaN, cur = from, upTo = to;
   for (let page = 0; page < 30 && cur < to; page++) {
     let rows = null, lastErr = null;
     for (const host of HOSTS) {
@@ -3631,28 +3778,31 @@ async function tradeRange(sym, from, to) {
     }
     if (!rows) throw lastErr;
     rows.forEach(r => { const p = +r.p; if (!(p > 0)) return; if (!isFinite(first)) first = p; lo = Math.min(lo, p); hi = Math.max(hi, p); });
-    if (rows.length < 1000) break;
+    if (rows.length < 1000) { upTo = to; break; }
     cur = +rows[rows.length - 1].T + 1;
+    upTo = cur; // 30回で打ち切ったときは、ここまでしか調べていない
   }
-  return isFinite(first) ? { lo, hi, first } : null;
+  return isFinite(first) ? { lo, hi, first, upTo } : { lo: NaN, hi: NaN, first: NaN, upTo };
 }
 /* from から現在までの値動きを、もれなく順にたどる。
  * 分の途中から始まる端数は約定の記録で、そこから先は 1分足 → 5分足 → 1時間足 → 日足 と、
  * 区切りがそろうたびに粗い足へ上がり、現在が近づいたら細かい足へ下りる。
  * test(安値, 高値, 最初の価格, 終わりの時刻) が true を返したら、そこでやめる。 */
 const LADDER = [['1d', 864e5], ['1h', 36e5], ['5m', 3e5], ['1m', 6e4]];
-async function scanAway(sym, from, test) {
+// end: どこまで調べるか。調べ終えた時刻を返す(途中でやめたときも、そこまで)
+async function scanAway(sym, from, end, test) {
   let cur = from;
   if (cur % 6e4) {
-    const to = Math.min(Math.ceil(cur / 6e4) * 6e4, tnow());
+    const to = Math.min(Math.ceil(cur / 6e4) * 6e4, end);
     const r = await tradeRange(sym, cur, to);
-    if (r && test(r.lo, r.hi, r.first, to, cur)) return;
+    if (r && isFinite(r.first) && test(r.lo, r.hi, r.first, r.upTo, cur)) return end;
+    if (r && r.upTo < to) return r.upTo;
     cur = to;
   }
   for (let guard = 0; guard < 60; guard++) {
-    if (tnow() - cur < 6e4) return; // 残りの1分未満は、いまの価格での判定に任せる
-    const k = LADDER.findIndex(([, ms]) => cur % ms === 0 && cur + ms <= tnow());
-    if (k < 0) return;
+    if (end - cur < 6e4) break; // 残りの1分未満は、下で約定の記録から調べる
+    const k = LADDER.findIndex(([, ms]) => cur % ms === 0 && cur + ms <= end);
+    if (k < 0) break;
     const [api, ms] = LADDER[k];
     // ひとつ粗い足の区切りまで進む(いちばん粗い足なら、一度に最大1000本)
     const limit = k > 0 ? Math.min(1000, Math.round((Math.floor(cur / LADDER[k - 1][1] + 1) * LADDER[k - 1][1] - cur) / ms)) : 1000;
@@ -3660,12 +3810,25 @@ async function scanAway(sym, from, test) {
     let moved = false;
     for (const b of rows) {
       if (b.t < cur) continue;
-      if (b.t + ms > tnow()) break; // まだ確定していない足
-      if (test(b.l, b.h, b.o, b.t + ms, b.t)) return;
+      if (b.t + ms > end) break; // まだ確定していない足
+      if (test(b.l, b.h, b.o, b.t + ms, b.t)) return end;
       cur = b.t + ms; moved = true;
     }
     if (!moved) cur += ms; // その時間帯のデータがない(取引がなかった)ときは、先へ進む
   }
+  if (end - cur >= 6e4) return cur; // 長すぎて一度に調べきれなかった。続きは次に調べる
+  // 残りの1分未満(いまの直前まで)。約定の記録で調べる。計算値の銘柄は約定の記録がないので、いまの1分足の高値・安値で調べる
+  if (cur < end) {
+    let r;
+    if (SYNTH[sym]) {
+      const rows = await fetchKlines(sym, '1m', 2, 0, cur).catch(e => { if (e && e.message === 'empty') return []; throw e; });
+      const b = rows.find(x => x.t === cur);
+      r = b ? { lo: b.l, hi: b.h, first: b.o, upTo: end } : { first: NaN, upTo: end };
+    } else r = await tradeRange(sym, cur, end);
+    if (isFinite(r.first)) test(r.lo, r.hi, r.first, r.upTo, cur);
+    return r.upTo;
+  }
+  return end;
 }
 async function reconcile(sym) {
   if (reconciled[sym]) return;
@@ -3683,14 +3846,17 @@ async function reconcile(sym) {
     const posStart = p => Math.max(p.opened, p.levelsAt || 0, seen0), ordStart = o => Math.max(o.t || 0, seen0);
     const starts = orders0.map(ordStart).concat(guarded(pos0) ? [posStart(pos0)] : []);
     const from = Math.min(tnow(), ...starts);
-    if (tnow() - from >= 60000) {
+    // いまの直前(1秒前)まで調べる。最後の1秒は、取引所の記録に載るのが遅れることがあるので、配信で届いた約定で調べる
+    const end = tnow() - 1000;
+    let upTo = Math.max(seen0, end);
+    if (end > from) {
       // 待っている間に(別のタブなどで)内容が変わっていたら、いったんやめて最初からやり直す
       const sig = () => { const p = T.positions[sym]; return `${p ? `${p.id}:${p.levelsAt}:${p.qty}` : '-'}|${T.orders.filter(o => o.sym === sym).map(o => `${o.id}:${o.price}`).join(',')}`; };
       let expect = sig(), changed = false;
       // 資金調達料の実際の率を、先に取り寄せておく(調べている途中では待てないため。取れなければ目安の率)
       const pf = T.positions[sym];
       if (pf && pf.lev > 1 && perpOf(sym)) await loadFunding(sym, (fin(pf.fundAt) ? pf.fundAt : pf.opened) - FUND_MS);
-      await scanAway(sym, from, (lo, hi, open, tEnd, tStart) => {
+      upTo = await scanAway(sym, from, end, (lo, hi, open, tEnd, tStart) => {
         if (sig() !== expect) { changed = true; return true; }
         const q = quoteOf(sym);
         // 0. 資金調達料:この時間帯が始まるまでに過ぎた区切りの分を、始値で精算する(区切りの時刻に近い価格を使うため)
@@ -3725,7 +3891,8 @@ async function reconcile(sym) {
       if (changed) throw new Error('changed');
     }
     reconciled[sym] = true;
-    T.seen[sym] = tnow();
+    // ここまで調べた。これより前の約定は、配信で届いていても、もう使わない(二度約定させない)
+    T.seen[sym] = upTo; recEnd[sym] = upTo;
   } catch (e) {
     // 取り寄せに失敗したら「確認済み」にはしない。少し待ってやり直す
     delete reconciled[sym];
@@ -3818,7 +3985,7 @@ function checkTriggers(sym, lo, hi, path) {
   }
   if (!reason || !(fill > 0)) return;
   // 損切り・強制決済は、取引所では成行の決済注文になる。いま見ている銘柄で板(上位5段)が取れていれば、
-  // ポジションの数量の分だけ板を食っていった平均の価格にする(成行と同じ決まり。5段で足りない分は 0.1% 不利)。
+  // ポジションの数量の分だけ板を食っていった平均の価格にする(成行と同じ決まり。5段で足りない分は見積もる)。
   // それでも、届いた約定・気配値から決めた上の価格より有利にはしない
   let thin = null;
   if (reason !== 'tp' && sym === state.symbol) {
@@ -3828,7 +3995,7 @@ function checkTriggers(sym, lo, hi, path) {
   const q = quoteOf(sym);
   if (closePosition(sym, reason, { price: fill, away: false }) === null) {
     const h = T.history[0];
-    if (thin && thin.over) toast(`${labelOf(sym)}:板の上位5段では足りなかったため、足りない分は5段目より 0.1% 不利な価格で決済したものとしました(平均 ${fmtPrice(h.price)})。`);
+    if (thin && thin.over) toast(`${labelOf(sym)}:板の上位5段では足りなかったため、足りない分は、見えている板と同じ厚さが先にも続くとして見積もりました(5段目から最大 0.1%)。平均 ${fmtPrice(h.price)}。`);
     toast(reason === 'liq'
       ? `${labelOf(sym)}:強制決済の価格に届いたため、ポジションが強制的に決済されました(損益 ${fmtMoney(netOf(h), q, true)} ${q}。証拠金はすべて失います)`
       : `${labelOf(sym)}:${reason === 'tp' ? '利確' : '損切り'}の価格に届いたので決済しました(${fmtPrice(h.price)}、損益 ${fmtMoney(netOf(h), q, true)} ${q})`);
@@ -3909,22 +4076,37 @@ function tradeTick() {
   const sym = state.symbol;
   const allB = state.allBars && state.allBars.length ? state.allBars : state.bars;
   T.last[sym] = allB[allB.length - 1].c; // リプレイ中でも、売買に使うのは本物の最新の価格
-  const lo = feed.lo, hi = feed.hi, path = feed.pathFull ? null : feed.path;
+  const watching = !!T.positions[sym] || T.orders.some(o => o.sym === sym);
+  // 通信が途切れた・配信が止まった・長く閉じていた間の約定は、取り寄せて調べ直す(GAP_MS)
+  if (reconciled[sym] === true && watching && needsScan(sym)) delete reconciled[sym];
+  if (reconciled[sym] !== true) {
+    // 先に、途切れていた間の値動きを確かめる。確かめている間に届いた約定は、捨てずにためておき、終わってから続きを調べる
+    checkPriceAlerts(sym, Math.min(feed.lo, T.last[sym]), Math.max(feed.hi, T.last[sym]));
+    if (!reconciled[sym] && !state.loading) reconcile(sym);
+    renderTrade();
+    return;
+  }
+  let lo = feed.lo, hi = feed.hi, path = feed.pathFull ? null : feed.path;
   feed.lo = Infinity; feed.hi = -Infinity; feed.path = []; feed.pathFull = false;
   checkPriceAlerts(sym, Math.min(lo, T.last[sym]), Math.max(hi, T.last[sym]));
-  if (reconciled[sym] === true) {
-    // 開いたままでも、長く価格を確かめられなかった(通信断・スリープ)なら、その間の値動きを調べ直す
-    if ((T.positions[sym] || T.orders.some(o => o.sym === sym)) && clockReady && fin(T.seen[sym]) && tnow() - T.seen[sym] > 90000) { delete reconciled[sym]; reconcile(sym); }
-    else {
-      if (clockReady) { T.seen[sym] = tnow(); if (settleFunding(sym, tnow(), T.last[sym])) saveTrade(); }
-      checkTriggers(sym, lo, hi, path);
-      // 指値:配信が届いている間は、約定の列だけで判定する(足の終値は、置く前の約定のこともあるため)。
-      // 配信が止まって取りにいった価格のときは、列がないので、高値・安値(終値を含む)で判定する
-      const live = ws && ws.readyState === 1 && mono() - feed.lastMsg < 2500;
-      if (clockReady && priceOk(sym)) checkOrders(sym, lo, hi, path && (path.length || live) ? path : null);
-      stopOut(quoteOf(sym));
-    }
-  } else if (!reconciled[sym] && !state.loading) reconcile(sym); // 先に、閉じていた間の値動きを確かめる
+  const done = recEnd[sym];
+  if (done !== undefined) {
+    // 取り寄せて調べ終えた時刻より前の約定は、もう調べてあるので使わない(同じ値動きで二度約定させない)。
+    // 列があふれていたら、どれが後の約定か分からないので、いまの価格だけで調べる
+    delete recEnd[sym];
+    if (path) path = path.filter(x => !(x.t < done));
+    lo = hi = NaN;
+  }
+  // 配信が止まって、取りにいった価格しかないときは、ここでは判定しない。間があいたら、上で約定を取り寄せて調べる
+  // (取りにいった価格は数秒おきなので、その間に一瞬だけ届いた価格を見逃してしまう)
+  const live = streamLive();
+  if (live || !watching) {
+    if (clockReady) { T.seen[sym] = tnow(); if (settleFunding(sym, tnow(), T.last[sym])) saveTrade(); }
+    checkTriggers(sym, lo, hi, path);
+    // 指値:配信が届いている間は、約定の列だけで判定する(足の終値は、置く前の約定のこともあるため)
+    if (clockReady && priceOk(sym)) checkOrders(sym, lo, hi, path && (path.length || live) ? path : null);
+  }
+  stopOut(quoteOf(sym));
   renderTrade();
 }
 // 表示していない銘柄のポジションも、価格を取りにいって利確・損切りを判定する
@@ -3937,16 +4119,11 @@ function pollPositions() {
       T.last[sym] = b.c;
       otherFresh[sym] = mono();
       delete dead[sym];
-      if (reconciled[sym] === true && clockReady && fin(T.seen[sym]) && tnow() - T.seen[sym] > 90000) delete reconciled[sym];
+      // 前回から今までの約定を取り寄せて、もれなく調べる(5秒おきの価格だけでは、その間に一瞬届いた価格を見逃すため)。
+      // 配信で約定が届いている銘柄は、配信のほうで調べる
+      if (reconciled[sym] === true && needsScan(sym)) delete reconciled[sym];
       await reconcile(sym);
-      if (reconciled[sym] === true) {
-        // この1分足がまるごと前回の確認より後なら、その高値・安値も使う
-        const whole = clockReady && fin(T.seen[sym]) && b.t >= T.seen[sym];
-        if (clockReady) { T.seen[sym] = tnow(); settleFunding(sym, tnow(), b.c); } // 保存は、すぐ下で行う
-        checkTriggers(sym, whole ? b.l : NaN, whole ? b.h : NaN);
-        if (clockReady) checkOrders(sym, whole ? b.l : NaN, whole ? b.h : NaN);
-        stopOut(quoteOf(sym));
-      }
+      if (reconciled[sym] === true) stopOut(quoteOf(sym));
       saveTrade(); renderTrade(); draw();
     }).catch(() => markDeadIfUnlisted(sym));
   });
@@ -3973,21 +4150,24 @@ function renderTrade() {
   // ポジションを持っているときは、どちらのボタンが「決済」になるかをボタンに書く
   setTxt('trSellSub', pos ? (pos.qty > 0 ? '買いを決済する' : '売りを増やす') : '下がると利益');
   setTxt('trBuySub', pos ? (pos.qty < 0 ? '売りを決済する' : '買いを増やす') : '上がると利益');
-  const tradable = px > 0 && priceOk(sym) && reconciled[sym] === true && clockReady && !state.replay;
+  // 気配値(買える価格・売れる価格)が届いていないとき(つなぎ直した直後・配信が止まったとき)も、売買できない
+  const quoteOk = !!liveQuote(sym);
+  const tradable = px > 0 && priceOk(sym) && reconciled[sym] === true && clockReady && quoteOk && !state.replay;
   $('trBuy').disabled = $('trSell').disabled = !tradable || sending;
   renderQuick();
   const levSel = $('trLev');
   if (pos) { levSel.value = String(pos.lev || 1); levSel.disabled = true; setTxt('trLevHint', '保有中のポジションに合わせます'); }
   else { levSel.disabled = false; setTxt('trLevHint', '1倍 = レバレッジなし。高いほど危険'); }
   // 閉じていた間の値動きの確認が終わらず売買できないときは、その理由を出す(何も出ないと故障に見える)
-  const WAIT = '開いていなかった間の値動きを確認しています。終わるまで売買できません(通信が不安定だと、時間がかかります)。';
+  const WAIT = '開いていなかった間・通信が途切れていた間の値動きを確認しています。終わるまで売買できません(通信が不安定だと、時間がかかります)。';
   const WAIT_PRICE = '最新の価格を確認しています。数秒で売買できるようになります。';
   const REPLAY_MSG = 'リプレイ中は売買できません。リプレイを終わると、売買できるようになります。';
   if (state.replay && !$('trMsg').textContent) setTxt('trMsg', REPLAY_MSG, 'msg');
   else if (!state.replay && $('trMsg').textContent === REPLAY_MSG) setTxt('trMsg', '');
-  const waiting = px > 0 && !tradable && !state.replay && (reconciled[sym] !== true || !clockReady);
+  const checking = reconciled[sym] !== true || !clockReady;
+  const waiting = px > 0 && !tradable && !state.replay && (checking || !quoteOk);
   // 調べるもの(ポジション・指値)がないときは、「価格を確かめている」とだけ出す(閉じていた間の確認と言うと、誤解させる)
-  const msgNow = pos || T.orders.some(o => o.sym === sym) ? WAIT : WAIT_PRICE;
+  const msgNow = checking && (pos || T.orders.some(o => o.sym === sym)) ? WAIT : WAIT_PRICE;
   const cur = $('trMsg').textContent;
   if (waiting && (!cur || cur === WAIT || cur === WAIT_PRICE)) setTxt('trMsg', msgNow, 'msg');
   else if (!waiting && (cur === WAIT || cur === WAIT_PRICE)) setTxt('trMsg', '');
@@ -4237,9 +4417,18 @@ function bindTrade() {
       levWarned = true;
       toast('レバレッジをかけると、小さな値動きで大きく損をします。証拠金がなくなる手前で強制的に決済され、その証拠金はすべて失います(デモなので、実際のお金は動きません)。');
     }
-    renderUnit(); renderRisk(); renderTrade();
+    renderUnit(); renderRisk(); renderTrade(); renderFundNote();
   });
   amt.value = acct(quoteOf(state.symbol)).start / 10;
+  // レバレッジを選んでいるときは、この銘柄の資金調達料の率(年率)を出す。実際の率が取れたときだけ
+  const renderFundNote = () => {
+    const sym = state.symbol, box = $('trFundNote'), on = curLev() > 1 && !!perpOf(sym);
+    if (on) loadNextFunding(sym);
+    const f = fundReal[sym], text = on && f && f.next ? `この銘柄の資金調達料:次回 ${pctRate(f.next.rate)}(+は買いが払う)${fundYearText(f.next.rate)}` : '';
+    setTxt('trFundNote', text);
+    if (box.hidden === !!text) box.hidden = !text;
+  };
+  setInterval(() => { if (!document.hidden && state.tradeOpen !== false) renderFundNote(); }, 2000);
   /* 注文の大きさは「金額」でも「数量」でも入れられる。中では、いつも金額に直して扱う。
    * 数量から金額への換算には、実際に約定する側の価格(買いは買える価格、売りは売れる価格)を使う */
   let unit = 'amount';
@@ -4285,7 +4474,7 @@ function bindTrade() {
     }
     const worse = (x, side) => `${((side === 'buy' ? x.px / x.top - 1 : 1 - x.px / x.top) * 100).toFixed(3)}%`;
     setTxt('trFillEst', `成行の見込み:買い 平均 ${fmtPrice(b.px)}(最良より ${worse(b, 'buy')} 不利)/売り 平均 ${fmtPrice(s.px)}(${worse(s, 'sell')} 不利)` +
-      (b.over || s.over ? '。板の上位5段では足りないため、足りない分は5段目より 0.1% 不利な価格で計算しています' : ''));
+      (b.over || s.over ? '。板の上位5段では足りないため、足りない分は、見えている板と同じ厚さが先にも続くとして見積もっています(5段目から最大 0.1%)' : ''));
   }
   $('trUnit').addEventListener('click', () => {
     const n = notionalOf(0);
@@ -4306,6 +4495,23 @@ function bindTrade() {
     } else setNotional(floorMoney(v, q));
     renderRisk();
   });
+  /* 値動きの大きさに合わせた金額(ボラティリティ目標)。金額 = 評価額 × min(1, 目標の値動き ÷ この銘柄の値動き)。
+   * この銘柄の値動きは、いまのチャートの足 20 本の変化率の標準偏差を年率にしたもの。いま動いている足は使わない(前の足まで)。
+   * 値動きの大きい銘柄ほど、金額が小さくなる。研究(Moreira・Muir 2017、Harvey ら 2018)では、値動きの荒さを平らにする効果は
+   * はっきりしているが、利益が増えるかどうかは結果が分かれている */
+  $('trVt').addEventListener('click', e => {
+    const tg = parseFloat(e.target.dataset.vt);
+    if (!tg) return;
+    const sym = state.symbol, q = quoteOf(sym), bars = state.allBars && state.allBars.length ? state.allBars : state.bars, iv = curInterval();
+    const vol = bars.length > 22 ? GT.stats.realizedVol(bars, 20, 'sd')[bars.length - 1] : NaN;
+    if (!(vol > 0) || !state.live) { setTxt('trVtText', '値動きの大きさを計算できません(足が足りないか、価格を取得できていません)。', 'dim'); return; }
+    const st = acctStats(q), lv = curLev(), w = Math.min(1, tg / vol);
+    const v = Math.min(st.equity * w, st.avail / ((lv > 1 ? 1 / lv : 1) + FEE));
+    setNotional(floorMoney(v, q)); renderRisk();
+    setTxt('trVtText', `この銘柄の値動きは年率 約 ${(vol * 100).toFixed(0)}%(${iv.label}足 20 本・前の足まで。1年 = ${Math.round(GT.stats.barsPerYear(iv.ms)).toLocaleString()} 本で年率に)。` +
+      `目標 ${(tg * 100).toFixed(0)}% ÷ ${(vol * 100).toFixed(0)}% = ${w.toFixed(2)} → 評価額の ${(w * 100).toFixed(0)}%${v < st.equity * w - 1e-9 ? '(使える金額までにしました)' : ''}を入れました。短い足ほど、値動きは大きめ・小さめにぶれます。`, 'dim');
+  });
+  ['change', 'symbolpicked'].forEach(ev => $('symbol').addEventListener(ev, () => setTxt('trVtText', '', 'dim')));
   // 注文の種類(成行 / 指値)
   let orderType = 'market';
   $('trType').addEventListener('click', e => {
@@ -4381,7 +4587,9 @@ function bindTrade() {
       const px = T.last[sym], had = T.positions[sym], opening = !had || Math.sign(had.qty) === dir;
       // 利確・損切りは、実際に約定する価格(買いは「買える価格」、売りは「売れる価格」)とも比べる。
       // そうしないと、買った価格より安い「利確」が通り、すぐ損で決済されてしまう
-      const lq = liveQuote(sym), hiRef = Math.max(px, lq ? lq.ask : px), loRef = Math.min(px, lq ? lq.bid : px);
+      // 板を食う大きな注文は、平均の約定価格が買える価格・売れる価格より不利になるので、その見込みとも比べる
+      const lq = liveQuote(sym), est = lq ? bookFill(sym, side, { notional }) : null;
+      const hiRef = Math.max(px, lq ? lq.ask : px, est && dir > 0 ? est.px : -Infinity), loRef = Math.min(px, lq ? lq.bid : px, est && dir < 0 ? est.px : Infinity);
       let err = opening && px > 0 ? (checkLevels(dir, dir > 0 ? hiRef : loRef, tp, null) || checkLevels(dir, dir > 0 ? loRef : hiRef, null, sl)) : null;
       // レバレッジで新しく建てるとき、損切りが強制決済より遠ければ断る
       if (!err && opening && !had && levNow > 1 && sl !== null) {
@@ -4400,20 +4608,22 @@ function bindTrade() {
       let err = late || levelErr();
       if (!err) err = execute(sym, side, notional, 'manual', undefined, { note, lev: levNow });
       if (err) { say(err, 'msg down'); renderTrade(); return; }
-      const pos = T.positions[sym];
+      const pos = T.positions[sym], h = T.history[0];
+      // 利確・損切りは、実際に約定した価格に対して向きが合っているものだけ付ける(見込みより不利に約定した場合に備える)
+      let dropped = '';
       if (pos && opening) {
-        if (tp !== null) pos.tp = tp;
-        if (sl !== null) pos.sl = sl;
+        if (tp !== null) { if (checkLevels(dir, h.price, tp, null) === null) pos.tp = tp; else dropped += '利確'; }
+        if (sl !== null) { if (checkLevels(dir, h.price, null, sl) === null) pos.sl = sl; else dropped += (dropped ? '・' : '') + '損切り'; }
         pos.levelsAt = tnow();
         saveTrade();
       }
-      const h = T.history[0];
       const closedAll = !opening && !T.positions[sym], capped = closedAll && notional > h.qty * h.price * 1.02;
       say((closedAll ? `${hadDir > 0 ? '買い' : '売り'}のポジションをすべて決済しました` : `${side === 'buy' ? '買い' : '売り'}ました`) + `:${fmtQty(h.qty)} @ ${fmtPrice(h.price)}` +
         (h.pnl === null ? '' : `(損益 ${fmtMoney(netOf(h), q, true)} ${q})`) +
         (capped ? '。保有分を超える金額は注文していません。反対向きに持つには、もう一度注文してください。' : '') +
-        (lastFill && lastFill.over ? '。板の上位5段では足りなかったため、足りない分は5段目より 0.1% 不利な価格で約定したものとしました' : '') +
-        (!opening && (tp !== null || sl !== null) ? '。入力した利確・損切りは、決済の注文では使いません(変えるときは「保有中のポジション」の欄で)。' : ''), 'msg');
+        (lastFill && lastFill.over ? '。板の上位5段では足りなかったため、足りない分は、見えている板と同じ厚さが先にも続くとして見積もりました(5段目から最大 0.1%)' : '') +
+        (!opening && (tp !== null || sl !== null) ? '。入力した利確・損切りは、決済の注文では使いません(変えるときは「保有中のポジション」の欄で)。' : '') +
+        (dropped ? `。約定した価格(${fmtPrice(h.price)})に対して向きが合わないため、${dropped}は付けませんでした。「保有中のポジション」の欄で付け直してください` : ''), 'msg');
       done();
     };
     afterLatency(sym).then(late => { sending = false; fire(late); });
@@ -4743,6 +4953,108 @@ function drawCurve(cv, st) {
   const last = pts[pts.length - 1].v;
   if (Math.abs(Y(last) - Y(st.start)) > 13) { c.fillStyle = color; c.fillText('現在', w - padR + 6, Y(last)); }
 }
+/* 自分の売買のくせ(デモの履歴から)。研究で知られた「くせ」と同じ形で数えるだけで、良い・悪いは決めない。
+ *   ・含み益・含み損の決済の割合(PGR / PLR。Odean 1998):自分の手で決済したときに、そのとき持っていたポジションを
+ *     「決済した益・決済した損・持ち続けた益・持ち続けた損」に分けて数える。利確・損切り・強制決済で自動的に決済されたものは数えない。
+ *     持ち続けたほうの含み損益は、その時刻の1時間足の終値で判定する(足を取り寄せるので、下の marketStats で数える)
+ *   ・持っていた時間(負けた取引と勝った取引の中央値)、勝ったあと・負けたあとの次の取引の金額(Ben-David ら 2018)、
+ *     負けてから30分以内の次の取引、1週間あたりの取引の数、手数料が手数料を引く前の利益に占める割合(Barber・Odean 2000)
+ * 30分などの区切りは、このアプリで決めたもので、論文の値ではない */
+function behaviourStats(q) {
+  const ev = T.history.filter(h => quoteOf(h.sym) === q && h.reason !== 'fund').slice().reverse();
+  const open = new Map(), pos = [], held = []; // open: `sym:pid` → { sym, dir, avg, qty, t0, size }。held: 手で決済したときに持ち続けていたもの
+  let rg = 0, rl = 0, manual = 0, gross = 0, fees = 0;
+  ev.forEach(h => {
+    fees += h.fee;
+    const key = `${h.sym}:${h.pid}`;
+    if (h.pnl === null) {
+      // 建てた・買い増した
+      const o = open.get(key);
+      if (o) { o.avg = (o.avg * o.qty + h.price * h.qty) / (o.qty + h.qty); o.qty += h.qty; }
+      else { const n = { sym: h.sym, dir: h.side === 'buy' ? 1 : -1, avg: h.price, qty: h.qty, t0: h.t, size: h.qty * h.price, net: 0 }; open.set(key, n); pos.push(n); }
+      return;
+    }
+    gross += h.pnl;
+    const o = open.get(key);
+    if (h.reason === 'manual') {
+      manual++;
+      if (h.pnl > 0) rg++; else if (h.pnl < 0) rl++;
+      open.forEach((x, k) => { if (k !== key) held.push({ sym: x.sym, dir: x.dir, avg: x.avg, t: h.t }); });
+    }
+    if (o) { o.net += netOf(h); o.qty -= h.qty; o.t1 = h.t; if (o.qty <= o.size / o.avg * 1e-6) { o.closed = true; open.delete(key); } }
+  });
+  const med = a => { if (!a.length) return NaN; const b = a.slice().sort((x, y) => x - y), m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
+  const done = pos.filter(x => x.closed);
+  const win = done.filter(x => x.net > 0), loss = done.filter(x => x.net < 0);
+  // 次の取引の金額:直前に決済し終えた取引が勝ちか負けか
+  const afterW = [], afterL = [];
+  let reIn = 0;
+  pos.forEach(x => {
+    const prev = done.filter(y => y !== x && y.t1 <= x.t0).sort((a, b) => b.t1 - a.t1)[0];
+    if (!prev) return;
+    (prev.net > 0 ? afterW : prev.net < 0 ? afterL : []).push(x.size);
+  });
+  loss.forEach(y => { if (pos.some(x => x !== y && x.t0 > y.t1 && x.t0 - y.t1 <= 30 * 6e4)) reIn++; });
+  const span = ev.length ? Math.max(ev[ev.length - 1].t - ev[0].t, 7 * 864e5) : NaN;
+  return {
+    manual, rg, rl, held,
+    holdLoss: med(loss.map(x => x.t1 - x.t0)), holdWin: med(win.map(x => x.t1 - x.t0)), nWin: win.length, nLoss: loss.length,
+    sizeAll: med(pos.map(x => x.size)), sizeAfterW: med(afterW), sizeAfterL: med(afterL), nAfterW: afterW.length, nAfterL: afterL.length,
+    reIn, perWeek: done.length / (span / (7 * 864e5)), nDone: done.length, fees, gross, feeShare: gross > 0 ? fees / gross : NaN,
+    entries: pos.map(x => ({ sym: x.sym, t: x.t0, px: x.avg })),
+  };
+}
+/* 大きく動いた直後に入った取引の割合(Barber・Odean 2008、Barber ら 2022:個人は、注目を集めた銘柄を買いがち)。
+ * 入る前の24時間の値動きの大きさ |いまの価格 ÷ 24時間前の価格 − 1| が、日足の ATR(14本、前の日まで)の2倍を超えたら「大きく動いた直後」。
+ * 足を取り寄せるので、別に計算する(直近 約40日の、1時間足がある範囲の取引だけ) */
+const attnCache = new Map();
+async function marketStats(b) {
+  const entries = b.entries;
+  const syms = [...new Set(entries.map(e => e.sym).concat(b.held.map(x => x.sym)))].slice(0, 10);
+  let n = 0, big = 0, pg = 0, pl = 0, unk = 0;
+  for (const sym of syms) {
+    let d = attnCache.get(sym);
+    if (!d || Date.now() - d.at > 6e5) {
+      const [h1, d1] = await Promise.all([fetchKlines(sym, '1h', 1000), fetchKlines(sym, '1d', 120)]);
+      d = { at: Date.now(), h1, d1 }; attnCache.set(sym, d);
+    }
+    const atrD = GT.helpers.atr(d.d1, 14);
+    entries.filter(e => e.sym === sym).forEach(e => {
+      const k = d.h1.findIndex(b => b.t <= e.t - 864e5 && e.t - 864e5 < b.t + 36e5);
+      let j = -1; for (let i = 0; i < d.d1.length; i++) if (d.d1[i].t + 864e5 <= e.t) j = i;
+      if (k < 0 || j < 14 || !(atrD[j] > 0)) return;
+      n++;
+      if (Math.abs(e.px - d.h1[k].c) > 2 * atrD[j]) big++;
+    });
+    // 手で決済したときに持ち続けていたポジションの含み損益:その時刻を含む1時間足の終値で判定
+    b.held.filter(x => x.sym === sym).forEach(x => {
+      const bar = d.h1.find(y => y.t <= x.t && x.t < y.t + 36e5);
+      if (!bar) { unk++; return; }
+      const u = (bar.c - x.avg) * x.dir;
+      if (u > 0) pg++; else if (u < 0) pl++;
+    });
+  }
+  unk += b.held.filter(x => !syms.includes(x.sym)).length;
+  const rg = b.rg, rl = b.rl;
+  return { n, big, pg, pl, unk, nPgr: rg + rl + pg + pl, pgr: rg + pg ? rg / (rg + pg) : NaN, plr: rl + pl ? rl / (rl + pl) : NaN };
+}
+function behaviourHtml(b, q) {
+  const pc = v => (isFinite(v) ? `${(v * 100).toFixed(0)}%` : '—');
+  const dur = ms => (!isFinite(ms) ? '—' : ms < 36e5 ? `${Math.max(1, Math.round(ms / 6e4))} 分` : ms < 864e5 ? `${(ms / 36e5).toFixed(1)} 時間` : `${(ms / 864e5).toFixed(1)} 日`);
+  const kpi = (label, value, hint) => `<div class="kpi"><span class="dim">${label}</span><strong>${value}</strong>${hint ? `<small>${hint}</small>` : ''}</div>`;
+  const money = v => (isFinite(v) ? `${fmtMoney(v, q)} ${esc(q)}` : '—');
+  return `<h3>売買のくせ(研究で知られた形で数えたもの)</h3>` +
+    `<p class="small">あなたのデモの履歴を、投資家の行動の研究と同じ形で数えたものです。数が少ないうちは偶然で大きく変わります。良い・悪いの判定ではありません。</p><div class="kpis">` +
+    `<div class="kpi" id="anPgr"><span class="dim">含み益・含み損の決済の割合</span><strong>計算しています…</strong><small>自分の手で決済した ${b.manual} 回について数えます</small></div>` +
+    kpi('持っていた時間(中央値)', `負け ${dur(b.holdLoss)} / 勝ち ${dur(b.holdWin)}`, `負けた取引 ${b.nLoss} 回・勝った取引 ${b.nWin} 回。負けた取引を長く持つ傾向は、上と同じ研究で「損を確定させにくい」くせとして知られています`) +
+    kpi('次の取引の金額(中央値)', `勝ったあと ${money(b.sizeAfterW)} / 負けたあと ${money(b.sizeAfterL)}`, `全体の中央値 ${money(b.sizeAll)}(勝ったあと ${b.nAfterW} 回・負けたあと ${b.nAfterL} 回)。Ben-David ら(2018)は、個人の為替の取引で、勝った週のあとに金額を大きく増やす傾向を報告しています`) +
+    kpi('負けてから30分以内に次の取引', `${b.reIn} 回`, `負けた取引 ${b.nLoss} 回のうち(30分はこのアプリで決めた区切り)`) +
+    `<div class="kpi" id="anAttn"><span class="dim">大きく動いた直後に入った取引</span><strong>計算しています…</strong><small>入る前の24時間の値動きが、日足の ATR(14)の2倍を超えていたもの</small></div>` +
+    kpi('1週間あたりの取引', isFinite(b.perWeek) ? b.perWeek.toFixed(1) : '—', `決済し終えた取引 ${b.nDone} 回`) +
+    kpi('手数料 ÷ 手数料を引く前の損益', b.gross > 0 ? pc(b.feeShare) : '—', b.gross > 0 ? `手数料 ${money(b.fees)}、引く前の損益 ${money(b.gross)}。Barber・Odean(2000)は、よく売買する個人ほど、手数料などで成績が下がったと報告しています` : `手数料 ${money(b.fees)}。手数料を引く前の損益がプラスでないため、割合は出していません`) +
+    `</div>`;
+}
+let attnToken = 0;
 function renderAnalysis() {
   const body = $('anBody'), sel = $('anQuote');
   const used = [...new Set(T.history.map(h => quoteOf(h.sym)))];
@@ -4777,7 +5089,24 @@ function renderAnalysis() {
       `</tbody></table></div>`
     : `<p class="dim">まだ取引がありません。デモトレードで売買すると、ここに成績が出ます。</p>`;
   if (st.n > 0 && st.n < 30) html += `<p class="dim small">決済が ${st.n} 回と少ないため、勝率などの数字は偶然に大きく左右されます。目安として見てください。</p>`;
+  const bh = behaviourStats(q);
+  if (st.n > 0) html += behaviourHtml(bh, q);
   body.innerHTML = html;
+  if (st.n > 0 && $('anAttn')) {
+    const token = ++attnToken;
+    marketStats(bh).then(r => {
+      const box = $('anAttn');
+      if (token !== attnToken || !box) return;
+      box.querySelector('strong').textContent = r.n ? `${r.big} 回 / ${r.n} 回` : '数えられる取引がありません';
+      const pg = $('anPgr'), pc = v => (isFinite(v) ? `${(v * 100).toFixed(0)}%` : '—');
+      if (pg) {
+        pg.querySelector('strong').textContent = r.nPgr >= 20 ? `益 ${pc(r.pgr)} / 損 ${pc(r.plr)}` : 'まだ数が足りません';
+        pg.querySelector('small').textContent = `自分の手で決済した ${bh.manual} 回について、そのとき持っていたポジション ${r.nPgr} 件(決済した益 ${bh.rg}・損 ${bh.rl}、持ち続けた益 ${r.pg}・損 ${r.pl})を数えました(20 件以上で表示${r.unk ? `。価格が取れず数えなかったもの ${r.unk} 件` : ''})。` +
+          (r.nPgr >= 20 && isFinite(r.pgr - r.plr) ? `差 ${((r.pgr - r.plr) * 100).toFixed(0)} ポイント。` : '') + 'Odean(1998)は、個人投資家は含み益を含み損より決済しやすいと報告しています。持ち続けた分の含み損益は、その時刻の1時間足の終値で判定。利確・損切りでの自動の決済は数えません';
+      }
+      box.querySelector('small').textContent = `入る前の24時間の値動きが、日足の ATR(14、前の日まで)の2倍を超えていた取引(直近 約40日の取引だけ)。Barber・Odean(2008)は、個人投資家は注目を集めた(大きく動いた・出来高の多い)銘柄を買いがちだと報告しています`;
+    }).catch(() => { if (token !== attnToken) return; ['anAttn', 'anPgr'].forEach(id => { const box = $(id); if (box) box.querySelector('strong').textContent = '価格を取り寄せられませんでした'; }); });
+  }
   drawCurve($('anCurve'), st);
   if ($('anBars')) drawPnlBars($('anBars'), st, q);
 }
@@ -4841,7 +5170,7 @@ const TOUR_STEPS = [
   { sel: ['#chartWrap'], title: 'チャートを動かす', inside: true,
     touch: '指1本で左右にスワイプすると、過去にさかのぼれます。指2本で広げる・つまむと、拡大・縮小します。\nチャートをタップすると十字線が出て、その足の始値・高値・安値・終値が上に出ます。',
     mouse: 'ドラッグで左右に動かし、マウスのホイールで拡大・縮小します。ダブルクリックで元の表示に戻ります。\nマウスを重ねた足の始値・高値・安値・終値が、左上に出ます。' },
-  { sel: ['#indBtn'], title: 'インジケーターを足す', body: '移動平均線や RSI など、74種類の分析用の線を追加できます。名前で検索でき、☆ を押すと「よく使う」に入ります。\nいちばん下の「＋ 自分で作る」では、式を書いてオリジナルも作れます。' },
+  { sel: ['#indBtn'], title: 'インジケーターを足す', body: '移動平均線や RSI など、78種類の分析用の線を追加できます。名前で検索でき、☆ を押すと「よく使う」に入ります。\nいちばん下の「＋ 自分で作る」では、式を書いてオリジナルも作れます。' },
   { sel: ['#drawBtn'], title: 'ツール', body: '線を引く(水平線・トレンドライン・フィボナッチなど)、価格のお知らせを置く、売買ルールを過去のデータで試す、表示を切りかえる、画像で保存する、といった機能が入っています。' },
   { sel: ['#tbOpen', '#tradeBtn'], title: 'デモトレード', body: '仮想の資金 10,000 で、買い・売りの練習ができます。利確・損切りの価格を入れておくと、届いたときに自動で決済します。\n成績は「成績を分析」で振り返れます。' },
   { sel: ['#guideLink', '#drawBtn'], title: '学ぶ・調べる', body: '「教科書」には、銘柄の特徴・インジケーターの読み方・手法・資金管理をまとめています。\n操作で迷ったら、「ツール → 操作マニュアル」に、すべての機能の使い方があります。' },
@@ -5289,6 +5618,19 @@ const RULES = [
     inputs: [{ label: '期間', def: 20 }],
     lines: [{ name: '高値', expr: 'prev(highest(high, p1))', color: '#27ae60' }, { name: '安値', expr: 'prev(lowest(low, p1))', color: '#c0392b' }],
     marks: [{ name: '高値を超える', expr: 'crossover(close, prev(highest(high, p1)))', dir: 'up' }, { name: '安値を割る', expr: 'crossunder(close, prev(lowest(low, p1)))', dir: 'down' }] },
+  // ここから下は、論文で調べられた形のもの(説明に論文の名前を書いてある)。どれも「買うか、休むか」だけで試す
+  { name: '12か月の時系列モメンタム(TSMOM)', desc: '過去252本(日足で約12か月)の値上がり率がプラスに変わったら買い、マイナスに変わったら手じまう。Moskowitz・Ooi・Pedersen(2012)と Hurst・Ooi・Pedersen(2017)の、過去12か月の値動きの符号で向きを決める方法です(論文では売りも使い、値動きの大きさで持つ量を調整しています。ここでは買うか休むかだけで、最初の合図が出るまでは持ちません)。日足で使う想定です。Huang ら(2020)は、銘柄ごとに見ると予想する力は弱いと反論しています。', overlay: true,
+    inputs: [{ label: '何本前と比べるか', def: 252 }],
+    lines: [{ name: 'n本前の終値', expr: 'prev(close, p1)', color: '#8e44ad' }],
+    marks: [{ name: 'プラスに変わる', expr: 'crossover(close, prev(close, p1))', dir: 'up' }, { name: 'マイナスに変わる', expr: 'crossunder(close, prev(close, p1))', dir: 'down' }] },
+  { name: '2週間の暗号資産モメンタム', desc: '過去14本(日足で2週間)の値上がり率がプラスに変わったら買い、マイナスに変わったら手じまう。Liu・Tsyvinski(2021)と Dobrynskaya(2023)は、暗号資産では2〜4週の流れが続きやすく、1か月を超えると反転しやすいと報告しています(どちらも多くの銘柄を比べた研究で、1銘柄の売買の成績ではありません)。日足で使う想定です(1時間足なら 336 本)。', overlay: true,
+    inputs: [{ label: '何本前と比べるか', def: 14 }],
+    lines: [{ name: 'n本前の終値', expr: 'prev(close, p1)', color: '#e67e22' }],
+    marks: [{ name: 'プラスに変わる', expr: 'crossover(close, prev(close, p1))', dir: 'up' }, { name: 'マイナスに変わる', expr: 'crossunder(close, prev(close, p1))', dir: 'down' }] },
+  { name: '終値と10日平均線(Han・Yang・Zhou)', desc: '終値が10本の単純移動平均線を上に抜けたら買い、下に抜けたら手じまう。Han・Yang・Zhou(2013)は、値動きの大きい株のグループで、この10日の平均線の規則が持ち続けるより良かったと報告しています。Zakamulin は、こうした平均線の規則の良い成績の多くは、計算の誤り(先読み)を除くと消えると指摘しています。', overlay: true,
+    inputs: [{ label: '平均線の期間', def: 10 }],
+    lines: [{ name: '平均', expr: 'sma(close, p1)', color: '#2f80ed' }],
+    marks: [{ name: '上抜け', expr: 'crossover(close, sma(close, p1))', dir: 'up' }, { name: '下抜け', expr: 'crossunder(close, sma(close, p1))', dir: 'down' }] },
 ];
 RULES.forEach(r => { r.hist = ''; r.bands = []; });
 function openRules() {
@@ -5423,6 +5765,7 @@ function renderBacktest() {
     luckTest(bars, r, box);
   }
 
+  renderBtStats(add, kpi, r, bars, iv, marks, byRule);
   if (r.trades.length) {
     add(el('h3', { text: `売買の記録(新しい順・${Math.min(50, r.trades.length)}件まで)` }));
     // スマホでも横にずらさず読めるよう、大事な「損益」と「理由」を左に置く
@@ -5436,6 +5779,54 @@ function renderBacktest() {
       el('thead', {}, [el('tr', {}, ['向き', '損益', '理由', '入った日', '価格', '手じまい', '価格', '期間'].map(t => el('th', { text: t })))]), el('tbody', {}, rows)])]));
   }
   drawBtCurve(cv, r);
+}
+/* 成績の読み方(統計の目安)。式は indicators.js の stats にまとめてある(Node でも確かめられる)。
+ * 試した回数 N:この画面を開いてから(ページを読み込み直すまで)、同じ銘柄・時間足で試した「ルール・数値・設定」の組み合わせの数。
+ * 同じ組み合わせは何度試しても1回と数える。たくさん試すほど、いちばん良い結果は偶然でも良く見えるので、そのぶん割り引く(DSR) */
+const btTrials = new Map(); // `銘柄|時間足` → Map(組み合わせ → 1本あたりの SR)
+function renderBtStats(add, kpi, r, bars, iv, marks, byRule) {
+  const S = GT.stats, bpy = S.barsPerYear(iv ? iv.ms * iv.group : NaN);
+  if (!(bpy > 0) || bars.length < 30) return;
+  const gross = GT.backtest(bars, marks, { side: bt.side, exit: bt.side === 'both' ? 'signal' : bt.exit, hold: bt.hold, fee: 0, slip: 0, sl: bt.sl / 100, tp: bt.tp / 100 });
+  const st = S.btStats(r, bpy, gross);
+  const what = byRule ? `rule:${bt.rule}` : `ind:${bt.ind.type}:${JSON.stringify(bt.ind.p, (k, v) => (k === 'vis' || k === 'alert' ? undefined : v))}`;
+  const key = [what, bt.side, r.exitMode, r.exitMode === 'bars' ? bt.hold : '', bt.sl, bt.tp, state.btSlip].join('|');
+  const bucket = `${state.symbol}|${state.interval}`;
+  if (!btTrials.has(bucket)) btTrials.set(bucket, new Map());
+  const tries = btTrials.get(bucket);
+  if (isFinite(st.sr)) tries.set(key, st.sr);
+  const N = Math.max(1, tries.size), srs = [...tries.values()];
+  // V:試した結果の SR のばらつき。5回以上試していれば、その実際のばらつきを使う。少ないうちは「本当は差がない」場合のばらつき 1/(n−1)
+  let V = 1 / (st.n - 1), vFrom = '本当の差がない場合のばらつき 1/(本数−1)';
+  if (srs.length >= 5) {
+    const m = srs.reduce((a, x) => a + x, 0) / srs.length, v = srs.reduce((a, x) => a + (x - m) * (x - m), 0) / (srs.length - 1);
+    if (v > 0) { V = v; vFrom = `試した ${srs.length} 通りの結果のばらつき`; }
+  }
+  const d = S.dsr(st.sr, st.n, st.skew, st.kurt, N, V);
+  const f2 = v => (isFinite(v) ? v.toFixed(2) : '—'), pc = v => (isFinite(v) ? `${(v * 100).toFixed(1)}%` : '—');
+  const yrs = v => (isFinite(v) ? (v >= 1 ? `約 ${v.toFixed(1)} 年` : `約 ${Math.max(1, Math.round(v * 365))} 日`) : '—');
+  add(el('h3', { text: '成績の読み方(条件つきの目安)' }));
+  add(el('p', { class: 'small', text: `足1本ごとの資金の増減から計算しています(1年 = ${Math.round(bpy).toLocaleString()} 本。暗号資産は土日も動くので 365 日で数えます)。` +
+    'どれも「毎回の値動きが互いに無関係で、性質が時間で変わらない」とした場合の目安です。実際の値動きは、荒れる時期と静かな時期がかたまって来るので、目安は甘めに出ます。もうかる確率ではありません。' }));
+  const enough = st.n >= st.minTRL;
+  const trl = el('div', { class: 'kpi' }, [el('span', { class: 'dim', text: '必要なデータの長さ(MinTRL)' }),
+    el('strong', { text: isFinite(st.minTRL) ? `${Math.ceil(st.minTRL).toLocaleString()} 本` : '—' }),
+    el('small', { text: isFinite(st.minTRL) ? `${yrs(st.minTRL / bpy)}。いまは ${st.n.toLocaleString()} 本(${yrs(st.years)})。この本数がないと、95% の確かさで「SR が 0 より上」とは言えない(Bailey・López de Prado 2012)` : 'SR が 0 以下なので、データをどれだけ増やしても「0 より上」とは言えません' })]);
+  if (!enough && isFinite(st.minTRL)) trl.querySelector('strong').appendChild(el('span', { class: 'bt-badge', text: 'データが足りない' }));
+  add(el('div', { class: 'kpis', id: 'btStats' }, [
+    kpi('シャープレシオ(年率)', f2(st.srAnn), '', '平均の増え方 ÷ ばらつき。1本あたりの値 × √(1年の本数)。売買のない足も 0 として入る'),
+    kpi('ソルティノレシオ(年率)', f2(st.sortinoAnn), '', '下がる方向のばらつきだけで割ったもの(目標 0)'),
+    kpi('PSR(0 と比べて)', pc(st.psr0), '', `本数 ${st.n.toLocaleString()}・ゆがみ ${f2(st.skew)}・とがり ${f2(st.kurt)} から見た「SR が 0 より上」の確からしさ(Bailey・López de Prado 2012)`),
+    kpi(`DSR(試した回数 N = ${N})`, pc(d.dsr), '', `${N} 通り試したことを割り引いた PSR(Bailey・López de Prado 2014)。比べる基準 SR0 = ${f2(d.sr0 * Math.sqrt(bpy))}(年率)。ばらつきは${vFrom}。試した組み合わせが似ていると、割り引きすぎになります`),
+    trl,
+    kpi('t 値', f2(st.tstat), st.tstat < 3 ? 'down' : '', st.tstat < 3 ? '3 より小さい。たくさんの手法が試されてきたので、3 以上でないと偶然と区別しにくい(Harvey・Liu・Zhu 2016)' : '3 以上(Harvey・Liu・Zhu 2016 の目安)。それでも、試した回数が多ければ偶然はありえます'),
+    kpi('損益が 0 になる片道のコスト', isFinite(st.breakEven) ? (st.breakEven > 0 ? `${(st.breakEven * 100).toFixed(3)}%` : 'なし') : '—', '',
+      st.breakEven > 0 ? `手数料とすべりを合わせて、1回の売買(片道)でこの割合を超えると、損益がマイナスになります。いまの設定は ${((FEE + state.btSlip / 100) * 100).toFixed(3)}%` : '手数料・すべりが 0 でも、損益がプラスになりません'),
+    kpi('1年あたりの売買の回数', isFinite(st.tradesPerYear) ? st.tradesPerYear.toFixed(1) : '—', '', `コストが、コストを引く前の利益に占める割合: ${isFinite(st.costShare) ? pc(st.costShare) : 'コストを引く前も利益なし'}。回数の多い手法ほど、コストで利益が消えやすい(Novy-Marx・Velikov 2016)`),
+  ]));
+  const btl = S.minBTL(N, 1);
+  if (N > 1) add(el('p', { class: 'dim small', text: `${N} 通り試した場合、本当は何の力もない手法でも、いちばん良いものは偶然で年率 SR 1 くらいに見えることがあります。それを避けるには、${yrs(btl)}以上のデータが目安です(MinBTL、Bailey ら 2014)。いまのデータは ${yrs(st.years)}。` }));
+  else add(el('p', { class: 'dim small', text: '試した回数 N は、ルールや数値、入り方・手じまい・損切り・利確・すべりを変えて試すたびに増えます(同じ組み合わせは1回)。ページを読み込み直すと 0 に戻ります。' }));
 }
 /* 「たまたま」の確かめ。同じ回数・同じ向き・同じ保有期間の売買を、でたらめな時点で始めた場合を LUCK_RUNS 回作り、
  * 合図どおりの成績が、その中で上から何%に入るかを出す。

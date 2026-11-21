@@ -99,6 +99,7 @@
           <option value="10">10倍</option><option value="20">20倍</option><option value="50">50倍</option><option value="100">100倍</option>
         </select>
       </label>
+      <p id="trFundNote" class="tr-fill dim" hidden></p>
       <label id="trLimitRow" class="row" hidden>
         <span class="lbl">指値の価格<small>買いは今より安く、売りは今より高く</small></span>
         <input id="trLimit" class="ctl" type="number" inputmode="decimal" min="0" step="any">
@@ -114,6 +115,15 @@
         <button type="button" data-pct="0.25">25%</button>
         <button type="button" data-pct="0.5">50%</button>
         <button type="button" data-pct="1">100%</button>
+      </div>
+      <div class="tr-vt">
+        <span class="dim small">値動きに合わせた金額(年率の目標)</span>
+        <div id="trVt" class="tr-quick" role="group" aria-label="値動きの大きさに合わせて金額を決める(年率の目標)">
+          <button type="button" data-vt="0.1">10%</button>
+          <button type="button" data-vt="0.2">20%</button>
+          <button type="button" data-vt="0.4">40%</button>
+        </div>
+        <small id="trVtText" class="dim"></small>
       </div>
       <label class="row">
         <span class="lbl">利確の価格<small>任意。届いたら自動で決済</small></span>
@@ -311,7 +321,7 @@
         <dt>銘柄と時間足を変える</dt>
         <dd>左上の銘柄名から選びます。いちばん下の「すべての銘柄から探す」で、ほかの銘柄も選べます。</dd>
         <dt>インジケーターを足す</dt>
-        <dd>「<span class="touch">指標</span><span class="mouse">インジケーター</span>」から選びます(74種類・名前で検索可)。☆ を押すと「よく使う」に入ります。いちばん下の「＋ 自分で作る」では、式を書いてオリジナルの線や、売買の合図(▲▼)も作れます。合図は、設定画面から「過去データで試す」「出たら知らせる」が使えます。設定や削除は、名前の横の<span class="touch">「⋯」</span><span class="mouse">アイコン</span>から。</dd>
+        <dd>「<span class="touch">指標</span><span class="mouse">インジケーター</span>」から選びます(78種類・名前で検索可)。☆ を押すと「よく使う」に入ります。いちばん下の「＋ 自分で作る」では、式を書いてオリジナルの線や、売買の合図(▲▼)も作れます。合図は、設定画面から「過去データで試す」「出たら知らせる」が使えます。設定や削除は、名前の横の<span class="touch">「⋯」</span><span class="mouse">アイコン</span>から。</dd>
         <dt>線を引く・画像で保存する</dt>
         <dd>「ツール」から、水平線・垂直線・トレンドライン・長方形・フィボナッチを引けます。「価格のお知らせ」の線を置くと、その価格に届いたときに知らせます(注文はしません)。ものさし・文字・リプレイ(過去の値動きの再生)・全画面表示も、ここにあります。同じメニューで、表示の切りかえ(ローソク足・平均足・ライン)、目盛りの切りかえ(ふつう・対数)、ほかの銘柄を重ねて比べる、画像の保存もできます。<span class="mouse">線を引く道具は、チャートの左はしのボタンからも選べます。</span></dd>
         <dt>売買ルールを過去のデータで試す</dt>

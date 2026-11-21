@@ -824,3 +824,11 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
 #cmpList .sect { margin: 8px 0 2px; font-weight: 700; }
 #cmpList button[aria-pressed="true"] { font-weight: 700; }
 @media (max-width: 760px) { .stack .legend.cmp:not(.main):not(.open) .vals { display: inline-flex; } .legend .cmp-x { width: 40px; height: 30px; margin: -4px 0; font-size: 18px; } }
+/* 成績の読み方:「データが足りない」の印。強い色にはせず、枠で知らせる */
+.kpi strong .bt-badge { display: inline-block; margin-left: 6px; padding: 1px 6px; border: 1px solid var(--muted); border-radius: 4px; font-size: 11px; font-weight: normal; color: var(--muted); vertical-align: middle; }
+/* 値動きに合わせた金額のボタン(3つ) */
+.tr-vt { margin: 0 0 6px; }
+.tr-vt > span { display: block; font-size: 11px; margin-bottom: 2px; }
+.tr-vt .tr-quick { grid-template-columns: repeat(3, 1fr); margin: 0 0 2px; }
+.tr-vt small { display: block; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.tr-vt small:empty { display: none; }

@@ -1275,6 +1275,84 @@ function makeCustom(def) {
   };
 }
 
+// ===== 研究(論文)で使われた形のもの =====
+// 1本の足の長さ(ミリ秒)。足の時刻の間隔のうち、いちばん多いもの(抜けた足があってもずれないように)
+function barMs(bars) {
+  const n = bars.length, cnt = new Map();
+  for (let i = Math.max(1, n - 200); i < n; i++) { const d = bars[i].t - bars[i - 1].t; if (d > 0) cnt.set(d, (cnt.get(d) || 0) + 1); }
+  let best = NaN, k = 0;
+  cnt.forEach((c, d) => { if (c > k) { k = c; best = d; } });
+  return best;
+}
+// 1年に何本の足があるか。暗号資産は土日も休まず動くので、365日 × 24時間で数える(1時間足 8760、4時間足 2190、日足 365)
+const YEAR_MS = 365 * 864e5;
+const barsPerYear = ms => (ms > 0 ? YEAR_MS / ms : NaN);
+// n 本前からの変化率(%)。足りない足は NaN
+const pastRet = (c, n) => c.map((v, i) => (i >= n && c[i - n] > 0 ? (v / c[i - n] - 1) * 100 : NaN));
+DEFS.tsmom = {
+  name: '時系列モメンタム(TSMOM)', short: 'TSMOM', group: 'momentum',
+  desc: '過去 n 本の値上がり率と、その符号(+ なら上昇の流れ)。Moskowitz・Ooi・Pedersen(2012)と Hurst ら(2017)が使った「過去12か月・3か月・1か月」の形。日足では 252・63・21 本',
+  params: [P.int('len1', '長い期間(棒と色。符号を見る)', 252), P.int('len2', '中くらいの期間', 63), P.int('len3', '短い期間', 21),
+    P.color('c2', '中くらいの線の色', '#2f80ed'), P.color('c3', '短い線の色', '#f5a623')],
+  compute(bars, p) {
+    const c = col(bars, 'close'), a = int(p.len1, 252), b = int(p.len2, 63), d = int(p.len3, 21), r = pastRet(c, a);
+    return {
+      lines: [{ name: `${b}本`, val: pastRet(c, b), color: p.c2 }, { name: `${d}本`, val: pastRet(c, d), color: p.c3 }],
+      hist: r, histDir: r.map(v => (v > 0 ? 1 : -1)), histName: `${a}本`, bands: [0], label: `${a} ${b} ${d}`,
+    };
+  },
+};
+DEFS.cmom = {
+  name: '暗号資産の短期モメンタム(1〜4週)', short: '週モメ', group: 'momentum',
+  desc: '過去 1・2・3・4 週間の値上がり率(%)。Liu・Tsyvinski(2021)と Dobrynskaya(2023)は、暗号資産では2〜4週の流れが続きやすく、1か月を超えると反転しやすいと報告。足の長さから週の本数を求める(1時間足なら1週 = 168本)',
+  params: [P.color('c1', '1週の色', '#e91e63'), P.color('c2', '2週の色', '#f5a623'), P.color('c3', '3週の色', '#27ae60'), P.color('c4', '4週の色', '#2f80ed')],
+  compute(bars, p) {
+    const c = col(bars, 'close'), ms = barMs(bars), wk = ms > 0 ? Math.max(1, Math.round(7 * 864e5 / ms)) : NaN;
+    const ln = (k, color) => ({ name: `${k}週`, val: isFinite(wk) ? pastRet(c, k * wk) : nans(c.length), color });
+    return { lines: [ln(1, p.c1), ln(2, p.c2), ln(3, p.c3), ln(4, p.c4)], bands: [0], label: isFinite(wk) ? `1週=${wk}本` : '' };
+  },
+};
+/* 実現ボラティリティ(年率)。i 本目の値は「i−1 本目の終値まで」の値動きだけで計算する(その足の値動きは使わない。先読みをしない)。
+ * kind 'sd': 直前 n 本の変化率の標準偏差。'ewma': 変化率の2乗を、λ の重みでならしたもの(RiskMetrics の形。平均は 0 とみる) */
+function realizedVol(bars, n, kind, lambda) {
+  const c = col(bars, 'close'), N = c.length, r = c.map((v, i) => (i && c[i - 1] > 0 ? v / c[i - 1] - 1 : NaN));
+  const k = Math.sqrt(barsPerYear(barMs(bars))), out = nans(N);
+  if (kind === 'ewma') {
+    let v = NaN, m = 0;
+    for (let i = 1; i < N; i++) {
+      // out[i] には、r[i−1] までをならした値を入れる
+      if (isFinite(v) && m >= n) out[i] = Math.sqrt(v) * k;
+      if (!isFinite(r[i])) continue;
+      v = isFinite(v) ? lambda * v + (1 - lambda) * r[i] * r[i] : r[i] * r[i];
+      m++;
+    }
+  } else {
+    const sd = stdev(r, n);
+    for (let i = 1; i < N; i++) out[i] = sd[i - 1] * k;
+  }
+  return out;
+}
+DEFS.voltarget = {
+  name: 'ボラティリティ目標の持ち高', short: '持ち高', group: 'volatility',
+  desc: '目標の値動き(年率)÷ 実際の値動き(年率)で、資金の何割を持つかの目安(上限 1 = 全額)。値動きが大きいときほど小さくなる。Moreira・Muir(2017)、Barroso・Santa-Clara(2015)、Harvey ら(2018)の方法。前の足までのデータだけで計算',
+  params: [P.num('target', '目標の値動き(年率 %)', 20, 1, 200, 1), P.int('len', '期間(本)', 20),
+    { key: 'kind', label: '計算のしかた', type: 'select', def: 'sd', options: [['sd', '直近 n 本の標準偏差'], ['ewma', 'ならした値(EWMA、λ=0.94)']] },
+    P.color('color', '線の色', '#16a085')],
+  compute(bars, p) {
+    const vol = realizedVol(bars, int(p.len, 20), p.kind, 0.94), tg = (+p.target || 20) / 100;
+    return pane1('持ち高', vol.map(v => (v > 0 ? Math.min(1, tg / v) : NaN)), p.color, { bands: [1, 0.5], fixed: [0, 1.05], label: `${p.target}% ${p.len}${p.kind === 'ewma' ? ' EWMA' : ''}` });
+  },
+};
+DEFS.volshock = {
+  name: '出来高ショック(注目度)', short: '出来高Z', group: 'volume',
+  desc: 'その足の出来高が、直前 n 本の平均から、ばらつきの何倍離れているか(その足自身は平均に入れない)。Liu・Tsyvinski(2021)は注目度(検索数)の急増が翌週の値動きを予想すると報告。Barber・Odean(2008)は、個人は注目を集めた銘柄を買いがちだと報告',
+  params: [P.len(52), P.color('color', '線の色', '#8e44ad')],
+  compute(bars, p) {
+    const n = int(p.len, 52), v = bars.map(b => b.v), m = sma(v, n), sd = stdev(v, n);
+    return pane1('Z', v.map((x, i) => (i >= 1 && sd[i - 1] > 0 ? (x - m[i - 1]) / sd[i - 1] : NaN)), p.color, { bands: [2, 0], label: String(n) });
+  },
+};
+
 // ================================================================ 合図どおりに売買した場合の成績(過去データでの試算)
 /* 決まり:
  *   ・合図は、足が確定してから分かるものとして扱う。売買は「次の足の始値」で行う(先読みをしない)
@@ -1354,6 +1432,94 @@ function backtest(bars, marks, opts) {
   };
 }
 
+
+// ================================================================ 成績の読み方(統計の目安)
+/* 試算の成績が「偶然でも出るものか」を見るための計算。どれも、毎回の損益が互いに無関係で、性質が時間で変わらないことを前提にした
+ * 条件つきの目安で、もうかる確率ではない。式は次のとおり(SR は1本あたりのシャープレシオ = 平均 ÷ 標準偏差)。
+ *   Sortino = 平均 ÷ √(Σ min(r,0)² ÷ n)                       (目標は 0)
+ *   PSR(SR*) = Φ[(SR − SR*)·√(n−1) / √(1 − γ3·SR + (γ4−1)/4·SR²)]   Bailey・López de Prado(2012)。γ3 = ゆがみ、γ4 = とがり(正規分布で 3)
+ *   MinTRL = 1 + (1 − γ3·SR + (γ4−1)/4·SR²)·(z_p ÷ (SR − SR*))²       同上。この本数より少ないと、95% の確かさで SR* を上回るとは言えない
+ *   E[max_N] = (1−γ)·Φ⁻¹(1−1/N) + γ·Φ⁻¹(1−1/(N·e))、γ = 0.5772…    N 回試したときに、偶然で出る最大の値の目安
+ *   DSR = PSR(SR0)、SR0 = √V·E[max_N]                                   Bailey・López de Prado(2014)。V = 試した結果の SR のばらつき
+ *   MinBTL(年) = (E[max_N] ÷ 年率の目標 SR)²                            Bailey ら(2014) */
+const EULER = 0.5772156649015329;
+// 標準正規分布の累積確率 Φ(x)。誤差関数の近似(相対誤差 1.2e-7 以下)
+function normCdf(x) {
+  const z = Math.abs(x) / Math.SQRT2, t = 1 / (1 + 0.5 * z);
+  const r = t * Math.exp(-z * z - 1.26551223 + t * (1.00002368 + t * (0.37409196 + t * (0.09678418 + t * (-0.18628806 + t * (0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (-0.82215223 + t * 0.17087277)))))))));
+  return x >= 0 ? 1 - r / 2 : r / 2;
+}
+// Φ の逆(確率 p になる x)。Acklam の近似のあと、1回だけ補正する
+function normInv(p) {
+  if (!(p > 0 && p < 1)) return p === 0 ? -Infinity : p === 1 ? Infinity : NaN;
+  const a = [-39.69683028665376, 220.9460984245205, -275.9285104469687, 138.357751867269, -30.66479806614716, 2.506628277459239];
+  const b = [-54.47609879822406, 161.5858368580409, -155.6989798598866, 66.80131188771972, -13.28068155288572];
+  const c = [-0.007784894002430293, -0.3223964580411365, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
+  const d = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416];
+  let x;
+  if (p < 0.02425) { const q = Math.sqrt(-2 * Math.log(p)); x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+  else if (p > 1 - 0.02425) { const q = Math.sqrt(-2 * Math.log(1 - p)); x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+  else { const q = p - 0.5, r = q * q; x = (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1); }
+  const e = normCdf(x) - p, u = e * Math.sqrt(2 * Math.PI) * Math.exp(x * x / 2);
+  return x - u / (1 + x * u / 2);
+}
+// 平均・標準偏差(n−1 で割る)・ゆがみ γ3・とがり γ4(どちらも n で割る積率。正規分布なら 0 と 3)
+function moments(r) {
+  const n = r.length;
+  if (n < 2) return { n, mean: NaN, sd: NaN, skew: NaN, kurt: NaN };
+  const m = r.reduce((a, x) => a + x, 0) / n;
+  let s2 = 0, s3 = 0, s4 = 0;
+  r.forEach(x => { const d = x - m; s2 += d * d; s3 += d * d * d; s4 += d * d * d * d; });
+  const m2 = s2 / n;
+  return { n, mean: m, sd: Math.sqrt(s2 / (n - 1)), skew: m2 > 0 ? (s3 / n) / Math.pow(m2, 1.5) : 0, kurt: m2 > 0 ? (s4 / n) / (m2 * m2) : 3 };
+}
+function sortino(r) {
+  const n = r.length;
+  if (!n) return NaN;
+  const m = r.reduce((a, x) => a + x, 0) / n, dd = Math.sqrt(r.reduce((a, x) => a + Math.min(x, 0) * Math.min(x, 0), 0) / n);
+  return dd > 0 ? m / dd : NaN;
+}
+const srDen = (sr, skew, kurt) => 1 - skew * sr + (kurt - 1) / 4 * sr * sr;
+function psr(sr, n, skew, kurt, srStar) {
+  const den = srDen(sr, skew, kurt);
+  if (!(n > 1) || !(den > 0)) return NaN;
+  return normCdf((sr - (srStar || 0)) * Math.sqrt(n - 1) / Math.sqrt(den));
+}
+function minTRL(sr, skew, kurt, srStar, p) {
+  const d = sr - (srStar || 0);
+  if (!(d > 0)) return Infinity; // SR* を上回っていなければ、何本あっても言えない
+  return 1 + srDen(sr, skew, kurt) * Math.pow(normInv(p || 0.95) / d, 2);
+}
+function expMaxSR(N) {
+  if (!(N > 1)) return 0;
+  return (1 - EULER) * normInv(1 - 1 / N) + EULER * normInv(1 - 1 / (N * Math.E));
+}
+function dsr(sr, n, skew, kurt, N, V) {
+  const sr0 = Math.sqrt(V) * expMaxSR(N);
+  return { sr0, dsr: psr(sr, n, skew, kurt, sr0) };
+}
+const minBTL = (N, srAnnual) => Math.pow(expMaxSR(N) / srAnnual, 2);
+/* 損益が 0 になる片道のコスト。手数料もすべりも 0 にしたときの資金の倍率 G と、往復の回数 K から、
+ * G·(1−c)^(2K) = 1 を解く(片道ごとに c の割合を引くと、往復で (1−c)² になるため) */
+const breakEvenCost = (G, K) => (G > 1 && K > 0 ? 1 - Math.pow(G, -1 / (2 * K)) : 0);
+/* backtest() の結果から、成績の読み方の数字をまとめて出す。
+ * bpy: 1年の足の本数。gross: 手数料・すべりを 0 にしたときの backtest() の結果(損益が 0 になるコストと、コストの割合に使う) */
+function btStats(r, bpy, gross) {
+  const c = r.curve, rets = [];
+  for (let i = 1; i < c.length; i++) if (c[i - 1] > 0) rets.push(c[i] / c[i - 1] - 1);
+  const mo = moments(rets), sr = mo.sd > 0 ? mo.mean / mo.sd : NaN, k = Math.sqrt(bpy);
+  const years = c.length / bpy, K = r.n + (r.open ? 1 : 0);
+  const G = gross ? 1 + gross.total : NaN;
+  return {
+    n: mo.n, sr, skew: mo.skew, kurt: mo.kurt, srAnn: sr * k, sortinoAnn: sortino(rets) * k, years,
+    psr0: psr(sr, mo.n, mo.skew, mo.kurt, 0), minTRL: minTRL(sr, mo.skew, mo.kurt, 0, 0.95),
+    tstat: sr * Math.sqrt(mo.n), tradesPerYear: years > 0 ? r.n / years : NaN,
+    breakEven: isFinite(G) ? breakEvenCost(G, K) : NaN,
+    costShare: isFinite(G) && G > 1 ? (G - (1 + r.total)) / (G - 1) : NaN, grossTotal: isFinite(G) ? G - 1 : NaN,
+  };
+}
+const stats = { normCdf, normInv, moments, sortino, psr, minTRL, expMaxSR, dsr, minBTL, breakEvenCost, btStats, barsPerYear, barMs, realizedVol };
+
 const GROUPS = [
   ['trend', 'トレンド(流れの向き)'],
   ['momentum', 'オシレーター(勢い・行きすぎ)'],
@@ -1368,5 +1534,5 @@ function defaults(id) {
   return out;
 }
 
-return { DEFS, GROUPS, FUNCS, defaults, backtest, makeCustom, checkFormula, parseFormula, evalFormula, MA_OPTIONS, helpers: { maOf, sma, ema, rma, wma, hma, dema, tema, kama, vwma, linreg, stdev, highest, lowest, sum, atr, rsi, trueRange, src } };
+return { DEFS, GROUPS, FUNCS, defaults, backtest, stats, makeCustom, checkFormula, parseFormula, evalFormula, MA_OPTIONS, helpers: { maOf, sma, ema, rma, wma, hma, dema, tema, kama, vwma, linreg, stdev, highest, lowest, sum, atr, rsi, trueRange, src } };
 });
