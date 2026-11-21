@@ -939,6 +939,10 @@ function noteTick(dir) {
 // いま有効な気配値(売れる価格 bid と、買える価格 ask)。古いものや別の銘柄のものは使わない。
 // 表示には5秒まで使う。成行の約定には、もっと新しいもの(QUOTE_TRADE_MS)だけを使う
 const QUOTE_TRADE_MS = 2000;
+// 気配値が届かなくなってから、この時間がたったら「配信につながらない」と案内を変える(つなぎ直しの数秒は待つ)
+const QUOTE_LONG_MS = 10000;
+let quoteLostAt = 0; // 気配値が届かなくなった時刻(届いているときは 0)
+let rateOkAt = -1e9, rateTok = -1; // 配信が最後に届いていた時刻と、そのときの読み込みの番号
 function liveQuote(sym, maxAge) {
   if (feed.quoteSym !== sym || mono() - feed.quoteAt > (maxAge || 5000) || !(feed.bid > 0) || !(feed.ask > 0)) return null;
   return { bid: feed.bid, ask: feed.ask };
@@ -987,7 +991,9 @@ function renderRate() {
   feed.rate = rateAt ? Math.round(feed.msgs / dt * 1000) : 0;
   feed.msgs = 0; rateAt = now;
   const on = state.live && ws && ws.readyState === 1 && now - feed.lastMsg < 5000;
-  const waiting = !ws || ws.readyState === 0 || now - feed.lastMsg < 5000; // つなぎ始めたばかり
+  if (on || rateOkAt < 0) rateOkAt = now;
+  // つなぎ直しを繰り返しているだけ(10秒以上届かない)なら、「つないでいます」と言い続けない
+  const waiting = (!ws || ws.readyState === 0 || now - feed.lastMsg < 5000) && now - rateOkAt < QUOTE_LONG_MS; // つなぎ始めたばかり
   setTxt('trRate', on ? `受信 ${feed.rate.toLocaleString()} 件/秒` : !state.live ? '' : waiting ? '配信につないでいます…' : '配信が止まっています(2秒ごとに取得中)');
   $('status').title = on ? `リアルタイム配信を受信中(直近1秒で ${feed.rate} 件)` : '';
 }
@@ -1002,6 +1008,8 @@ function openStream() {
   closeStream();
   if (!state.live || !window.WebSocket) return;
   const token = state.loadToken;
+  // 銘柄・時間足を変えた直後だけ、ここから10秒は「つないでいます」と出す(つなぎ直しのたびには延ばさない)
+  if (rateTok !== token) { rateTok = token; rateOkAt = mono(); }
   const sym = state.symbol.toLowerCase();
   // 足の更新(kline)に加えて、約定(aggTrade)も受け取り、1件ごとの値動きを表示する
   // bookTicker は、いちばん良い買い注文・売り注文の価格が変わるたびに届く(気配値をすぐに反映する)
@@ -1241,7 +1249,7 @@ function maybeLoadMore() {
  * 足は同じ時間足で取りにいき、足の始まりの時刻で合わせる。売買の価格には、いっさい使わない */
 const CMP_COLOR = '#00a3c4';
 const cmp = { key: '', raw: [], byT: new Map(), busy: false, done: false, err: false, fails: 0, token: 0, view: null };
-const fmtPct = v => (isFinite(v) ? `${v >= 0 ? '+' : ''}${(v * 100).toFixed(2)}%` : '—');
+const fmtPct = v => { const s = fx(v * 100, 2); return s === '—' ? s : `${+s >= 0 ? '+' : ''}${s}%`; };
 const compareOn = () => !!state.compare && state.compare !== state.symbol;
 function setCompareBars(raw) {
   const iv = curInterval();
@@ -2442,7 +2450,7 @@ function updateLegends() {
       const items = brief ? [['', fmtPrice(b.c), col]] : [b.o, b.h, b.l, b.c].map((v, k) => [names[k], fmtPrice(v), col]);
       if (prev) {
         const d = b.c - prev.c;
-        items.push(['', `${d >= 0 ? '+' : ''}${fmtPrice(d, b.c)} (${d >= 0 ? '+' : ''}${(d / prev.c * 100).toFixed(2)}%)`, d >= 0 ? UP : DOWN]);
+        items.push(['', `${d >= 0 ? '+' : ''}${fmtPrice(d, b.c)} (${fmtPct(d / prev.c)})`, d >= 0 ? UP : DOWN]);
       }
       if (!brief) items.push(['出来高', fmtCompact(b.v), col]);
       setVals(el, items);
@@ -2450,7 +2458,8 @@ function updateLegends() {
     }
     const ind = pane.ind, p = ind.p, T = IND_TYPES[ind.type];
     el.classList.toggle('off', !!ind.hidden);
-    setText(el, '.name', T.name);
+    // スマホでは短い名前にする(長い名前だと凡例が2行になり、線を隠すため)
+    setText(el, '.name', compact && T.short ? T.short : T.name);
     if (T.simple) {
       setText(el, '.params', ind.out ? ind.out.label : '');
       const one = ind.out && ind.out.lines.length === 1 && !ind.out.hist;
@@ -3349,7 +3358,7 @@ function fundNowText(sym) {
   if (f && (f.nextBusy || f.busy)) return '実際の率を取り寄せています…';
   return '0.01%の目安(実際の率を取れませんでした)';
 }
-const pctRate = v => `${v >= 0 ? '+' : ''}${(v * 100).toFixed(4)}%`;
+const pctRate = v => { const s = fx(v * 100, 4); return `${+s >= 0 && s !== '—' ? '+' : ''}${s}%`; };
 /* 資金調達料の率を年率に直す(8時間ごと = 1日3回 × 365日。4時間ごとの銘柄では実際はこの2倍)。
  * 年率 30% を超えるほど買いに偏っているときは、落ち着いて知らせる。Schmeling・Schrimpf・Todorov(BIS WP 1087)は、
  * 先物と現物の価格差(キャリー)が大きいと、そのあとに急落が起きやすく、レバレッジを求める個人の買いが原因の一つだと報告している */
@@ -3358,7 +3367,7 @@ const fundYear = rate => rate * 3 * 365;
 function fundYearText(rate) {
   if (!fin(rate)) return '';
   const y = fundYear(rate);
-  return ` ・ 年率にすると約 ${y >= 0 ? '+' : ''}${(y * 100).toFixed(1)}%` +
+  return ` ・ 年率にすると約 ${pctText(y, 1, true)}` +
     (Math.abs(y) >= FUND_WARN ? `。年率 ${FUND_WARN * 100}% を超える率は、過去には、そのあとの急な値下がりと結びつきやすかったと報告されています(Schmeling・Schrimpf・Todorov、BIS WP 1087)` : '');
 }
 /* 成行注文が板(上位5段)を食っていくときの、5段目より先の分。5段より先の板は見えないので、見積もる。
@@ -3708,9 +3717,9 @@ function execute(sym, side, notional, reason, qty, opts) {
 let lastFill = null; // 直前の成行注文の、板での約定の様子
 /* 注文の遅れ。実際の取引所では、押してから注文が届くまでに時間がかかり、その間に板が動く。
  * 成行の注文(手での決済も)は、押してから 0.2 秒たち、かつ押したあとの板・気配値が1回以上届いてから、
- * その時点の板・気配値で約定させる。1秒たっても新しい板・気配値が届かなければ、価格が古いとみなして取り消す。
+ * その時点の板・気配値で約定させる。3秒たっても新しい板・気配値が届かなければ、価格が古いとみなして取り消す。
  * 利確・損切り・指値・強制決済は、取引所の側で待っている注文なので、遅れは足さない */
-const LATENCY_MS = 200, LATENCY_MAX = 1000;
+const LATENCY_MS = 200, LATENCY_MAX = 3000;
 const SENDING_MSG = '注文を送っています…';
 const STALE_MSG = '価格を最新の状態にできていないため、いまは売買できません。数秒待ってから、もう一度お試しください。';
 let sending = false; // 注文を送っている途中(その間は、売買・決済のボタンを押せない)
@@ -3722,7 +3731,7 @@ function dataAt(sym) {
   return t;
 }
 // 注文が取引所に届くまで待つ。取り消すときは、その理由の文を返す。
-// 押したあとの板・気配値が届くまで待つ(配信が止まっているときは、1秒で取り消す。古い価格では約定させない)
+// 押したあとの板・気配値が届くまで待つ(取引の少ない銘柄では板の更新が2秒ほどあくことがあるので、3秒までは待つ。それでも届かなければ取り消す。古い価格では約定させない)
 async function afterLatency(sym) {
   const t0 = mono();
   for (;;) {
@@ -4161,16 +4170,20 @@ function renderTrade() {
   // 閉じていた間の値動きの確認が終わらず売買できないときは、その理由を出す(何も出ないと故障に見える)
   const WAIT = '開いていなかった間・通信が途切れていた間の値動きを確認しています。終わるまで売買できません(通信が不安定だと、時間がかかります)。';
   const WAIT_PRICE = '最新の価格を確認しています。数秒で売買できるようになります。';
+  // 気配値が10秒以上届かないとき(配信につながらない・止まった)は、「数秒で」と言い続けない。いつまでも待たされて故障に見えるため
+  const WAIT_STREAM = 'リアルタイムの価格(買える価格・売れる価格)が届いていないため、いまは売買できません(古い価格で約定させないため)。チャートの価格は数秒ごとに取り寄せています。通信が戻れば、自動で売買できるようになります。';
+  if (quoteOk || !(px > 0)) quoteLostAt = 0; else if (!quoteLostAt) quoteLostAt = mono();
+  const longWait = !!quoteLostAt && mono() - quoteLostAt > QUOTE_LONG_MS;
   const REPLAY_MSG = 'リプレイ中は売買できません。リプレイを終わると、売買できるようになります。';
   if (state.replay && !$('trMsg').textContent) setTxt('trMsg', REPLAY_MSG, 'msg');
   else if (!state.replay && $('trMsg').textContent === REPLAY_MSG) setTxt('trMsg', '');
   const checking = reconciled[sym] !== true || !clockReady;
   const waiting = px > 0 && !tradable && !state.replay && (checking || !quoteOk);
   // 調べるもの(ポジション・指値)がないときは、「価格を確かめている」とだけ出す(閉じていた間の確認と言うと、誤解させる)
-  const msgNow = checking && (pos || T.orders.some(o => o.sym === sym)) ? WAIT : WAIT_PRICE;
-  const cur = $('trMsg').textContent;
-  if (waiting && (!cur || cur === WAIT || cur === WAIT_PRICE)) setTxt('trMsg', msgNow, 'msg');
-  else if (!waiting && (cur === WAIT || cur === WAIT_PRICE)) setTxt('trMsg', '');
+  const msgNow = checking && (pos || T.orders.some(o => o.sym === sym)) ? WAIT : !quoteOk && longWait ? WAIT_STREAM : WAIT_PRICE;
+  const cur = $('trMsg').textContent, mine = cur === WAIT || cur === WAIT_PRICE || cur === WAIT_STREAM;
+  if (waiting && (!cur || mine)) { if (cur !== msgNow) setTxt('trMsg', msgNow, 'msg'); }
+  else if (!waiting && mine) setTxt('trMsg', '');
   // 取引所から消えた銘柄は価格が取れないので、建値での清算だけできるようにする
   const gone = !!dead[sym] && !!pos;
   $('pClose').disabled = (!tradable && !gone) || sending;
@@ -4420,6 +4433,7 @@ function bindTrade() {
     renderUnit(); renderRisk(); renderTrade(); renderFundNote();
   });
   amt.value = acct(quoteOf(state.symbol)).start / 10;
+  let vtKey = ''; // 値動きに合わせた金額を計算したときの、銘柄と時間足
   // レバレッジを選んでいるときは、この銘柄の資金調達料の率(年率)を出す。実際の率が取れたときだけ
   const renderFundNote = () => {
     const sym = state.symbol, box = $('trFundNote'), on = curLev() > 1 && !!perpOf(sym);
@@ -4472,8 +4486,11 @@ function bindTrade() {
       setTxt('trFillEst', 'この銘柄は板の情報がないため、成行は「買える価格」「売れる価格」のまま約定します(注文が大きくても価格は不利になりません。実際より有利な計算です)。');
       return;
     }
-    const worse = (x, side) => `${((side === 'buy' ? x.px / x.top - 1 : 1 - x.px / x.top) * 100).toFixed(3)}%`;
-    setTxt('trFillEst', `成行の見込み:買い 平均 ${fmtPrice(b.px)}(最良より ${worse(b, 'buy')} 不利)/売り 平均 ${fmtPrice(s.px)}(${worse(s, 'sell')} 不利)` +
+    const worse = (x, side) => `${fx(Math.max(0, (side === 'buy' ? x.px / x.top - 1 : 1 - x.px / x.top) * 100), 3)}%`; // 丸めの誤差で「-0.000%」と出さない
+    // 板のいちばん良い価格だけで足りるとき(0.000%)は、「不利」と書かず短く出す
+    const flat = worse(b, 'buy') === '0.000%' && worse(s, 'sell') === '0.000%';
+    setTxt('trFillEst', flat ? `成行の見込み:板のいちばん良い価格で約定(買い ${fmtPrice(b.px)}/売り ${fmtPrice(s.px)})`
+      : `成行の見込み:買い 平均 ${fmtPrice(b.px)}(最良より ${worse(b, 'buy')} 不利)/売り 平均 ${fmtPrice(s.px)}(${worse(s, 'sell')} 不利)` +
       (b.over || s.over ? '。板の上位5段では足りないため、足りない分は、見えている板と同じ厚さが先にも続くとして見積もっています(5段目から最大 0.1%)' : ''));
   }
   $('trUnit').addEventListener('click', () => {
@@ -4500,18 +4517,26 @@ function bindTrade() {
    * 値動きの大きい銘柄ほど、金額が小さくなる。研究(Moreira・Muir 2017、Harvey ら 2018)では、値動きの荒さを平らにする効果は
    * はっきりしているが、利益が増えるかどうかは結果が分かれている */
   $('trVt').addEventListener('click', e => {
-    const tg = parseFloat(e.target.dataset.vt);
+    const b0 = e.target.closest('button[data-vt]'), tg = b0 ? parseFloat(b0.dataset.vt) : NaN;
     if (!tg) return;
     const sym = state.symbol, q = quoteOf(sym), bars = state.allBars && state.allBars.length ? state.allBars : state.bars, iv = curInterval();
-    const vol = bars.length > 22 ? GT.stats.realizedVol(bars, 20, 'sd')[bars.length - 1] : NaN;
-    if (!(vol > 0) || !state.live) { setTxt('trVtText', '値動きの大きさを計算できません(足が足りないか、価格を取得できていません)。', 'dim'); return; }
+    const S = GT.stats, vol = bars.length > 22 ? S.realizedVol(bars, 20, 'sd')[bars.length - 1] : NaN;
+    // 計算できない理由を分けて出す(足が足りない/値動きがない/価格が取れていない)。理由が分からないと、故障に見える
+    const why = !state.live ? '価格を取得できていないため' : bars.length <= 22 ? `足が ${bars.length} 本しかないため(21 本以上必要)` : vol === 0 ? '直近 20 本の値動きがまったくないため' : !(vol > 0) ? '値動きの大きさが分からないため' : '';
+    if (why) { setTxt('trVtText', `${why}、値動きに合わせた金額は計算できません。金額は変えていません。`, 'dim'); vtKey = `${sym}|${state.interval}`; return; }
     const st = acctStats(q), lv = curLev(), w = Math.min(1, tg / vol);
     const v = Math.min(st.equity * w, st.avail / ((lv > 1 ? 1 / lv : 1) + FEE));
     setNotional(floorMoney(v, q)); renderRisk();
-    setTxt('trVtText', `この銘柄の値動きは年率 約 ${(vol * 100).toFixed(0)}%(${iv.label}足 20 本・前の足まで。1年 = ${Math.round(GT.stats.barsPerYear(iv.ms)).toLocaleString()} 本で年率に)。` +
-      `目標 ${(tg * 100).toFixed(0)}% ÷ ${(vol * 100).toFixed(0)}% = ${w.toFixed(2)} → 評価額の ${(w * 100).toFixed(0)}%${v < st.equity * w - 1e-9 ? '(使える金額までにしました)' : ''}を入れました。短い足ほど、値動きは大きめ・小さめにぶれます。`, 'dim');
+    // 年率に直す本数は、値動きの計算と同じもの(足の時刻の間隔)を使う
+    const bpy = S.barsPerYear(S.barMs(bars));
+    setTxt('trVtText', `値動き 年率 約 ${pctText(vol, 0)}(${iv.label}足 20 本)。目標 ${pctText(tg, 0)} ÷ ${pctText(vol, 0)} → 評価額の ${pctText(w, 0)}` +
+      `${v < st.equity * w - 1e-9 ? '(使える金額まで)' : ''}を入れました。` + (iv.ms < 36e5 ? '短い足では、値動きの見積もりがぶれやすくなります。' : ''), 'dim');
+    $('trVtText').title = `1年 = ${Math.round(bpy).toLocaleString()} 本として年率にしています。いま動いている足は使いません(前の足まで)。`;
+    vtKey = `${sym}|${state.interval}`;
   });
   ['change', 'symbolpicked'].forEach(ev => $('symbol').addEventListener(ev, () => setTxt('trVtText', '', 'dim')));
+  // 時間足を変えたときも、前の計算の文を消す(別の足の値動きの話が残らないように)
+  setInterval(() => { if (vtKey && vtKey !== `${state.symbol}|${state.interval}`) { vtKey = ''; setTxt('trVtText', '', 'dim'); } }, 1000);
   // 注文の種類(成行 / 指値)
   let orderType = 'market';
   $('trType').addEventListener('click', e => {
@@ -5038,21 +5063,44 @@ async function marketStats(b) {
   const rg = b.rg, rl = b.rl;
   return { n, big, pg, pl, unk, nPgr: rg + rl + pg + pl, pgr: rg + pg ? rg / (rg + pg) : NaN, plr: rl + pl ? rl / (rl + pl) : NaN };
 }
+// たたんだ欄(文字列で組み立てる画面用)。開いた・閉じたは foldOpen で覚え、描き直しても保つ(renderAnalysis の最後で付け直す)
+const foldHtml = (key, title, sub, inner, guide) =>
+  `<details class="fold" data-fold="${key}"><summary><span>${title}</span>${sub ? `<small>${sub}</small>` : ''}</summary><div class="fold-body">${inner}` +
+  (guide ? `<p class="small"><a class="glink" href="guide.html#${guide}" target="_blank" rel="noopener">教科書の説明を読む ›</a></p>` : '') + `</div></details>`;
+const glinkHtml = id => `<a class="glink" href="guide.html#${id}" target="_blank" rel="noopener">教科書で読む ›</a>`;
+// 「売買のくせ」の欄。1つの数字に、1行のふつうの言葉の説明と、教科書へのリンクを付ける。論文の名前は教科書のほうに書いてある
 function behaviourHtml(b, q) {
-  const pc = v => (isFinite(v) ? `${(v * 100).toFixed(0)}%` : '—');
-  const dur = ms => (!isFinite(ms) ? '—' : ms < 36e5 ? `${Math.max(1, Math.round(ms / 6e4))} 分` : ms < 864e5 ? `${(ms / 36e5).toFixed(1)} 時間` : `${(ms / 864e5).toFixed(1)} 日`);
-  const kpi = (label, value, hint) => `<div class="kpi"><span class="dim">${label}</span><strong>${value}</strong>${hint ? `<small>${hint}</small>` : ''}</div>`;
+  const pc = v => pctText(v, 0);
+  const dur = ms => (!isFinite(ms) ? '—' : ms < 36e5 ? `${Math.max(1, Math.round(ms / 6e4))} 分` : ms < 864e5 ? `${fx(ms / 36e5, 1)} 時間` : `${fx(ms / 864e5, 1)} 日`);
+  const kpi = (label, value, hint, guide, id) => `<div class="kpi"${id ? ` id="${id}"` : ''}><span class="dim">${label}</span><strong>${value}</strong>${hint ? `<small>${hint}</small>` : ''}${guide ? glinkHtml(guide) : ''}</div>`;
   const money = v => (isFinite(v) ? `${fmtMoney(v, q)} ${esc(q)}` : '—');
-  return `<h3>売買のくせ(研究で知られた形で数えたもの)</h3>` +
-    `<p class="small">あなたのデモの履歴を、投資家の行動の研究と同じ形で数えたものです。数が少ないうちは偶然で大きく変わります。良い・悪いの判定ではありません。</p><div class="kpis">` +
-    `<div class="kpi" id="anPgr"><span class="dim">含み益・含み損の決済の割合</span><strong>計算しています…</strong><small>自分の手で決済した ${b.manual} 回について数えます</small></div>` +
-    kpi('持っていた時間(中央値)', `負け ${dur(b.holdLoss)} / 勝ち ${dur(b.holdWin)}`, `負けた取引 ${b.nLoss} 回・勝った取引 ${b.nWin} 回。負けた取引を長く持つ傾向は、上と同じ研究で「損を確定させにくい」くせとして知られています`) +
-    kpi('次の取引の金額(中央値)', `勝ったあと ${money(b.sizeAfterW)} / 負けたあと ${money(b.sizeAfterL)}`, `全体の中央値 ${money(b.sizeAll)}(勝ったあと ${b.nAfterW} 回・負けたあと ${b.nAfterL} 回)。Ben-David ら(2018)は、個人の為替の取引で、勝った週のあとに金額を大きく増やす傾向を報告しています`) +
-    kpi('負けてから30分以内に次の取引', `${b.reIn} 回`, `負けた取引 ${b.nLoss} 回のうち(30分はこのアプリで決めた区切り)`) +
-    `<div class="kpi" id="anAttn"><span class="dim">大きく動いた直後に入った取引</span><strong>計算しています…</strong><small>入る前の24時間の値動きが、日足の ATR(14)の2倍を超えていたもの</small></div>` +
-    kpi('1週間あたりの取引', isFinite(b.perWeek) ? b.perWeek.toFixed(1) : '—', `決済し終えた取引 ${b.nDone} 回`) +
-    kpi('手数料 ÷ 手数料を引く前の損益', b.gross > 0 ? pc(b.feeShare) : '—', b.gross > 0 ? `手数料 ${money(b.fees)}、引く前の損益 ${money(b.gross)}。Barber・Odean(2000)は、よく売買する個人ほど、手数料などで成績が下がったと報告しています` : `手数料 ${money(b.fees)}。手数料を引く前の損益がプラスでないため、割合は出していません`) +
+  // 大きい金額は、小数を省いて短くする(スマホで1行に収めるため)
+  const num = v => (!isFinite(v) ? '—' : Math.abs(v) >= 1000 ? nf(0).format(Math.round(v)) : fmtMoney(v, q));
+  const inner = `<p class="small">デモの履歴を、投資家の行動の研究と同じ形で数えたものです。良い・悪いの判定ではありません。数が少ないうちは、偶然で大きく変わります。</p><div class="kpis">` +
+    kpi('含み益・含み損の決済の割合', '計算しています…', `利益の出ているものほど早く決済していないか(手で決済した ${b.manual} 回から)`, 'behavior-metrics', 'anPgr') +
+    kpi('持っていた時間(中央値)', `負け ${dur(b.holdLoss)} / 勝ち ${dur(b.holdWin)}`, `負けを長く持ちすぎていないか(負け ${b.nLoss} 回・勝ち ${b.nWin} 回)`, 'behavior-metrics') +
+    kpi(`次の取引の金額(中央値・${esc(q)})`, `勝ち後 ${num(b.sizeAfterW)} / 負け後 ${num(b.sizeAfterL)}`, `勝ち負けで金額が変わっていないか(全体 ${num(b.sizeAll)}。勝ち後 ${b.nAfterW} 回・負け後 ${b.nAfterL} 回)`, 'behavior-metrics') +
+    kpi('負けてから30分以内に次の取引', `${b.reIn} 回`, `負けを取り返そうと急いでいないか(負け ${b.nLoss} 回のうち)`, 'behavior-metrics') +
+    kpi('大きく動いた直後に入った取引', '計算しています…', '目立つ動きに飛びついていないか', 'retail', 'anAttn') +
+    kpi('1週間あたりの取引', fx(b.perWeek, 1), `売買しすぎていないか(決済し終えた取引 ${b.nDone} 回)`, 'retail') +
+    kpi('手数料 ÷ 手数料を引く前の損益', b.gross > 0 ? pc(b.feeShare) : '—', b.gross > 0 ? `手数料が利益を食っていないか(手数料 ${money(b.fees)})` : `手数料 ${money(b.fees)}。引く前の損益がプラスでないため、割合は出していません`, 'retail') +
     `</div>`;
+  return foldHtml('an-habit', '売買のくせ(研究で知られた形で数えたもの)', '7 項目', inner, 'behavior-metrics');
+}
+/* 成績の画面のいちばん上の「ひとことで」。目立つくせは、数が足りるときだけ、2つまで書く(強い言い方はしない) */
+function analysisVerdict(st, b, q) {
+  if (!st.n) return `<div class="verdict v-mid" id="anVerdict" role="status"><span class="v-tag">ひとことで</span><strong>まだ決済した取引がありません。</strong><span class="v-sub">デモトレードで売買して決済すると、ここに成績と売買のくせが出ます。</span></div>`;
+  const tone = st.net > 0 ? 'good' : st.net < 0 ? 'bad' : 'mid';
+  const head = `決済 ${st.n} 回で、確定した損益は ${fmtMoney(st.net, q, true)} ${esc(q)}(${pctText(st.net / st.start, 2, true)})です。`;
+  const notes = [];
+  if (b.nLoss >= 5 && b.nWin >= 5 && b.holdLoss > 1.5 * b.holdWin) notes.push('負けた取引を、勝った取引より長く持つ傾向が見えます。');
+  if (b.nAfterL >= 5 && b.sizeAfterL > 1.5 * b.sizeAll) notes.push('負けたあとに、金額を大きくする傾向が見えます。');
+  if (b.nLoss >= 5 && b.reIn / b.nLoss >= 0.3) notes.push('負けてすぐ(30分以内)に次の取引をすることが多めです。');
+  if (b.gross > 0 && b.feeShare >= 0.5 && b.nDone >= 10) notes.push('手数料が、手数料を引く前の利益の半分以上になっています。');
+  const sub = (st.n < 30 ? `回数が少ないため、勝率などは偶然で大きく変わります。` : '') + notes.slice(0, 2).join('') + (notes.length ? '(偶然のこともあります。くわしくは下の「売買のくせ」)' : '');
+  const chips = [`勝率 ${pctText(st.wins / st.n, 0)}`, `1週間に ${fx(b.perWeek, 1)} 回`, `最大の落ち込み ${st.maxDD > 0 ? pctText(-st.maxDDPct / 100, 1) : '—'}`];
+  return `<div class="verdict v-${tone}" id="anVerdict" role="status"><span class="v-tag">ひとことで</span><strong>${head}</strong>${sub ? `<span class="v-sub">${sub}</span>` : ''}` +
+    `<span class="v-chips">${chips.map(t => `<span>${t}</span>`).join('')}</span></div>`;
 }
 let attnToken = 0;
 function renderAnalysis() {
@@ -5088,23 +5136,28 @@ function renderAnalysis() {
       st.bySym.map(s => `<tr><td>${esc(labelOf(s.sym))}</td><td>${s.n}</td><td>${s.n ? (s.wins / s.n * 100).toFixed(0) + '%' : '—'}</td><td class="${pnlClass(s.net)}">${fmtMoney(s.net, q, true)}</td></tr>`).join('') +
       `</tbody></table></div>`
     : `<p class="dim">まだ取引がありません。デモトレードで売買すると、ここに成績が出ます。</p>`;
-  if (st.n > 0 && st.n < 30) html += `<p class="dim small">決済が ${st.n} 回と少ないため、勝率などの数字は偶然に大きく左右されます。目安として見てください。</p>`;
   const bh = behaviourStats(q);
   if (st.n > 0) html += behaviourHtml(bh, q);
-  body.innerHTML = html;
+  body.innerHTML = analysisVerdict(st, bh, q) + html;
+  body.querySelectorAll('details.fold').forEach(d => {
+    if (foldOpen.has(d.dataset.fold)) d.open = true;
+    d.addEventListener('toggle', () => { if (d.open) foldOpen.add(d.dataset.fold); else foldOpen.delete(d.dataset.fold); });
+  });
   if (st.n > 0 && $('anAttn')) {
     const token = ++attnToken;
     marketStats(bh).then(r => {
       const box = $('anAttn');
       if (token !== attnToken || !box) return;
       box.querySelector('strong').textContent = r.n ? `${r.big} 回 / ${r.n} 回` : '数えられる取引がありません';
-      const pg = $('anPgr'), pc = v => (isFinite(v) ? `${(v * 100).toFixed(0)}%` : '—');
+      box.querySelector('small').textContent = `目立つ動きに飛びついていないか(入る前の24時間の値動きが、日足の ATR(14)の2倍を超えていた取引。直近 約40日の分)`;
+      const pg = $('anPgr'), pc = v => pctText(v, 0);
       if (pg) {
         pg.querySelector('strong').textContent = r.nPgr >= 20 ? `益 ${pc(r.pgr)} / 損 ${pc(r.plr)}` : 'まだ数が足りません';
-        pg.querySelector('small').textContent = `自分の手で決済した ${bh.manual} 回について、そのとき持っていたポジション ${r.nPgr} 件(決済した益 ${bh.rg}・損 ${bh.rl}、持ち続けた益 ${r.pg}・損 ${r.pl})を数えました(20 件以上で表示${r.unk ? `。価格が取れず数えなかったもの ${r.unk} 件` : ''})。` +
-          (r.nPgr >= 20 && isFinite(r.pgr - r.plr) ? `差 ${((r.pgr - r.plr) * 100).toFixed(0)} ポイント。` : '') + 'Odean(1998)は、個人投資家は含み益を含み損より決済しやすいと報告しています。持ち続けた分の含み損益は、その時刻の1時間足の終値で判定。利確・損切りでの自動の決済は数えません';
+        // 数えたもの:手で決済したときに「決済した益・損」と「持ち続けた益・損」。持ち続けた分の含み損益は、その時刻の1時間足の終値で判定。
+        // 利確・損切りでの自動の決済は数えない(Odean 1998 の数え方。くわしくは教科書)
+        pg.querySelector('small').textContent = `利益の出ているものほど早く決済していないか。手で決済した ${bh.manual} 回のとき持っていた ${r.nPgr} 件から(決済 益${bh.rg}・損${bh.rl}/持ち続け 益${r.pg}・損${r.pl}。20 件以上で表示)` +
+          (r.unk ? `。価格が取れず数えなかったもの ${r.unk} 件` : '') + (r.nPgr >= 20 && isFinite(r.pgr - r.plr) ? `。差 ${fx((r.pgr - r.plr) * 100, 0)} ポイント` : '');
       }
-      box.querySelector('small').textContent = `入る前の24時間の値動きが、日足の ATR(14、前の日まで)の2倍を超えていた取引(直近 約40日の取引だけ)。Barber・Odean(2008)は、個人投資家は注目を集めた(大きく動いた・出来高の多い)銘柄を買いがちだと報告しています`;
     }).catch(() => { if (token !== attnToken) return; ['anAttn', 'anPgr'].forEach(id => { const box = $(id); if (box) box.querySelector('strong').textContent = '価格を取り寄せられませんでした'; }); });
   }
   drawCurve($('anCurve'), st);
@@ -5669,6 +5722,11 @@ function renderBacktest() {
   $('btTitle').textContent = byRule ? '売買ルールを過去データで試す' : `「${IND_TYPES[ind.type].name}」の合図で売買していたら`;
   body.textContent = '';
   const add = (...nodes) => nodes.forEach(nd => body.appendChild(nd));
+  // 統計の目安を先に計算する(いちばん上の「ひとことで」に使うため)。足が少なすぎるときは null
+  const rd = btRead(r, bars, iv, marks, byRule);
+  // 「ひとことで」は、スマホでも開いてすぐ見えるよう、設定より上に置く(ルールを選ぶ欄のすぐ下)
+  const verdict = btVerdict(r, rd);
+  if (!byRule) add(verdict);
   if (byRule) {
     const def = RULES[bt.rule];
     const sel = el('select', { class: 'ctl', id: 'btRule', 'aria-label': '売買ルール' }, RULES.map((r, i) => el('option', { value: String(i), text: r.name })));
@@ -5686,10 +5744,9 @@ function renderBacktest() {
       $('btOverlay').hidden = true;
       toast(`「${def.name}」をチャートに追加しました。⚙ から数値を変えたり、式を編集したりできます。`);
     });
-    add(el('div', { class: 'bt-rule' }, [el('label', { class: 'bt-ctl' }, [el('span', { class: 'dim', text: '売買ルール' }), sel]), addBtn]));
+    add(el('div', { class: 'bt-rule' }, [el('label', { class: 'bt-ctl' }, [el('span', { class: 'dim', text: '売買ルール' }), sel]), addBtn]), verdict);
     add(el('p', { class: 'small', text: `${def.desc} 設定: ${def.inputs.map(q => `${q.label} ${q.def}`).join('、')}(「チャートに出す」と、数値を変えて試せます)` }));
   }
-  const pct = (v, sign) => (isFinite(v) ? `${sign && v > 0 ? '+' : ''}${(v * 100).toFixed(Math.abs(v) >= 10 ? 0 : 2)}%` : '—');
   const select = (label, value, options, onChange) => {
     const sel = el('select', { class: 'ctl' }, options.map(([v, t]) => el('option', { value: v, text: t })));
     sel.value = value;
@@ -5715,118 +5772,215 @@ function renderBacktest() {
     const num = el('input', { class: 'ctl', type: 'number', min: '0', max: key === 'sl' ? '99' : '1000', step: '0.1', inputmode: 'decimal', placeholder: 'なし' });
     if (bt[key] > 0) num.value = bt[key];
     num.addEventListener('change', () => { const v = parseFloat(num.value); bt[key] = v > 0 ? clamp(v, 0.01, key === 'sl' ? 99 : 1000) : 0; renderBacktest(); });
-    return el('label', { class: 'bt-ctl' }, [el('span', { class: 'dim', text: label }), num]);
+    return el('label', { class: 'bt-ctl num' }, [el('span', { class: 'dim', text: label }), num]);
   };
-  ctl.appendChild(pctBox('損切り(入った価格から何%不利に動いたら)', 'sl'));
-  ctl.appendChild(pctBox('利確(何%有利に動いたら)', 'tp'));
+  ctl.appendChild(pctBox('損切り(何%不利で)', 'sl'));
+  ctl.appendChild(pctBox('利確(何%有利で)', 'tp'));
   {
     // すべり:注文した価格より、少し不利な価格で約定すること。入るときも出るときも、毎回この割合だけ不利にする
     const num = el('input', { class: 'ctl', type: 'number', min: '0', max: '5', step: '0.01', inputmode: 'decimal', id: 'btSlip' });
     num.value = state.btSlip;
     num.addEventListener('change', () => { const v = parseFloat(num.value); state.btSlip = isFinite(v) && v >= 0 ? clamp(v, 0, 5) : 0.05; save(); renderBacktest(); });
-    ctl.appendChild(el('label', { class: 'bt-ctl' }, [el('span', { class: 'dim', text: `すべり(片道 %。手数料 ${(FEE * 100).toFixed(1)}% とは別)` }), num]));
+    ctl.appendChild(el('label', { class: 'bt-ctl num', title: `注文した価格より不利に約定する分。手数料 ${fx(FEE * 100, 1)}% とは別に、入るときも出るときも引きます` }, [el('span', { class: 'dim', text: 'すべり(片道 %)' }), num]));
   }
   add(ctl);
-  add(el('p', { class: 'dim small', text: `${labelOf(state.symbol)}・${iv ? iv.label : ''}足・${bars.length}本(${fmtDate(bars[0].t)} 〜 ${fmtDate(bars[bars.length - 1].t)})で計算。合図が出た足の「次の足の始値」で売買し、売買のたびに手数料 ${(FEE * 100).toFixed(1)}% とすべり ${state.btSlip}% を不利な側に引いています。「持ち続けた場合」も、同じ最初の足の始値で買い、同じ最後の足の終値で売ったとして、同じ手数料とすべりを引いています。最後に手じまっていない売買も、最後の足の終値で手じまったとして計算しています。` }));
+  add(el('p', { class: 'dim small', text: `${labelOf(state.symbol)}・${iv ? iv.label : ''}足・${bars.length.toLocaleString()}本(${fmtDate(bars[0].t)} 〜 ${fmtDate(bars[bars.length - 1].t)})で計算しました。` }));
 
-  const kpi = (label, value, cls, hint) => {
-    const k = el('div', { class: 'kpi' }, [el('span', { class: 'dim', text: label }), el('strong', { class: cls || '', text: value })]);
-    if (hint) k.appendChild(el('small', { text: hint }));
-    return k;
-  };
   const cls = v => (v > 0 ? 'up' : v < 0 ? 'down' : '');
   const diff = r.total - r.holdRet;
   add(el('div', { class: 'kpis' }, [
-    kpi('合図どおりの損益', pct(r.total, true), cls(r.total), '資金を毎回すべて使った場合の、期間全体の増減'),
-    kpi('何もせず持ち続けた場合', pct(r.holdRet, true), cls(r.holdRet), isFinite(diff) ? `合図どおりのほうが ${pct(Math.abs(diff))} ${diff >= 0 ? '良い' : '悪い'}` : ''),
-    kpi('勝率', r.n ? `${(r.wins / r.n * 100).toFixed(0)}%` : '—', '', `売買 ${r.n} 回(勝ち ${r.wins}・負け ${r.losses})` + (bt.sl > 0 || bt.tp > 0 ? `。うち損切り ${r.nSl} 回・利確 ${r.nTp} 回` : '')),
-    kpi('プロフィットファクター', isFinite(r.pf) ? r.pf.toFixed(2) : r.wins && !r.losses ? '負けなし' : '—', isFinite(r.pf) ? cls(r.pf - 1) : '', '利益の合計 ÷ 損失の合計。1 より大きければ全体でプラス'),
-    kpi('最大ドローダウン', r.maxDD > 0 ? pct(-r.maxDD) : '—', r.maxDD > 0 ? 'down' : '', '資金がいちばん多かった時点からの、最大の落ち込み'),
-    kpi('平均利益 / 平均損失', `${pct(r.avgWin, true)} / ${pct(r.avgLoss, true)}`, '', `ポジションを持っていた時間は全体の ${(r.exposure * 100).toFixed(0)}%`),
+    btKpi('合図どおりの損益', pctText(r.total, 2, true), cls(r.total), '資金を毎回すべて使った場合の、期間全体の増減'),
+    btKpi('何もせず持ち続けた場合', pctText(r.holdRet, 2, true), cls(r.holdRet), isFinite(diff) ? `合図どおりのほうが ${pctText(Math.abs(diff), 2)} ${diff >= 0 ? '良い' : '悪い'}` : ''),
+    btKpi('勝率', r.n ? pctText(r.wins / r.n, 0) : '—', '', `売買 ${r.n} 回(勝ち ${r.wins}・負け ${r.losses})` + (bt.sl > 0 || bt.tp > 0 ? `。うち損切り ${r.nSl} 回・利確 ${r.nTp} 回` : '')),
+    btKpi('プロフィットファクター', isFinite(r.pf) ? fx(r.pf, 2) : r.wins && !r.losses ? '負けなし' : '—', isFinite(r.pf) ? cls(r.pf - 1) : '', '利益の合計 ÷ 損失の合計。1 より大きければ全体でプラス'),
+    btKpi('最大ドローダウン', r.maxDD > 0 ? pctText(-r.maxDD, 2) : '—', r.maxDD > 0 ? 'down' : '', '資金がいちばん多かった時点からの、最大の落ち込み'),
+    btKpi('平均利益 / 平均損失', `${pctText(r.avgWin, 2, true)} / ${pctText(r.avgLoss, 2, true)}`, '', `ポジションを持っていた時間は全体の ${pctText(r.exposure, 0)}`),
   ]));
   add(el('h3', { text: '資金の推移(開始時を 1 とした倍率)' }));
   const cv = el('canvas', { id: 'btCurve', class: 'curve', role: 'img', 'aria-label': '合図どおりに売買した場合と、持ち続けた場合の資金の推移' });
   add(cv);
   add(el('p', { class: 'dim small', text: '色の線が合図どおり、灰色の線が持ち続けた場合です。' }));
 
+  // ここから下は、たたんで出す(数字が多いので、見たいものだけ開けるように)。開いた・閉じたは、描き直しても保つ
+  // 偶然でも出せる成績かどうか:でたらめな時点で同じように売買した場合と比べる
+  if (r.n >= 1) {
+    const box = el('p', { class: 'small', id: 'btLuck', text: '計算しています…' }), sub = el('small', { text: '計算しています…' });
+    add(fold('luck', 'たまたまではないか(でたらめな売買と比べる)', sub, [box], 'backtest'));
+    luckTest(bars, r, box, sub);
+  }
+  if (rd) add(btStatsFold(rd, r));
+  add(btDdFold(r));
   const warn = [];
   if (r.n === 0) warn.push('この期間では、売買が一度も成立していません。条件がきびしすぎるか、合図の向きと「入り方」が合っていない可能性があります。');
   else if (r.n < 30) warn.push(`売買が ${r.n} 回と少ないため、結果は偶然に大きく左右されます。30回に満たない成績は、参考程度に見てください。`);
-  if (r.open) warn.push(`最後の売買は、まだ手じまいしていません(いま手じまうと ${pct(r.open.ret, true)}。手数料・すべり込み)。損益には入れていますが、勝率には数えていません。`);
+  if (r.open) warn.push(`最後の売買は、まだ手じまいしていません(いま手じまうと ${pctText(r.open.ret, 2, true)}。手数料・すべり込み)。損益には入れていますが、勝率には数えていません。`);
+  warn.push(`合図が出た足の「次の足の始値」で売買し、売買のたびに手数料 ${fx(FEE * 100, 1)}% とすべり ${state.btSlip}% を不利な側に引いています。「持ち続けた場合」も、同じ最初の足の始値で買い、同じ最後の足の終値で売ったとして、同じ手数料とすべりを引いています。最後に手じまっていない売買も、最後の足の終値で手じまったとして計算しています。`);
   if (bt.sl > 0 && bt.tp > 0) warn.push('1本の足の中で損切りと利確の両方に届いた場合は、どちらが先か分からないため、損切りが先だったとして計算しています(成績を良く見せないため)。');
   warn.push('これは過去の値動きに当てはめた結果で、これからも同じようになることを示すものではありません。成績が良くなるまで式や数値を調整すると、過去にたまたま合っただけの設定になりやすくなります。別の銘柄や時間足でも試して、同じ傾向が出るかを確かめてください。');
   warn.push('実際の売買では、注文が思った価格で通らないこと(すべり)があり、成績はここより悪くなるのがふつうです。');
-  add(el('ul', { class: 'bt-notes' }, warn.map(t => el('li', { text: t }))));
-  // 偶然でも出せる成績かどうか:でたらめな時点で同じように売買した場合と比べる
-  if (r.n >= 1) {
-    add(el('h3', { text: 'たまたまではないか(でたらめに売買した場合と比べる)' }));
-    const box = el('p', { class: 'small', id: 'btLuck', text: '計算しています…' });
-    add(box);
-    luckTest(bars, r, box);
-  }
-
-  renderBtStats(add, kpi, r, bars, iv, marks, byRule);
+  add(fold('notes', '計算の決まりと注意点', el('small', { text: `${warn.length} 項目` }), [el('ul', { class: 'bt-notes' }, warn.map(t => el('li', { text: t })))], 'backtest'));
   if (r.trades.length) {
-    add(el('h3', { text: `売買の記録(新しい順・${Math.min(50, r.trades.length)}件まで)` }));
     // スマホでも横にずらさず読めるよう、大事な「損益」と「理由」を左に置く
     const rows = r.trades.slice(-50).reverse().map(t => el('tr', {}, [
-      el('td', { text: t.dir > 0 ? '買い' : '売り' }), el('td', { class: cls(t.ret), text: pct(t.ret, true) }),
+      el('td', { text: t.dir > 0 ? '買い' : '売り' }), el('td', { class: cls(t.ret), text: pctText(t.ret, 2, true) }),
       el('td', { text: t.why === 'liq' ? '資金がゼロ' : t.why === 'sl' ? '損切り' : t.why === 'tp' ? '利確' : r.exitMode === 'signal' ? '合図' : '本数' }),
       el('td', { text: fmtDate(t.t0, iv && iv.ms < 86400000) }), el('td', { text: fmtPrice(t.p0) }),
       el('td', { text: fmtDate(t.t1, iv && iv.ms < 86400000) }), el('td', { text: fmtPrice(t.p1) }), el('td', { text: `${t.bars}本` }),
     ]));
-    add(el('div', { class: 'tbl-wrap' }, [el('table', { class: 'tbl' }, [
-      el('thead', {}, [el('tr', {}, ['向き', '損益', '理由', '入った日', '価格', '手じまい', '価格', '期間'].map(t => el('th', { text: t })))]), el('tbody', {}, rows)])]));
+    add(fold('trades', '売買の記録', el('small', { text: `新しい順・${Math.min(50, r.trades.length)}件まで` }), [el('div', { class: 'tbl-wrap' }, [el('table', { class: 'tbl' }, [
+      el('thead', {}, [el('tr', {}, ['向き', '損益', '理由', '入った日', '価格', '手じまい', '価格', '期間'].map(t => el('th', { text: t })))]), el('tbody', {}, rows)])])]));
   }
   drawBtCurve(cv, r);
 }
+/* 数字の表示をそろえる。小数 d 桁に丸め、丸めた結果が 0 なら符号を付けない(「-0.00」「-0.000%」と出さない)。数でなければ「—」 */
+function fx(v, d) {
+  if (!isFinite(v)) return '—';
+  const s = v.toFixed(d);
+  return /^-0(\.0*)?$/.test(s) ? s.slice(1) : s;
+}
+// 割合(0.0123 → 「1.23%」)。signed で、プラスに「+」を付ける。10倍(1,000%)以上は小数を出さない
+function pctText(v, d, signed) {
+  if (!isFinite(v)) return '—';
+  const s = fx(v * 100, Math.abs(v) >= 10 ? 0 : d);
+  return `${signed && +s > 0 ? '+' : ''}${s}%`;
+}
+// 教科書の、その数字を説明している節へのリンク(新しいタブで開く。試算の画面を閉じずに読めるように)
+const guideA = (id, text) => el('a', { class: 'glink', href: `guide.html#${id}`, target: '_blank', rel: 'noopener', text: text || '教科書で読む ›' });
+// 数字の箱。hint は1行の、ふつうの言葉の説明。guide を渡すと、教科書へのリンクを付ける
+function btKpi(label, value, cls, hint, guide) {
+  const k = el('div', { class: 'kpi' }, [el('span', { class: 'dim', text: label }), el('strong', { class: cls || '', text: value })]);
+  if (hint) k.appendChild(el('small', { text: hint }));
+  if (guide) k.appendChild(guideA(guide));
+  return k;
+}
+/* たたんで出す欄。開いた・閉じたは覚えておき、条件を変えて描き直しても、そのままにする(開いた欄が勝手に閉じると、読みにくい) */
+const foldOpen = new Set();
+function fold(key, title, sub, children, guide) {
+  const d = el('details', { class: 'fold', 'data-fold': key }), s = el('summary', {}, [el('span', { text: title })]);
+  if (sub) s.appendChild(sub);
+  d.appendChild(s);
+  const inner = el('div', { class: 'fold-body' }, children);
+  if (guide) inner.appendChild(el('p', { class: 'small' }, [guideA(guide, '教科書の説明を読む ›')]));
+  d.appendChild(inner);
+  if (foldOpen.has(key)) d.open = true;
+  d.addEventListener('toggle', () => { if (d.open) foldOpen.add(key); else foldOpen.delete(key); });
+  return d;
+}
 /* 成績の読み方(統計の目安)。式は indicators.js の stats にまとめてある(Node でも確かめられる)。
  * 試した回数 N:この画面を開いてから(ページを読み込み直すまで)、同じ銘柄・時間足で試した「ルール・数値・設定」の組み合わせの数。
- * 同じ組み合わせは何度試しても1回と数える。たくさん試すほど、いちばん良い結果は偶然でも良く見えるので、そのぶん割り引く(DSR) */
-const btTrials = new Map(); // `銘柄|時間足` → Map(組み合わせ → 1本あたりの SR)
-function renderBtStats(add, kpi, r, bars, iv, marks, byRule) {
+ * 同じ組み合わせは何度試しても1回と数える。たくさん試すほど、いちばん良い結果は偶然でも良く見えるので、そのぶん割り引く(DSR)。
+ * ただし、期間を 20 → 21 に変えただけの試しは、ほとんど同じ売買になる。別々に数えると割り引きすぎるので、
+ * 足1本ごとの資金の増減が、前に試したものと相関 0.9 以上なら同じ1通りと数えた「実質の回数」も出す(GT.stats.effectiveN)。
+ * 銘柄・時間足ごとに別に数える(変えると、その銘柄・時間足の回数に切りかわる。戻せば、前の回数から続く) */
+const btTrials = new Map(); // `銘柄|時間足` → Map(組み合わせ → { sr: 1本あたりの SR, rets: 足1本ごとの資金の増減 })
+const TRIAL_MAX = 300;     // 覚えておく組み合わせの数の上限(古いものから忘れる。計算が重くならないように)
+function btRead(r, bars, iv, marks, byRule) {
   const S = GT.stats, bpy = S.barsPerYear(iv ? iv.ms * iv.group : NaN);
-  if (!(bpy > 0) || bars.length < 30) return;
+  if (!(bpy > 0) || bars.length < 30) return null;
   const gross = GT.backtest(bars, marks, { side: bt.side, exit: bt.side === 'both' ? 'signal' : bt.exit, hold: bt.hold, fee: 0, slip: 0, sl: bt.sl / 100, tp: bt.tp / 100 });
   const st = S.btStats(r, bpy, gross);
-  const what = byRule ? `rule:${bt.rule}` : `ind:${bt.ind.type}:${JSON.stringify(bt.ind.p, (k, v) => (k === 'vis' || k === 'alert' ? undefined : v))}`;
+  // 線の色・表示する時間足・お知らせ・枠の高さなど、成績に関係しない設定は、組み合わせに数えない(色を変えただけで回数が増えないように)
+  const look = (k, v) => k === 'vis' || k === 'alert' || k === 'weight' || (typeof v === 'string' && /^#[0-9a-f]{3,8}$/i.test(v));
+  const what = byRule ? `rule:${bt.rule}` : `ind:${bt.ind.type}:${JSON.stringify(bt.ind.p, (k, v) => (k && look(k, v) ? undefined : v))}`;
   const key = [what, bt.side, r.exitMode, r.exitMode === 'bars' ? bt.hold : '', bt.sl, bt.tp, state.btSlip].join('|');
   const bucket = `${state.symbol}|${state.interval}`;
   if (!btTrials.has(bucket)) btTrials.set(bucket, new Map());
   const tries = btTrials.get(bucket);
-  if (isFinite(st.sr)) tries.set(key, st.sr);
-  const N = Math.max(1, tries.size), srs = [...tries.values()];
+  if (isFinite(st.sr)) {
+    const c = r.curve, rets = new Float32Array(Math.max(0, c.length - 1));
+    for (let i = 1; i < c.length; i++) rets[i - 1] = c[i - 1] > 0 ? c[i] / c[i - 1] - 1 : 0;
+    tries.delete(key); // 入れ直して、新しい順の最後にする
+    tries.set(key, { sr: st.sr, rets });
+    while (tries.size > TRIAL_MAX) tries.delete(tries.keys().next().value);
+  }
+  const list = [...tries.values()], N = Math.max(1, list.length), srs = list.map(x => x.sr);
+  const eff = list.length > 1 ? S.effectiveN(list.map(x => x.rets), 0.9).n : N;
   // V:試した結果の SR のばらつき。5回以上試していれば、その実際のばらつきを使う。少ないうちは「本当は差がない」場合のばらつき 1/(n−1)
-  let V = 1 / (st.n - 1), vFrom = '本当の差がない場合のばらつき 1/(本数−1)';
+  let V = 1 / (st.n - 1), vFrom = '本当の差がない場合のばらつき';
   if (srs.length >= 5) {
     const m = srs.reduce((a, x) => a + x, 0) / srs.length, v = srs.reduce((a, x) => a + (x - m) * (x - m), 0) / (srs.length - 1);
     if (v > 0) { V = v; vFrom = `試した ${srs.length} 通りの結果のばらつき`; }
   }
-  const d = S.dsr(st.sr, st.n, st.skew, st.kurt, N, V);
-  const f2 = v => (isFinite(v) ? v.toFixed(2) : '—'), pc = v => (isFinite(v) ? `${(v * 100).toFixed(1)}%` : '—');
-  const yrs = v => (isFinite(v) ? (v >= 1 ? `約 ${v.toFixed(1)} 年` : `約 ${Math.max(1, Math.round(v * 365))} 日`) : '—');
-  add(el('h3', { text: '成績の読み方(条件つきの目安)' }));
-  add(el('p', { class: 'small', text: `足1本ごとの資金の増減から計算しています(1年 = ${Math.round(bpy).toLocaleString()} 本。暗号資産は土日も動くので 365 日で数えます)。` +
-    'どれも「毎回の値動きが互いに無関係で、性質が時間で変わらない」とした場合の目安です。実際の値動きは、荒れる時期と静かな時期がかたまって来るので、目安は甘めに出ます。もうかる確率ではありません。' }));
-  const enough = st.n >= st.minTRL;
-  const trl = el('div', { class: 'kpi' }, [el('span', { class: 'dim', text: '必要なデータの長さ(MinTRL)' }),
-    el('strong', { text: isFinite(st.minTRL) ? `${Math.ceil(st.minTRL).toLocaleString()} 本` : '—' }),
-    el('small', { text: isFinite(st.minTRL) ? `${yrs(st.minTRL / bpy)}。いまは ${st.n.toLocaleString()} 本(${yrs(st.years)})。この本数がないと、95% の確かさで「SR が 0 より上」とは言えない(Bailey・López de Prado 2012)` : 'SR が 0 以下なので、データをどれだけ増やしても「0 より上」とは言えません' })]);
-  if (!enough && isFinite(st.minTRL)) trl.querySelector('strong').appendChild(el('span', { class: 'bt-badge', text: 'データが足りない' }));
-  add(el('div', { class: 'kpis', id: 'btStats' }, [
-    kpi('シャープレシオ(年率)', f2(st.srAnn), '', '平均の増え方 ÷ ばらつき。1本あたりの値 × √(1年の本数)。売買のない足も 0 として入る'),
-    kpi('ソルティノレシオ(年率)', f2(st.sortinoAnn), '', '下がる方向のばらつきだけで割ったもの(目標 0)'),
-    kpi('PSR(0 と比べて)', pc(st.psr0), '', `本数 ${st.n.toLocaleString()}・ゆがみ ${f2(st.skew)}・とがり ${f2(st.kurt)} から見た「SR が 0 より上」の確からしさ(Bailey・López de Prado 2012)`),
-    kpi(`DSR(試した回数 N = ${N})`, pc(d.dsr), '', `${N} 通り試したことを割り引いた PSR(Bailey・López de Prado 2014)。比べる基準 SR0 = ${f2(d.sr0 * Math.sqrt(bpy))}(年率)。ばらつきは${vFrom}。試した組み合わせが似ていると、割り引きすぎになります`),
-    trl,
-    kpi('t 値', f2(st.tstat), st.tstat < 3 ? 'down' : '', st.tstat < 3 ? '3 より小さい。たくさんの手法が試されてきたので、3 以上でないと偶然と区別しにくい(Harvey・Liu・Zhu 2016)' : '3 以上(Harvey・Liu・Zhu 2016 の目安)。それでも、試した回数が多ければ偶然はありえます'),
-    kpi('損益が 0 になる片道のコスト', isFinite(st.breakEven) ? (st.breakEven > 0 ? `${(st.breakEven * 100).toFixed(3)}%` : 'なし') : '—', '',
-      st.breakEven > 0 ? `手数料とすべりを合わせて、1回の売買(片道)でこの割合を超えると、損益がマイナスになります。いまの設定は ${((FEE + state.btSlip / 100) * 100).toFixed(3)}%` : '手数料・すべりが 0 でも、損益がプラスになりません'),
-    kpi('1年あたりの売買の回数', isFinite(st.tradesPerYear) ? st.tradesPerYear.toFixed(1) : '—', '', `コストが、コストを引く前の利益に占める割合: ${isFinite(st.costShare) ? pc(st.costShare) : 'コストを引く前も利益なし'}。回数の多い手法ほど、コストで利益が消えやすい(Novy-Marx・Velikov 2016)`),
-  ]));
-  const btl = S.minBTL(N, 1);
-  if (N > 1) add(el('p', { class: 'dim small', text: `${N} 通り試した場合、本当は何の力もない手法でも、いちばん良いものは偶然で年率 SR 1 くらいに見えることがあります。それを避けるには、${yrs(btl)}以上のデータが目安です(MinBTL、Bailey ら 2014)。いまのデータは ${yrs(st.years)}。` }));
-  else add(el('p', { class: 'dim small', text: '試した回数 N は、ルールや数値、入り方・手じまい・損切り・利確・すべりを変えて試すたびに増えます(同じ組み合わせは1回)。ページを読み込み直すと 0 に戻ります。' }));
+  const d = S.dsr(st.sr, st.n, st.skew, st.kurt, eff, V), dRaw = S.dsr(st.sr, st.n, st.skew, st.kurt, N, V);
+  return { st, bpy, N, eff, d, dRaw, vFrom, enough: st.n >= st.minTRL, btl: S.minBTL(eff, 1), counted: list.length };
+}
+const yrsText = v => (isFinite(v) ? (v >= 1 ? `約 ${fx(v, 1)} 年` : `約 ${Math.max(1, Math.round(v * 365))} 日`) : '—');
+/* いちばん上の「ひとことで」。強い言い方はしない:良く見えても「偶然だけでは出にくい」まで。
+ * 判定の順:売買なし → 損 → (回数・データの長さ・試した回数のどれかが足りない)→ 目安を満たす */
+function btVerdict(r, rd) {
+  const tot = pctText(r.total, 2, true), hold = pctText(r.holdRet, 2, true);
+  let tone = 'mid', head;
+  if (r.n === 0 && !r.open) head = 'この条件では、この期間に売買が一度も成立しませんでした。';
+  else if (r.n === 0) head = `まだ手じまっていない売買が1つあるだけです(いま手じまうと ${pctText(r.open.ret, 2, true)})。良し悪しは判断できません。`;
+  else if (!(r.total > 0)) { tone = 'bad'; head = `この期間では、合図どおりに売買すると損でした(${tot})。`; }
+  else {
+    const dsr = rd ? rd.d.dsr : NaN;
+    const weak = r.n < 30 ? `売買が ${r.n} 回と少なく` : !rd || !rd.enough ? 'データの長さが足りず' : !(dsr >= 0.95) ? `試した回数(実質 ${rd.eff} 通り)を考えると` : '';
+    if (weak) head = `プラス(${tot})でしたが、${weak}、偶然と見分けられません。`;
+    else { tone = 'good'; head = `プラス(${tot})で、条件つきの目安では、偶然だけでは出にくい成績です。`; }
+  }
+  const sub = [];
+  if (isFinite(r.holdRet) && (r.n > 0 || r.open)) sub.push(`何もせず持ち続けた場合(${hold})より${r.total >= r.holdRet ? '良い' : '悪い'}結果です。`);
+  sub.push('過去に当てはめた結果で、これからも同じとは限りません。');
+  const chips = [`売買 ${r.n} 回`];
+  if (rd) chips.push(`データ ${yrsText(rd.st.years)}`);
+  if (rd && rd.counted) chips.push(`試した ${rd.N} 通り(実質 ${rd.eff})`);
+  return el('div', { class: `verdict v-${tone}`, id: 'btVerdict', role: 'status' }, [
+    el('span', { class: 'v-tag', text: 'ひとことで' }), el('strong', { text: head }), el('span', { class: 'v-sub', text: sub.join('') }),
+    el('span', { class: 'v-chips' }, chips.map(t => el('span', { text: t })))]);
+}
+function btStatsFold(rd, r) {
+  const { st, bpy, N, eff, d, dRaw } = rd, pc = v => pctText(v, 1);
+  // 資金が一度も動かない(売買がない・値動きがない)ときは、どの数字も計算できないので、1行だけにする
+  if (!isFinite(st.sr)) return fold('stats', '成績の読み方(条件つきの目安)', el('small', { text: '計算できません' }), [el('p', { class: 'small', text: '資金が一度も増減していない(売買がない、または値動きがない)ため、シャープレシオなどは計算できません。' })], 'sharpe');
+  // 手じまった売買が少ないと、足1本ごとの数字は、同じ売買の中の足が続けて同じ向きに動くだけで高く出る。数字を消さず、印で知らせる
+  const few = r.n < 30, fewBadge = box => { if (few) box.querySelector('strong').appendChild(el('span', { class: 'bt-badge', text: '売買が少ない' })); return box; };
+  const trlBox = btKpi('必要なデータの長さ(MinTRL)', isFinite(st.minTRL) ? `${Math.ceil(st.minTRL).toLocaleString()} 本` : '—', '',
+    !isFinite(st.sr) ? '売買がないため、計算できません' : isFinite(st.minTRL) ? `${yrsText(st.minTRL / bpy)}分。いまは ${st.n.toLocaleString()} 本(${yrsText(st.years)})。これより少ないと「たまたま」と区別できない` : 'SR が 0 以下なので、データを増やしても「0 より上」とは言えません', 'sharpe');
+  if (!rd.enough && isFinite(st.minTRL)) trlBox.querySelector('strong').appendChild(el('span', { class: 'bt-badge', text: 'データが足りない' }));
+  const noSr = !isFinite(st.sr);
+  const kp = [
+    btKpi('シャープレシオ(年率)', fx(st.srAnn, 2), '', noSr ? '値動きがないため、計算できません' : '増え方 ÷ ばらつき。大きいほど安定して増えた(1 以上はまれ)', 'sharpe'),
+    btKpi('ソルティノレシオ(年率)', fx(st.sortinoAnn, 2), '', '下がる方向のばらつきだけで割ったもの', 'sharpe'),
+    fewBadge(btKpi('PSR(0 と比べて)', pc(st.psr0), '', '「実力ゼロ」でこの成績になりにくい度合い。95% 以上が目安' + (few ? '。売買が 30 回未満では高く出やすい' : ''), 'sharpe')),
+    fewBadge(btKpi(`DSR(実質 ${eff} 通り)`, pc(d.dsr), '', '試した回数で割り引いた PSR。95% 以上が目安' + (N !== eff ? `。そのまま ${N} 通りと数えると ${pc(dRaw.dsr)}` : ''), 'sharpe')),
+    trlBox,
+    fewBadge(btKpi('t 値', fx(st.tstat, 2), '', !isFinite(st.tstat) ? '売買がないため、計算できません' : st.tstat < 3 ? '3 より小さく、偶然と区別しにくい' : '3 以上。それでも、試した回数が多ければ偶然はありえます', 'sharpe')),
+    btKpi('損益が 0 になる片道のコスト', isFinite(st.breakEven) ? (st.breakEven > 0 ? pctText(st.breakEven, 3) : 'なし') : '—', '',
+      r.n === 0 && !r.open ? '売買がないため、計算できません' : st.breakEven > 0 ? `手数料+すべりが片道でこれを超えると損。いまの設定は ${pctText(FEE + state.btSlip / 100, 3)}` : '手数料・すべりが 0 でも、損益がプラスになりません', 'stopcost'),
+    btKpi('1年あたりの売買の回数', fx(st.tradesPerYear, 1), '', `コストが、コストを引く前の利益に占める割合: ${isFinite(st.costShare) ? pc(st.costShare) : '—(コストを引く前も利益なし)'}`, 'stopcost'),
+  ];
+  const sub = el('small', { text: `DSR ${pc(d.dsr)}${few ? '(売買が少なく参考程度)' : ''}・試した ${N} 通り(実質 ${eff})` });
+  const parts = [
+    el('p', { class: 'small', text: `足1本ごとの資金の増減から計算しています(1年 = ${Math.round(bpy).toLocaleString()} 本。暗号資産は土日も動くので 365 日で数えます)。どれも「毎回の値動きが互いに無関係で、性質が時間で変わらない」とした場合の目安で、もうかる確率ではありません。実際の値動きは荒れる時期がかたまって来るので、目安は甘めに出ます。` }),
+    el('div', { class: 'kpis', id: 'btStats' }, kp),
+    el('p', { class: 'small', id: 'btTrialsNote', text: N > 1
+      ? `いまの銘柄・時間足で ${N} 通り試しました。結果の動きがほぼ同じもの(相関 0.9 以上)を1つにまとめると、実質 ${eff} 通りです。DSR は実質の回数で割り引いています(似た試しを別々に数えると、割り引きすぎるため)。`
+      : '試した回数 N は、ルールや数値、入り方・手じまい・損切り・利確・すべりを変えて試すたびに増えます(同じ組み合わせは1回。銘柄・時間足ごとに数え、ページを読み込み直すと 0 に戻ります)。' }),
+  ];
+  if (eff > 1) parts.push(el('p', { class: 'dim small', text: `${eff} 通り試すと、本当は何の力もない手法でも、いちばん良いものは偶然で年率 SR 1 くらいに見えることがあります。それを避けるには ${yrsText(rd.btl)}以上のデータが目安です(MinBTL)。いまのデータは ${yrsText(st.years)}。` }));
+  parts.push(el('p', { class: 'dim small', text: `DSR の基準 SR0 = ${fx(d.sr0 * Math.sqrt(bpy), 2)}(年率)。ばらつきは${rd.vFrom}を使っています。本数 ${st.n.toLocaleString()}・ゆがみ ${fx(st.skew, 2)}・とがり ${fx(st.kurt, 2)}。` }));
+  return fold('stats', '成績の読み方(条件つきの目安)', sub, parts, 'sharpe');
+}
+/* これから先の最大の落ち込みの試算(GT.stats.ddBootstrap)。試算の1回ごとの損益を、でたらめに選び直して 1,000 通り作る。
+ * 種は銘柄・時間足・損益から決めるので、同じ条件なら毎回同じ数字になる */
+const DD_MIN = 10;
+function btDdFold(r) {
+  const rets = r.trades.map(t => t.ret);
+  if (rets.length < DD_MIN) {
+    return fold('dd', 'これから先の落ち込みの試算', el('small', { text: `売買 ${DD_MIN} 回以上で計算` }),
+      [el('p', { class: 'small', text: `手じまった売買が ${rets.length} 回しかないため、試算しません(少ない回数から選び直しても、意味のある数字にならないため)。` })], 'ddgrow');
+  }
+  let seed = 2166136261;
+  `${state.symbol}|${state.interval}|${rets.length}|${fx(r.total, 6)}`.split('').forEach(ch => { seed = Math.imul(seed ^ ch.charCodeAt(0), 16777619) >>> 0; });
+  const res = GT.stats.ddBootstrap(rets, { runs: 1000, mult: [1, 2], seed });
+  const pastDD = GT.stats.maxDrawdownOf(rets);
+  const row = x => el('tr', {}, [el('td', { text: `${x.trades.toLocaleString()} 回${x.mult === 1 ? '(同じ回数)' : '(2倍)'}` }), el('td', { class: 'down', text: pctText(-x.median, 1) }), el('td', { class: 'down', text: pctText(-x.p95, 1) })]);
+  return fold('dd', 'これから先の落ち込みの試算', el('small', { text: `${res[0].trades} 回で 真ん中 ${pctText(-res[0].median, 1)}・20回に1回 ${pctText(-res[0].p95, 1)}` }), [
+    el('p', { class: 'small', text: `この試算の ${rets.length} 回の損益から、でたらめに選び直して(同じものが何度出てもよい)並べた売買の列を 1,000 通り作り、それぞれの「資金のいちばん多い時点からの最大の落ち込み」を数えた試算です。` }),
+    el('div', { class: 'tbl-wrap' }, [el('table', { class: 'tbl', id: 'btDd' }, [el('thead', {}, [el('tr', {}, ['売買の回数', '真ん中の値', '20回に1回は、これより深い'].map(t => el('th', { text: t })))]), el('tbody', {}, res.map(row))])]),
+    el('p', { class: 'dim small', text: `過去の実際の並び順では ${pctText(-pastDD, 1)}(決済の時点で数えた値)。回数が増えるほど、落ち込みは深くなりやすくなります。毎回の損益が互いに無関係とした試算で、決済の時点だけで数えるので、売買の途中の含み損を入れると、実際はもっと深くなりえます。` }),
+  ], 'ddgrow');
 }
 /* 「たまたま」の確かめ。同じ回数・同じ向き・同じ保有期間の売買を、でたらめな時点で始めた場合を LUCK_RUNS 回作り、
  * 合図どおりの成績が、その中で上から何%に入るかを出す。
@@ -5835,13 +5989,15 @@ function renderBtStats(add, kpi, r, bars, iv, marks, byRule) {
 const LUCK_RUNS = 500;
 let luckToken = 0;
 const luckCache = { key: '', html: null };
-function luckTest(bars, r, box) {
+function luckTest(bars, r, box, sub) {
+  // sub:たたんだ欄の見出しに出す、短い結果
+  const short = (p) => { if (sub && sub.isConnected) sub.textContent = `でたらめな売買の ${fx(p, 0)}% より良い`; };
   const token = ++luckToken, n = bars.length;
   const list = r.trades.map(t => ({ dir: t.dir, len: Math.max(1, t.bars) }));
   const key = `${state.symbol}|${state.interval}|${n}|${n ? bars[n - 1].t : 0}|${r.total}|${r.fee}|${r.slip}|${list.length}`;
-  if (luckCache.key === key && luckCache.text) { box.textContent = luckCache.text; return; }
+  if (luckCache.key === key && luckCache.text) { box.textContent = luckCache.text; short(luckCache.p); return; }
   const span = (n - 1) - 1, used = list.reduce((a, t) => a + t.len, 0), free = span - used;
-  if (free < 0 || n < 3) { box.textContent = '売買している期間が長すぎて、でたらめな時点に置きかえられないため、比べられません。'; return; }
+  if (free < 0 || n < 3) { box.textContent = '売買している期間が長すぎて、でたらめな時点に置きかえられないため、比べられません。'; if (sub) sub.textContent = '比べられません'; return; }
   // 決まった種から作る乱数(mulberry32)
   let seed = (n * 2654435761 + list.length * 40503 + Math.round((bars[0].t || 0) / 6e4)) >>> 0;
   const rnd = () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -5870,7 +6026,7 @@ function luckTest(bars, r, box) {
   const step = () => {
     if (token !== luckToken) return; // 条件が変わった
     for (let k = 0; k < 100 && res.length < LUCK_RUNS; k++) res.push(one());
-    if (res.length < LUCK_RUNS) { box.textContent = `計算しています… ${res.length} / ${LUCK_RUNS} 回`; setTimeout(step, 0); return; }
+    if (res.length < LUCK_RUNS) { box.textContent = `計算しています… ${res.length} / ${LUCK_RUNS} 回`; if (sub) sub.textContent = `計算しています… ${Math.round(res.length / LUCK_RUNS * 100)}%`; setTimeout(step, 0); return; }
     const below = (arr, v) => arr.filter(x => x < v).length / arr.length * 100;
     const pTot = below(res.map(x => x.total), mine), pAvg = below(res.map(x => x.avg), mineAvg);
     const verdict = pTot >= 95 ? 'でたらめな売買ではめったに出ない成績です。ただし、条件を何度も調整した結果なら、たまたまの可能性は残ります。'
@@ -5878,10 +6034,11 @@ function luckTest(bars, r, box) {
       : pTot >= 25 ? 'でたらめに売買したのと、ほとんど変わりません。合図に意味があるとは言えません。'
       : 'でたらめに売買したより悪い成績です。';
     const text = `同じ回数(${list.length} 回)・同じ向き・同じ保有本数の売買を、でたらめな時点で始めた場合を ${LUCK_RUNS} 通り作って比べました。` +
-      `合図どおりの成績(手じまった売買だけで ${(mine * 100).toFixed(2)}%)は、でたらめな売買の ${pTot.toFixed(0)}% より良く、` +
-      `1回あたりの平均(${(mineAvg * 100).toFixed(2)}%)は ${pAvg.toFixed(0)}% より良い結果でした。${verdict}`;
-    luckCache.key = key; luckCache.text = text;
+      `合図どおりの成績(手じまった売買だけで ${pctText(mine, 2, true)})は、でたらめな売買の ${fx(pTot, 0)}% より良く、` +
+      `1回あたりの平均(${pctText(mineAvg, 2, true)})は ${fx(pAvg, 0)}% より良い結果でした。${verdict}`;
+    luckCache.key = key; luckCache.text = text; luckCache.p = pTot;
     if (box.isConnected) box.textContent = text;
+    short(pTot);
   };
   setTimeout(step, 0);
 }

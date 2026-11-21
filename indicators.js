@@ -1518,7 +1518,71 @@ function btStats(r, bpy, gross) {
     costShare: isFinite(G) && G > 1 ? (G - (1 + r.total)) / (G - 1) : NaN, grossTotal: isFinite(G) ? G - 1 : NaN,
   };
 }
-const stats = { normCdf, normInv, moments, sortino, psr, minTRL, expMaxSR, dsr, minBTL, breakEvenCost, btStats, barsPerYear, barMs, realizedVol };
+/* 決まった種から作る乱数(mulberry32)。同じ種なら、いつ・どの端末で計算しても同じ結果になる(試算の数字が開くたびに変わらないように) */
+function seededRandom(seed) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+// 並んだ数の、下から q の位置の値(q = 0.5 で真ん中の値)。間は直線でつなぐ
+function quantile(sorted, q) {
+  const n = sorted.length;
+  if (!n) return NaN;
+  const x = (n - 1) * q, i = Math.floor(x), f = x - i;
+  return i + 1 < n ? sorted[i] * (1 - f) + sorted[i + 1] * f : sorted[i];
+}
+// 1回ごとの損益の割合を順に重ねたときの、資金のいちばん多かった時点からの最大の落ち込み(0〜1)
+function maxDrawdownOf(rets) {
+  let eq = 1, peak = 1, dd = 0;
+  for (const r of rets) { eq *= Math.max(0, 1 + r); if (eq > peak) peak = eq; else if (peak > 0) dd = Math.max(dd, 1 - eq / peak); }
+  return dd;
+}
+/* これから先の最大の落ち込みの試算(ブートストラップ)。
+ * 試算で出た1回ごとの損益(手じまった売買)の中から、でたらめに選び直して(同じものを何度選んでもよい)、
+ * 「同じ回数」と「2倍の回数」の売買の列を runs 通り作り、それぞれの最大の落ち込みを数える。
+ * 真ん中の値(中央値)と、20回に1回はこれより深い値(95% の位置)を返す。
+ * 前提:1回ごとの損益は互いに無関係で、これからも同じ散らばり方をする。決済の時点の資金だけで数えるので、
+ * 売買の途中の落ち込み(含み損)は入らない。つまり、実際はこれより深くなりうる「下限寄り」の目安 */
+function ddBootstrap(rets, opts) {
+  const o = opts || {}, runs = o.runs || 1000, mult = o.mult || [1, 2], n = rets.length;
+  if (n < 1) return null;
+  const rnd = seededRandom(o.seed === undefined ? 20240601 : o.seed);
+  return mult.map(k => {
+    const len = Math.max(1, Math.round(n * k)), dds = new Float64Array(runs), buf = new Float64Array(len);
+    for (let j = 0; j < runs; j++) {
+      for (let i = 0; i < len; i++) buf[i] = rets[Math.floor(rnd() * n)];
+      dds[j] = maxDrawdownOf(buf);
+    }
+    const s = Array.from(dds).sort((a, b) => a - b);
+    return { mult: k, trades: len, median: quantile(s, 0.5), p95: quantile(s, 0.95) };
+  });
+}
+// 2つの列の相関係数(長さは短いほうに、後ろをそろえる)。どちらかが動かない(ばらつき 0)なら NaN
+function corr(a, b) {
+  const n = Math.min(a.length, b.length), oa = a.length - n, ob = b.length - n;
+  if (n < 3) return NaN;
+  let ma = 0, mb = 0;
+  for (let i = 0; i < n; i++) { ma += a[oa + i]; mb += b[ob + i]; }
+  ma /= n; mb /= n;
+  let sab = 0, saa = 0, sbb = 0;
+  for (let i = 0; i < n; i++) { const x = a[oa + i] - ma, y = b[ob + i] - mb; sab += x * y; saa += x * x; sbb += y * y; }
+  return saa > 0 && sbb > 0 ? sab / Math.sqrt(saa * sbb) : NaN;
+}
+/* 実質の試した回数(effective N)。DSR の式は「N 回の試しが互いに無関係」としているが、期間を 20 → 21 に変えただけの試しは、
+ * ほとんど同じ売買になるので、別々に数えると割り引きすぎる。そこで、足1本ごとの資金の増減の列が、
+ * すでに数えた試しのどれかと相関 thr(0.9)以上なら、同じ1通りとして数える(先に試したものから順に、まとめる)。
+ * 0.9 は高めの線にしてある:少し似ているだけ(0.5 など)のものは別々に数えるので、割り引きを減らしすぎない(慎重な側)。
+ * 返すのは、まとまりの数と、各試しがどのまとまりに入ったか */
+function effectiveN(series, thr) {
+  const t = thr === undefined ? 0.9 : thr, reps = [], group = [];
+  series.forEach((s, i) => {
+    let g = -1;
+    for (let k = 0; k < reps.length && g < 0; k++) { const c = corr(series[reps[k]], s); if (c >= t) g = k; }
+    if (g < 0) { g = reps.length; reps.push(i); }
+    group.push(g);
+  });
+  return { n: reps.length, group };
+}
+const stats = { normCdf, normInv, moments, sortino, psr, minTRL, expMaxSR, dsr, minBTL, breakEvenCost, btStats, barsPerYear, barMs, realizedVol, seededRandom, quantile, maxDrawdownOf, ddBootstrap, corr, effectiveN };
 
 const GROUPS = [
   ['trend', 'トレンド(流れの向き)'],
