@@ -191,36 +191,32 @@ DEFS.psar = {
     P.num('max', '加速因子の上限', 0.2, 0.01, 2, 0.01), P.color('color', '点の色', '#2f80ed')],
   compute(bars, p) {
     const n = bars.length, out = nans(n);
-    if (n < 3) return { lines: [{ name: 'SAR', val: out, color: p.color, dots: true }], label: `${p.start} ${p.max}` };
-    // 手順は TA-Lib の SAR と同じ。最初の向きは、最初の2本の高値・安値の動きで決める
-    const upMove = bars[1].h - bars[0].h, downMove = bars[0].l - bars[1].l;
-    let long = !(downMove > upMove && downMove > 0);
-    let ep = long ? bars[1].h : bars[1].l, sar = long ? bars[0].l : bars[0].h, af = p.start;
-    let newLow = bars[1].l, newHigh = bars[1].h;
+    if (n < 2) return { lines: [{ name: 'SAR', val: out, color: p.color, dots: true }], label: `${p.start} ${p.max}` };
+    // 手順は TradingView の ta.sar と同じ(公開されている Pine の手順をそのまま移したもの)。
+    // 最初の向きは、最初の2本の終値で決める(上がっていれば上昇から)。
+    // 向きが変わったかは、SAR を直前2本の高値・安値の内側に寄せる「前」に調べる(寄せたあとで調べると、切り替わりが1本以上遅れることがある)
+    let res = NaN, ext = NaN, af = p.start, below = false;
     for (let i = 1; i < n; i++) {
-      const prevLow = newLow, prevHigh = newHigh;
-      newLow = bars[i].l; newHigh = bars[i].h;
-      if (long) {
-        if (newLow <= sar) {
-          // 安値が SAR に届いた:下降に切り替え。新しい SAR は、それまでの最高値から始める
-          long = false; sar = Math.max(ep, prevHigh, newHigh);
-          out[i] = sar; af = p.start; ep = newLow;
-          sar = Math.max(sar + af * (ep - sar), prevHigh, newHigh);
-        } else {
-          out[i] = sar;
-          if (newHigh > ep) { ep = newHigh; af = Math.min(af + p.step, p.max); }
-          // 上昇中の SAR は、直前2本の安値より上には置かない
-          sar = Math.min(sar + af * (ep - sar), prevLow, newLow);
-        }
-      } else if (newHigh >= sar) {
-        long = true; sar = Math.min(ep, prevLow, newLow);
-        out[i] = sar; af = p.start; ep = newHigh;
-        sar = Math.min(sar + af * (ep - sar), prevLow, newLow);
-      } else {
-        out[i] = sar;
-        if (newLow < ep) { ep = newLow; af = Math.min(af + p.step, p.max); }
-        sar = Math.max(sar + af * (ep - sar), prevHigh, newHigh);
+      const b = bars[i];
+      let first = false;
+      if (i === 1) {
+        below = b.c > bars[0].c; // 上がっていれば、点は価格の下(上昇)から始める
+        ext = below ? b.h : b.l; res = below ? bars[0].l : bars[0].h;
+        first = true; af = p.start;
       }
+      res += af * (ext - res);
+      if (below) {
+        // 安値が SAR を割った:下降に切り替え。SAR は、それまでの最高値(とこの足の高値の高いほう)から始める
+        if (res > b.l) { first = true; below = false; res = Math.max(b.h, ext); ext = b.l; af = p.start; }
+      } else if (res < b.h) { first = true; below = true; res = Math.min(b.l, ext); ext = b.h; af = p.start; }
+      if (!first) {
+        if (below) { if (b.h > ext) { ext = b.h; af = Math.min(af + p.step, p.max); } }
+        else if (b.l < ext) { ext = b.l; af = Math.min(af + p.step, p.max); }
+      }
+      // 上昇中の SAR は、直前2本の安値より上には置かない(下降中は、直前2本の高値より下には置かない)
+      if (below) { res = Math.min(res, bars[i - 1].l); if (i > 1) res = Math.min(res, bars[i - 2].l); }
+      else { res = Math.max(res, bars[i - 1].h); if (i > 1) res = Math.max(res, bars[i - 2].h); }
+      out[i] = res;
     }
     return { lines: [{ name: 'SAR', val: out, color: p.color, dots: true }], label: `${p.start} ${p.max}` };
   },
@@ -278,6 +274,15 @@ DEFS.keltner = {
     };
   },
 };
+/* その時刻が入る区切り(1日・1週間・1か月。どれも UTC。週は月曜 0 時から)の始まりの時刻。
+ * 読み込んだ最初の足が区切りの途中からかを調べるのに使う */
+function periodStart(t, per) {
+  const day = Math.floor(t / 864e5) * 864e5;
+  if (per === 'day') return day;
+  if (per === 'week') return day - ((Math.floor(t / 864e5) + 3) % 7) * 864e5; // 1970-01-01 は木曜なので、3 を足すと月曜が 0 になる
+  const d = new Date(t);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+}
 DEFS.vwap = {
   name: 'VWAP(出来高加重平均価格)', short: 'VWAP', group: 'volume', overlay: true,
   desc: '期間内に売買された価格を、出来高で重みづけした平均',
@@ -297,12 +302,15 @@ DEFS.vwap = {
       const day = Math.floor(t / 864e5);
       return anchor === 'week' ? Math.floor((day + 3) / 7) : day; // 週は月曜始まり
     };
+    // 読み込んだ最初の区切りが途中から始まっている(その日の 0 時より後の足からしかない)ときは、その区切りは描かない。
+    // 区切りの初めからの売買が入っていないので、TradingView などの VWAP と違う値になるため
+    const partial = n > 0 && bars[0].t > periodStart(bars[0].t, anchor);
     let key = null, pv = 0, vol = 0;
     for (let i = 0; i < n; i++) {
       const k = keyOf(bars[i].t);
       if (k !== key) { key = k; pv = 0; vol = 0; }
       pv += (bars[i].h + bars[i].l + bars[i].c) / 3 * bars[i].v; vol += bars[i].v;
-      if (vol > 0) out[i] = pv / vol;
+      if (vol > 0 && !(partial && k === keyOf(bars[0].t))) out[i] = pv / vol;
     }
     return { lines: [{ name: 'VWAP', val: out, color: p.color, width: 1.8 }], label: { day: '1日', week: '1週間', month: '1か月' }[anchor] };
   },
@@ -323,6 +331,7 @@ DEFS.stoch = {
     return { lines: [{ name: '%K', val: k, color: p.cK }, { name: '%D', val: d, color: p.cD }], bands: [+p.upper, +p.lower], fixed: [0, 100], label: `${p.kLen} ${p.kSmooth} ${p.dLen}` };
   },
 };
+const RSI_FLAT = 1e-9; // RSI(0〜100)の幅が、これ以下なら「動いていない」とみなす
 DEFS.stochrsi = {
   name: 'ストキャスティクス RSI', short: 'StochRSI', group: 'momentum',
   desc: 'RSI に、さらにストキャスティクスの計算をかけたもの。反応が速い',
@@ -330,7 +339,9 @@ DEFS.stochrsi = {
     P.source(), P.color('cK', '%K の色', '#2f80ed'), P.color('cD', '%D の色', '#f5a623')],
   compute(bars, p) {
     const r = rsi(col(bars, p.source), int(p.rsiLen, 14)), n = int(p.stLen, 14), hh = highest(r, n), ll = lowest(r, n);
-    const raw = r.map((v, i) => (!isFinite(hh[i]) || hh[i] === ll[i] ? NaN : 100 * (v - ll[i]) / (hh[i] - ll[i])));
+    // 値動きがない間の RSI は、計算の誤差で 1e-13 ほど揺れるだけなので、幅がそれより小さいときは位置が決まらないとして空ける
+    // (ちょうど同じかだけで調べていたときは、その誤差の揺れが 0〜100 に引き伸ばされ、16.67・83.33 などの意味のない値が出ていた)
+    const raw = r.map((v, i) => (!isFinite(hh[i]) || hh[i] - ll[i] <= RSI_FLAT ? NaN : 100 * (v - ll[i]) / (hh[i] - ll[i])));
     const k = sma(raw, int(p.kLen, 3)), d = sma(k, int(p.dLen, 3));
     return { lines: [{ name: '%K', val: k, color: p.cK }, { name: '%D', val: d, color: p.cD }], bands: [80, 20], fixed: [0, 100], label: `${p.rsiLen} ${p.stLen} ${p.kLen} ${p.dLen}` };
   },
@@ -751,7 +762,11 @@ DEFS.bop = {
   name: 'BOP(バランス・オブ・パワー)', short: 'BOP', group: 'volume',
   desc: '足の値幅のうち、始値から終値への動きが占める割合(-1〜+1)',
   params: [P.int('smooth', 'ならす期間', 14), P.color('color', '線の色', '#16a085')],
-  compute(bars, p) { const raw = bars.map(b => (b.h > b.l ? (b.c - b.o) / (b.h - b.l) : 0)); return pane1('BOP', sma(raw, int(p.smooth, 14)), p.color, { bands: [0], label: String(p.smooth) }); },
+  compute(bars, p) {
+    // 高値と安値が同じ足(値動きがない)は、割合が決まらないので空ける(TradingView と同じ。ならす期間の間は線も空く)
+    const raw = bars.map(b => (b.h > b.l ? (b.c - b.o) / (b.h - b.l) : NaN));
+    return pane1('BOP', sma(raw, int(p.smooth, 14)), p.color, { bands: [0], label: String(p.smooth) });
+  },
 };
 DEFS.adosc = {
   name: 'チャイキン・オシレーター', short: 'ChaikinOsc', group: 'volume',
@@ -832,12 +847,15 @@ DEFS.pivot = {
       per = gap < 864e5 ? 'D' : gap < 6048e5 ? 'W' : 'M';
     }
     const key = t => { const d = new Date(t); return per === 'D' ? Math.floor(t / 864e5) : per === 'W' ? Math.floor((t - 4 * 864e5) / 6048e5) : d.getUTCFullYear() * 12 + d.getUTCMonth(); };
+    // 読み込んだ最初の区切りが途中から始まっているときは、その区切りの高値・安値・終値は本当の値ではない
+    // (例:1時間足を 23 時から読むと、「前の日」が1本だけになる)。そこから計算した次の区切りの線は描かない
+    const pPer = { D: 'day', W: 'week', M: 'month' }[per], partial = n > 0 && bars[0].t > periodStart(bars[0].t, pPer);
     let cur = null, prev = null;
     for (let i = 0; i < n; i++) {
       const b = bars[i], k = key(b.t);
-      if (!cur || cur.k !== k) { prev = cur; cur = { k, h: b.h, l: b.l, c: b.c, start: true }; }
+      if (!cur || cur.k !== k) { prev = cur; cur = { k, h: b.h, l: b.l, c: b.c, start: true, part: !cur && partial }; }
       else { cur.h = Math.max(cur.h, b.h); cur.l = Math.min(cur.l, b.l); cur.c = b.c; cur.start = false; }
-      if (!prev || cur.start) continue; // 区切りの最初の足は空けて、前の区切りの線とつながらないようにする
+      if (!prev || prev.part || cur.start) continue; // 区切りの最初の足は空けて、前の区切りの線とつながらないようにする
       const pv = (prev.h + prev.l + prev.c) / 3, r = prev.h - prev.l;
       P0[i] = pv; R1[i] = 2 * pv - prev.l; S1[i] = 2 * pv - prev.h; R2[i] = pv + r; S2[i] = pv - r;
     }
@@ -1095,7 +1113,7 @@ const FUNCS = {
   not: { args: 'x', desc: '成り立たなければ 1', eg: 'not(close > open)' },
   if: { args: 'xxx', desc: '条件が成り立てば2つ目、そうでなければ3つ目', eg: 'if(close > open, volume, 0)' },
 };
-class FormulaError extends Error {}
+class FormulaError extends Error { constructor(m) { super(m); this.name = 'FormulaError'; } }
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k); // constructor などの、もとからある名前を部品とまちがえない
 function tokenize(text) {
   const out = [];
@@ -1164,6 +1182,7 @@ function parseFormula(text) {
   if (pos < tk.length) throw new FormulaError(`「${tk[pos].v}」の前後がつながっていません。`);
   return ast;
 }
+const LEN_MAX = 500; // 式の中で使える期間(本数)の上限
 function evalFormula(ast, bars, vars) {
   const n = bars.length;
   const arr = v => (Array.isArray(v) ? v : new Array(n).fill(v));
@@ -1174,7 +1193,10 @@ function evalFormula(ast, bars, vars) {
   };
   const len = v => {
     if (Array.isArray(v)) throw new FormulaError('期間(本数)には、数を入れてください(例: 20 や p1)。');
-    return Math.max(1, Math.min(500, Math.round(v) || 1));
+    const k = Math.max(1, Math.round(v) || 1);
+    // 500 本より長い期間は、黙って 500 に縮めると、別の線(期間 500 の線)を見せてしまうので、はっきり断る
+    if (k > LEN_MAX) throw new FormulaError(`期間は ${LEN_MAX} 本までです(${k} 本が指定されています)。`);
+    return k;
   };
   const cmp = f => (x, y) => (isFinite(x) && isFinite(y) ? +f(x, y) : NaN);
   const ops = {
@@ -1487,6 +1509,7 @@ function psr(sr, n, skew, kurt, srStar) {
 }
 function minTRL(sr, skew, kurt, srStar, p) {
   const d = sr - (srStar || 0);
+  if (!isFinite(sr)) return NaN; // 損益がまったく動かない(ばらつき 0)ときは、SR そのものが決まらない
   if (!(d > 0)) return Infinity; // SR* を上回っていなければ、何本あっても言えない
   return 1 + srDen(sr, skew, kurt) * Math.pow(normInv(p || 0.95) / d, 2);
 }
@@ -1497,6 +1520,16 @@ function expMaxSR(N) {
 function dsr(sr, n, skew, kurt, N, V) {
   const sr0 = Math.sqrt(V) * expMaxSR(N);
   return { sr0, dsr: psr(sr, n, skew, kurt, sr0) };
+}
+/* DSR の V(試した結果の SR のばらつき)。srs: 実質の1通りごとに1つずつの SR(ほぼ同じ試しのまとまりからは、代表の1つだけ)。
+ * ほぼ同じ試しを何十個も入れると、ばらつきが小さく出て、割り引きが足りなくなる(回数 N は実質の回数なのに、V だけ生の回数で数えることになる)。
+ * また、本当は差がないときでも、SR の推定値は 1/(n−1) くらいはばらつく。それより小さい V は使わない(割り引きすぎないより、足りないほうが危ない)。
+ * 戻り値 { V, fromTrials }: fromTrials は、試した結果のばらつきを使ったとき true */
+function dsrVar(srs, n) {
+  const floor = n > 1 ? 1 / (n - 1) : NaN, k = srs.length;
+  if (k < 2) return { V: floor, fromTrials: false };
+  const m = srs.reduce((a, x) => a + x, 0) / k, v = srs.reduce((a, x) => a + (x - m) * (x - m), 0) / (k - 1);
+  return v > floor ? { V: v, fromTrials: true } : { V: floor, fromTrials: false };
 }
 const minBTL = (N, srAnnual) => Math.pow(expMaxSR(N) / srAnnual, 2);
 /* 損益が 0 になる片道のコスト。手数料もすべりも 0 にしたときの資金の倍率 G と、往復の回数 K から、
@@ -1580,9 +1613,9 @@ function effectiveN(series, thr) {
     if (g < 0) { g = reps.length; reps.push(i); }
     group.push(g);
   });
-  return { n: reps.length, group };
+  return { n: reps.length, group, reps };
 }
-const stats = { normCdf, normInv, moments, sortino, psr, minTRL, expMaxSR, dsr, minBTL, breakEvenCost, btStats, barsPerYear, barMs, realizedVol, seededRandom, quantile, maxDrawdownOf, ddBootstrap, corr, effectiveN };
+const stats = { normCdf, normInv, moments, sortino, psr, minTRL, expMaxSR, dsr, dsrVar, minBTL, breakEvenCost, btStats, barsPerYear, barMs, realizedVol, seededRandom, quantile, maxDrawdownOf, ddBootstrap, corr, effectiveN };
 
 const GROUPS = [
   ['trend', 'トレンド(流れの向き)'],
