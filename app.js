@@ -345,6 +345,7 @@ const state = {
   pending: null,      // トレンドラインの1点目
   sel: null,          // 選択中の線
   loadToken: 0,
+  legendFold: false,  // 左上のインジケーターの名前の欄を、たたんでいるか(ローソク足を広く見せる)
   logScale: false,    // 価格の目盛りを対数にするか(同じ%の動きが、同じ高さになる)
   compare: null,      // 重ねて比べる銘柄(ないときは null)
   quickTrade: true,   // チャートの左上に、売買ボタンを出すか
@@ -363,7 +364,7 @@ function save() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({
       symbol: state.symbol, interval: state.interval, theme: state.theme, mainWeight: state.mainWeight, drawings: state.drawings, chartType: state.chartType,
-      tradeOpen: state.tradeOpen, logScale: state.logScale, compare: state.compare, quickTrade: state.quickTrade, btSlip: state.btSlip,
+      tradeOpen: state.tradeOpen, logScale: state.logScale, legendFold: state.legendFold, compare: state.compare, quickTrade: state.quickTrade, btSlip: state.btSlip,
       custom: SYMBOLS.slice(BUILTIN).map(x => ({ id: x.id, label: x.label, quote: x.quote || null })),
       customInds: customDefs, favs: favs.filter(t => IND_TYPES[t]), defaults2: defaults2Done,
       indicators: state.indicators.map(i => ({ type: i.type, hidden: i.hidden, p: i.p })),
@@ -408,7 +409,7 @@ function adoptShared() {
   if (!s || typeof s !== 'object') return;
   state.drawings = readDrawings(s); state.sel = null;
   // 目盛りの種類と、チャート上の売買ボタンを出すかどうかも、どのタブでも同じにする(重ねて比べる銘柄は、タブごと)
-  state.logScale = s.logScale === true; state.quickTrade = s.quickTrade !== false;
+  state.logScale = s.logScale === true; state.quickTrade = s.quickTrade !== false; state.legendFold = s.legendFold === true;
   readSymbols(s); refreshSymbols();
   const stored = (Array.isArray(s.customInds) ? s.customInds : []).filter(d => d && CUSTOM_ID.test(d.id)).slice(0, CUSTOM_MAX);
   const keep = new Set(stored.map(d => d.id));
@@ -448,6 +449,7 @@ function load() {
   state.tradeOpen = s && typeof s.tradeOpen === 'boolean' ? s.tradeOpen : window.innerWidth > 1000;
   state.drawings = readDrawings(s);
   state.logScale = !!s && s.logScale === true;
+  state.legendFold = !!s && s.legendFold === true;
   state.quickTrade = !s || s.quickTrade !== false;
   state.btSlip = s && typeof s.btSlip === 'number' && s.btSlip >= 0 && s.btSlip <= 5 ? s.btSlip : 0.05;
   state.compare = s && typeof s.compare === 'string' && SYMBOLS.some(x => x.id === s.compare) ? s.compare : null;
@@ -2403,6 +2405,22 @@ let stackEl = null;
  * key には銘柄・時間足・目盛りの種類を入れ、どれかが変わったら自動に戻す(別の銘柄に前の範囲を当てはめないため) */
 let yMan = null, legendH = 0;
 const yKey = log => `${state.symbol}|${state.interval}|${log ? 'log' : 'lin'}`;
+// 手動の範囲を用意する。自動から切りかえるときは、いま見えている範囲から始める(画面が飛ばないように)
+function manualY() {
+  const mp = panes[0];
+  if (!mp || mp.ind || !mp.ykey || !(mp.tmax > mp.tmin)) return null;
+  if (!yMan || yMan.key !== mp.ykey) yMan = { key: mp.ykey, a: mp.tmin, b: mp.tmax };
+  return yMan;
+}
+// 縦に伸び縮みさせる。f > 1 で広い範囲(縮小)、f < 1 で拡大。真ん中の価格は動かさない
+function scaleY(f) {
+  const m = manualY();
+  if (!m || !(f > 0)) return;
+  const c = (m.a + m.b) / 2, r = (m.b - m.a) * f;
+  if (r > 1e-12 && isFinite(r)) { m.a = c - r / 2; m.b = c + r / 2; }
+}
+// 価格の目盛りの上か(ローソク足の枠の右側)
+const onPriceAxis = p => { const mp = panes[0]; return !!mp && !mp.ind && p.x > plotW() && p.y >= mp.y && p.y <= mp.y + mp.h; };
 function mainStack() {
   if (!stackEl) {
     stackEl = document.createElement('div');
@@ -2415,6 +2433,17 @@ function mainStack() {
     }).observe(stackEl);
   }
   return stackEl;
+}
+let foldEl = null;
+function foldBtn() {
+  if (!foldEl) {
+    foldEl = document.createElement('button');
+    foldEl.type = 'button'; foldEl.className = 'legend-fold';
+    foldEl.title = '左上のインジケーターの名前と数値の欄を、たたむ・広げる';
+    foldEl.addEventListener('click', () => { state.legendFold = !state.legendFold; save(); draw(); });
+    mainStack().appendChild(foldEl);
+  }
+  return foldEl;
 }
 function legendFor(key, ind, parent) {
   let el = legendEls.get(key);
@@ -2511,6 +2540,12 @@ function updateLegends() {
         setVals(le, v && k >= v.base ? [['', fmtPct(v.pct(k)), CMP_COLOR]]
           : [['', !state.live ? 'デモデータでは比べられません' : cmp.err ? 'データを取得できません' : cmp.byT.size ? 'この範囲のデータがありません' : '読み込み中…', '']]);
       }
+      // インジケーターの名前の欄をたたむボタン。たたむと、その分ローソク足が上まで広く見える
+      const nOv = visibleOverlays().length + (compareOn() ? 1 : 0), fb = foldBtn();
+      fb.hidden = !nOv;
+      mainStack().classList.toggle('folded', !!state.legendFold && nOv > 0);
+      const ft = state.legendFold ? `▾ インジケーター ${nOv} 個の名前を表示` : '▴ 名前をたたむ';
+      if (fb.textContent !== ft) { fb.textContent = ft; fb.setAttribute('aria-expanded', String(!state.legendFold)); }
       setText(el, '.name', `${curSymbol().label} · ${curInterval().label}${state.chartType === 'heikin' ? ' · 平均足' : ''}${panes[0].log ? ' · 対数' : ''}`);
       const lt = feed.lastTick ? new Date(feed.lastTick) : null;
       setText(el, '.params', state.live
@@ -3186,7 +3221,7 @@ function paneWeight(k, v) {
 }
 function bindPointer() {
   const pts = new Map();
-  let pinch = 0, resizing = null, moved = 0, dragD = null, dragT = null, panY = null;
+  let pinch = 0, pinchV = false, resizing = null, moved = 0, dragD = null, dragT = null, panY = null;
   const pos = e => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
 
   canvas.addEventListener('pointerdown', e => {
@@ -3221,7 +3256,12 @@ function bindPointer() {
       state.dragging = state.sel;
     } else {
       resizing = null;
-      if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); }
+      if (pts.size === 2) {
+        const [a, b] = [...pts.values()];
+        pinch = Math.hypot(a.x - b.x, a.y - b.y);
+        // 指2本を縦に並べて広げる・つまむと、縦に伸び縮み。横に並べたときは、これまでどおり横の拡大・縮小
+        pinchV = Math.abs(a.y - b.y) > Math.abs(a.x - b.x) * 1.5 && a.y >= panes[0].y && b.y <= panes[0].y + panes[0].h + 200;
+      }
       // ローソク足の枠の中なら上下にも動かす。右の価格の目盛りの上なら、上下のドラッグで縦に伸び縮みさせる
       const mp = panes[0];
       panY = pts.size === 1 && mp && !mp.ind && p.y >= mp.y && p.y <= mp.y + mp.h ? (p.x > plotW() ? 'scale' : 'move') : null;
@@ -3265,16 +3305,10 @@ function bindPointer() {
       moved += Math.abs(p.x - prev.x) + Math.abs(p.y - prev.y);
       if (panY !== 'scale') state.end -= (p.x - prev.x) / state.barW;
       const mp = panes[0], dy = p.y - prev.y;
-      if (panY && dy && mp && mp.ykey && mp.tmax > mp.tmin) {
-        // 自動の範囲から手動に切りかえるときは、いま見えている範囲から始める(画面が飛ばないように)
-        if (!yMan || yMan.key !== mp.ykey) yMan = { key: mp.ykey, a: mp.tmin, b: mp.tmax };
-        const r = yMan.b - yMan.a;
-        if (panY === 'move') { const d = dy / mp.h * r; yMan.a += d; yMan.b += d; }
-        else {
-          // 下へドラッグすると縮小(広い範囲が見える)、上へドラッグすると拡大。真ん中の価格は動かさない
-          const f = clamp(Math.exp(dy * 0.005), 0.5, 2), c = (yMan.a + yMan.b) / 2;
-          if (r * f > 1e-12) { yMan.a = c - (c - yMan.a) * f; yMan.b = c + (yMan.b - c) * f; }
-        }
+      const m = panY && dy ? manualY() : null;
+      if (m) {
+        if (panY === 'move') { const d = dy / mp.h * (m.b - m.a); m.a += d; m.b += d; }
+        else scaleY(clamp(Math.exp(dy * 0.005), 0.5, 2)); // 下へドラッグで縮小(広い範囲が見える)、上へで拡大
       }
       pts.set(e.pointerId, p);
     } else if (prev && pts.size === 2) {
@@ -3282,10 +3316,10 @@ function bindPointer() {
       pts.set(e.pointerId, p);
       const [a, b] = [...pts.values()];
       const dist = Math.hypot(a.x - b.x, a.y - b.y);
-      if (pinch > 0 && dist > 0) zoomAt((a.x + b.x) / 2, dist / pinch);
+      if (pinch > 0 && dist > 0) { if (pinchV) scaleY(clamp(pinch / dist, 0.5, 2)); else zoomAt((a.x + b.x) / 2, dist / pinch); }
       pinch = dist;
     } else if (!prev && e.pointerType === 'mouse') {
-      canvas.style.cursor = dividerAt(p.y, 4) >= 0 || tradeLineAt(p, 5) ? 'ns-resize' : '';
+      canvas.style.cursor = dividerAt(p.y, 4) >= 0 || tradeLineAt(p, 5) || onPriceAxis(p) ? 'ns-resize' : '';
     }
     state.hover = p; draw();
   });
@@ -3318,7 +3352,8 @@ function bindPointer() {
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
     const p = pos(e);
-    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) state.end += e.deltaX / state.barW;
+    if (onPriceAxis(p)) scaleY(clamp(Math.exp(e.deltaY * 0.0015), 0.5, 2)); // 価格の目盛りの上のホイールは、縦の伸び縮み
+    else if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) state.end += e.deltaX / state.barW;
     else zoomAt(Math.min(p.x, plotW()), Math.exp(-e.deltaY * 0.0015));
     draw();
   }, { passive: false });

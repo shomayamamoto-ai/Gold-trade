@@ -142,6 +142,15 @@ body {
   max-width: calc(100% - 80px); pointer-events: none;
 }
 .stack .legend { position: static; max-width: 100%; }
+.stack.folded .legend:not(.main) { display: none; }
+.legend-fold {
+  order: 1; pointer-events: auto; margin: 1px 0 0 2px; padding: 2px 8px; min-height: 24px;
+  border: 1px solid var(--line); border-radius: 6px; background: color-mix(in srgb, var(--bg) 80%, transparent);
+  color: var(--muted); font: inherit; font-size: 11px; cursor: pointer;
+}
+.legend-fold:hover { color: var(--text); background: var(--hover); }
+.legend-fold[hidden] { display: none; }
+@media (pointer: coarse) { .legend-fold { min-height: 32px; font-size: 12px; } }
 .legend .more { display: none; }
 .legend:hover { background: var(--panel); box-shadow: 0 0 0 1px var(--line); }
 .legend .name { font-weight: 600; }
