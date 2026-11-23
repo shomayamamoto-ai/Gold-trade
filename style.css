@@ -190,7 +190,14 @@ body {
   font-size: 12px; white-space: nowrap;
 }
 #chart.placing { cursor: copy; }
-.loading[hidden], .fab[hidden], .banner[hidden], .hint[hidden] { display: none; }
+.autoy {
+  position: absolute; right: 4px; z-index: 3; height: 24px; min-width: 44px; padding: 0 8px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.autoy:hover { background: var(--hover); }
+@media (pointer: coarse) { .autoy { height: 36px; min-width: 52px; } }
+.autoy[hidden], .loading[hidden], .fab[hidden], .banner[hidden], .hint[hidden] { display: none; }
 
 .banner {
   display: flex; align-items: center; justify-content: center; flex-wrap: wrap;

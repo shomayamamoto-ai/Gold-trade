@@ -1634,6 +1634,10 @@ function render() {
   updateLegends();
   maybeLoadMore();
   $('toLatest').hidden = state.loading || !n || state.end >= n - 0.5;
+  // 縦の範囲を手で動かしているときだけ、「自動」に戻すボタンを、価格の目盛りの下に出す
+  const ab = $('autoY'), mp = panes[0], manual = !!(n && mp && yMan && yMan.key === mp.ykey);
+  if (ab.hidden === manual) ab.hidden = !manual;
+  if (manual) { const top = Math.round(mp.y + mp.h - (ab.offsetHeight || 24) - 6) + 'px'; if (ab.style.top !== top) ab.style.top = top; }
   const title = n ? `${fmtPrice(bars[n - 1].c)} ${curSymbol().label}${state.live ? '' : '(デモ)'} | Gold Trade Chart` : 'Gold Trade Chart';
   if (document.title !== title) document.title = title;
 }
@@ -1687,7 +1691,12 @@ function drawMain(pane, i0, i1, th) {
   if (b === a) { if (log) { a -= 0.01; b += 0.01; } else { a -= 1; b += 1; } }
   const padV = (b - a) * 0.1;
   // ふつうの目盛りで、価格がすべてプラスなら、目盛りが 0 より下へ行かないようにする
-  const tmin = !log && lo > 0 ? Math.max(0, a - padV * 1.6) : a - padV * 1.6, tmax = b + padV * 0.5 + headroom(tmin, b, pane, compact ? 78 : 44);
+  // 上の空き:左上の名前・数値の欄の高さぶん(ただし、ローソク足がつぶれないよう、枠の高さの42%まで)
+  const room = Math.min(Math.max(compact ? 78 : 44, legendH + 10), pane.h * 0.42);
+  let tmin = !log && lo > 0 ? Math.max(0, a - padV * 1.6) : a - padV * 1.6, tmax = b + padV * 0.5 + (b - tmin) * room / (pane.h - room);
+  const key = yKey(log);
+  if (yMan && yMan.key === key) { tmin = yMan.a; tmax = yMan.b; } // 手で動かした範囲を使う
+  pane.tmin = tmin; pane.tmax = tmax; pane.ykey = key;
   const min = bk(tmin), max = bk(tmax);
   // 対数目盛りでは、0 以下の値(一部のインジケーターの線など)は描けない。位置なし(NaN)にして、線をそこで切る
   const yOf = v => (log && !(v > 0) ? NaN : pane.y + pane.h - (fw(v) - tmin) / (tmax - tmin) * pane.h);
@@ -2389,11 +2398,21 @@ const ICONS = {
 };
 const legendEls = new Map();
 let stackEl = null;
+/* 縦方向の表示範囲。ふだんは見えている足に合わせて自動で決める(yMan = null)。
+ * チャートを上下にドラッグしたり、右の価格の目盛りを上下にドラッグしたりすると、手動の範囲(yMan)に切りかわる。
+ * key には銘柄・時間足・目盛りの種類を入れ、どれかが変わったら自動に戻す(別の銘柄に前の範囲を当てはめないため) */
+let yMan = null, legendH = 0;
+const yKey = log => `${state.symbol}|${state.interval}|${log ? 'log' : 'lin'}`;
 function mainStack() {
   if (!stackEl) {
     stackEl = document.createElement('div');
     stackEl.className = 'stack';
     legendsEl.appendChild(stackEl);
+    // 左上の名前・数値の欄の高さを覚えておく。ローソク足がこの欄の下に隠れないよう、上にその分の空きを作るのに使う
+    if (window.ResizeObserver) new ResizeObserver(() => {
+      const h = stackEl.offsetHeight;
+      if (Math.abs(h - legendH) > 3) { legendH = h; draw(); }
+    }).observe(stackEl);
   }
   return stackEl;
 }
@@ -3121,6 +3140,7 @@ function buildTopbar() {
   });
   $('retryBtn').addEventListener('click', loadData);
   $('toLatest').addEventListener('click', () => { state.end = state.bars.length + 5; draw(); });
+  $('autoY').addEventListener('click', () => { yMan = null; draw(); });
 
   document.querySelectorAll('.tab').forEach(t =>
     t.addEventListener('click', () => { dlg.tab = t.dataset.tab; renderDialog(); }));
@@ -3166,7 +3186,7 @@ function paneWeight(k, v) {
 }
 function bindPointer() {
   const pts = new Map();
-  let pinch = 0, resizing = null, moved = 0, dragD = null, dragT = null;
+  let pinch = 0, resizing = null, moved = 0, dragD = null, dragT = null, panY = null;
   const pos = e => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
 
   canvas.addEventListener('pointerdown', e => {
@@ -3202,6 +3222,9 @@ function bindPointer() {
     } else {
       resizing = null;
       if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); }
+      // ローソク足の枠の中なら上下にも動かす。右の価格の目盛りの上なら、上下のドラッグで縦に伸び縮みさせる
+      const mp = panes[0];
+      panY = pts.size === 1 && mp && !mp.ind && p.y >= mp.y && p.y <= mp.y + mp.h ? (p.x > plotW() ? 'scale' : 'move') : null;
       state.hover = p;
       canvas.classList.add('grabbing');
     }
@@ -3240,7 +3263,19 @@ function bindPointer() {
     }
     if (prev && pts.size === 1) {
       moved += Math.abs(p.x - prev.x) + Math.abs(p.y - prev.y);
-      state.end -= (p.x - prev.x) / state.barW;
+      if (panY !== 'scale') state.end -= (p.x - prev.x) / state.barW;
+      const mp = panes[0], dy = p.y - prev.y;
+      if (panY && dy && mp && mp.ykey && mp.tmax > mp.tmin) {
+        // 自動の範囲から手動に切りかえるときは、いま見えている範囲から始める(画面が飛ばないように)
+        if (!yMan || yMan.key !== mp.ykey) yMan = { key: mp.ykey, a: mp.tmin, b: mp.tmax };
+        const r = yMan.b - yMan.a;
+        if (panY === 'move') { const d = dy / mp.h * r; yMan.a += d; yMan.b += d; }
+        else {
+          // 下へドラッグすると縮小(広い範囲が見える)、上へドラッグすると拡大。真ん中の価格は動かさない
+          const f = clamp(Math.exp(dy * 0.005), 0.5, 2), c = (yMan.a + yMan.b) / 2;
+          if (r * f > 1e-12) { yMan.a = c - (c - yMan.a) * f; yMan.b = c + (yMan.b - c) * f; }
+        }
+      }
       pts.set(e.pointerId, p);
     } else if (prev && pts.size === 2) {
       moved += 10;
@@ -3255,7 +3290,7 @@ function bindPointer() {
     state.hover = p; draw();
   });
   const up = e => {
-    pts.delete(e.pointerId); pinch = 0;
+    pts.delete(e.pointerId); pinch = 0; if (!pts.size) panY = null;
     const special = !!resizing || (dragD && moved > 8) || !!dragT;
     if (dragT) {
       if (moved > 4 && e.type === 'pointerup') commitLine(state.dragLine);
@@ -3290,7 +3325,8 @@ function bindPointer() {
   canvas.addEventListener('dblclick', e => {
     const k = dividerAt(pos(e).y, 4);
     if (k >= 0) { state.mainWeight = 2.6; state.indicators.forEach(i => { i.p.weight = 1; }); save(); }
-    else resetViewport();
+    else if (pos(e).x > plotW()) yMan = null; // 価格の目盛りをダブルクリック:縦だけ自動に戻す
+    else { resetViewport(); yMan = null; }
     draw();
   });
   canvas.addEventListener('keydown', e => {
