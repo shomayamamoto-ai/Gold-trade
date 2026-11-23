@@ -4506,8 +4506,10 @@ function renderTrade() {
   setTxt('trSym', curSymbol().label);
   setTxt('trPrice', fmtPrice(px));
   // ポジションを持っているときは、どちらのボタンが「決済」になるかをボタンに書く
-  setTxt('trSellSub', pos ? (pos.qty > 0 ? '買いを決済する' : '売りを増やす') : '下がると利益');
-  setTxt('trBuySub', pos ? (pos.qty < 0 ? '売りを決済する' : '買いを増やす') : '上がると利益');
+  // 成行で反対の向きを押すと、金額の欄に関係なく、ポジションを1回で全部決済する(一部だけなら「半分を決済」か指値で)
+  const mkt = $('trLimitRow').hidden; // 指値の価格の欄が出ていなければ、成行
+  setTxt('trSellSub', pos ? (pos.qty > 0 ? (mkt ? '買いを全部決済する' : '買いを減らす(指値)') : '売りを増やす') : '下がると利益');
+  setTxt('trBuySub', pos ? (pos.qty < 0 ? (mkt ? '売りを全部決済する' : '売りを減らす(指値)') : '買いを増やす') : '上がると利益');
   // 気配値(買える価格・売れる価格)が届いていないとき(つなぎ直した直後・配信が止まったとき)も、売買できない
   const quoteOk = !!liveQuote(sym);
   const tradable = px > 0 && priceOk(sym) && reconciled[sym] === true && clockReady && quoteOk && !state.replay;
@@ -4536,7 +4538,10 @@ function renderTrade() {
   // 取引所から消えた銘柄は価格が取れないので、建値での清算だけできるようにする
   const gone = !!dead[sym] && !!pos;
   $('pClose').disabled = (!tradable && !gone) || sending;
-  setTxt('pClose', gone ? '最後の価格で清算する' : '決済する');
+  {
+    const lq = liveQuote(sym), xp = pos ? (lq ? (pos.qty > 0 ? lq.bid : lq.ask) : px) : NaN;
+    setTxt('pClose', gone ? '最後の価格で清算する' : pos ? `全部決済する(${xp > 0 ? fmtPrice(xp) + ' で' : ''}${pos.qty > 0 ? '売る' : '買い戻す'})` : '全部決済する');
+  }
   $('pSave').disabled = !tradable;
   if (gone) setTxt('pMsg', 'この銘柄は取引所で取引できなくなっています。最後に取得できた価格で清算できます。', 'msg');
   if (!(px > 0)) setTxt('trMsg', state.loading ? '' : '実際の価格を取得できていないため、いまは注文できません。');
@@ -4555,14 +4560,25 @@ function renderTrade() {
   $('trPos').hidden = !pos;
   if (pos) {
     const u = unrealized(sym), base = Math.abs(pos.qty) * pos.avg;
-    setTxt('pSide', pos.qty > 0 ? '買い(ロング)' : '売り(ショート)', pos.qty > 0 ? 'up' : 'down');
-    setTxt('pQty', `${fmtQty(pos.qty)}(${fmtMoney(Math.abs(pos.qty) * (px > 0 ? px : pos.avg), q)} ${q} 分)`);
-    setTxt('pAvg', fmtPrice(pos.avg));
-    const L = liqPrice(pos);
-    setTxt('pLev', pos.lev > 1 ? `×${pos.lev}(証拠金 ${fmtMoney(pos.margin, q)} ${q})` : '×1(レバレッジなし)', pos.lev > 1 ? 'down' : '');
-    if (pos.lev > 1) { loadNextFunding(sym); setTxt('pFund', fundNowText(sym)); } else setTxt('pFund', 'かかりません(1倍)');
-    setTxt('pLiq', L !== null ? `${fmtPrice(L)}(いまから ${px > 0 ? ((pos.qty > 0 ? px - L : L - px) / px * 100).toFixed(2) : '—'}%)` : 'なし');
-    setTxt('pPnl', `${fmtMoney(u, q, true)} ${q}(${pct2(base ? u / base * 100 : 0)}%)`, pnlClass(u, q));
+    setTxt('pSide', `${pos.qty > 0 ? '買い(ロング)' : '売り(ショート)'}${pos.lev > 1 ? ' ×' + pos.lev : ''}`, 'pos-badge ' + (pos.qty > 0 ? 'up' : 'down'));
+    // 数字と補足は、行を分けて出す(1行に詰めると、せまい画面で途中で折り返して読みにくいため)
+    const two = (id, main, sub, cls) => { setHtml($(id), `${esc(main)}${sub ? `<small>${esc(sub)}</small>` : ''}`); if ($(id).className !== (cls || '')) $(id).className = cls || ''; };
+    const qq = quoteOf(sym), coin = sym.endsWith(qq) ? sym.slice(0, -qq.length) : '';
+    two('pQty', `${fmtQty(Math.abs(pos.qty))}${coin ? ' ' + coin : ''}`, `${fmtMoney(Math.abs(pos.qty) * (px > 0 ? px : pos.avg), q)} ${q} 分`);
+    two('pAvg', fmtPrice(pos.avg), px > 0 ? `いま ${fmtPrice(px)}` : '');
+    const L = liqPrice(pos), liqPct = L !== null && px > 0 ? (pos.qty > 0 ? px - L : L - px) / px * 100 : NaN;
+    two('pLev', pos.lev > 1 ? `×${pos.lev}` : '×1(なし)', pos.lev > 1 ? `証拠金 ${fmtMoney(pos.margin, q)} ${q}` : '', pos.lev > 1 ? 'down' : '');
+    if (pos.lev > 1) {
+      loadNextFunding(sym);
+      // 「次回 +0.0097%(実際の率。…)・ 年率…」を、短い数字と補足の2行に分ける
+      const f = fundNowText(sym), k = f.indexOf('(');
+      two('pFund', k > 0 ? f.slice(0, k) : f, k > 0 ? f.slice(k + 1).replace(/\)/, '').replace(/^ ・ /, '') : '');
+    } else two('pFund', 'かかりません', '1倍のため');
+    two('pLiq', L !== null ? fmtPrice(L) : 'なし', isFinite(liqPct) ? `いまから ${liqPct.toFixed(2)}% 動くと` : '', isFinite(liqPct) && liqPct < 3 ? 'down' : '');
+    two('pPnl', `${fmtMoney(u, q, true)} ${q}`, `${pct2(base ? u / base * 100 : 0)}%`, pnlClass(u, q));
+    // 強制決済が近いときは、目立つ場所で知らせる
+    const warn = isFinite(liqPct) && liqPct < 3 ? `強制決済まで、あと ${liqPct.toFixed(2)}% の値動きです。強制決済になると、証拠金(${fmtMoney(pos.margin, q)} ${q})をすべて失います。` : '';
+    $('pWarn').hidden = !warn; if (warn) setTxt('pWarn', warn);
     // いま全部を決済した場合の損益:決済できる価格(買いは売れる価格、売りは買える価格)で、決済の手数料と、建てたときの手数料も引く
     {
       const lq = liveQuote(sym), xp = lq ? (pos.qty > 0 ? lq.bid : lq.ask) : px;
@@ -4571,7 +4587,12 @@ function renderTrade() {
         const g = pos.qty * (xp - pos.avg);
         net = (pos.lev > 1 ? Math.max(g, -pos.margin) : g) - Math.abs(pos.qty) * xp * FEE - (pos.feeOpen || 0);
       }
-      setTxt('pNet', isFinite(net) ? `${fmtMoney(net, q, true)} ${q}` : '—', pnlClass(net, q));
+      setTxt('pNet', isFinite(net) ? `${fmtMoney(net, q, true)} ${q}` : '—', 'pos-hero-val ' + pnlClass(net, q));
+      // 値動きの損益と大きく違うことがあるので、手数料の分を内訳で見せる(レバレッジが高いと、手数料が証拠金に比べて大きい)
+      if (xp > 0) {
+        const fees = Math.abs(pos.qty) * xp * FEE + (pos.feeOpen || 0), g = pos.qty * (xp - pos.avg);
+        setTxt('pNetWhy', `値動きの損益 ${fmtMoney(g, q, true)} − 手数料 ${fmtMoney(fees, q)}(建てたとき+決済するとき)`);
+      } else setTxt('pNetWhy', '');
     }
     // 利確・損切りに届いたときの損益の目安(手数料も引いた額)。入力中の値で計算する
     const est = (id, out) => {
@@ -4898,7 +4919,7 @@ function bindTrade() {
     [...$('trType').children].forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); });
     $('trLimitRow').hidden = orderType !== 'limit';
     if (orderType === 'limit' && !$('trLimit').value && T.last[state.symbol] > 0) $('trLimit').value = T.last[state.symbol];
-    renderUnit(); renderRisk();
+    renderUnit(); renderRisk(); renderTrade();
   });
   /* 損切りを入れたら、「損切りになったときにいくら失うか」を見せる。
    * 資金の何%を失う設定にするかを選ぶと、そこから買う金額を逆算する(教科書 第6章の計算)。 */
@@ -4955,6 +4976,9 @@ function bindTrade() {
       done();
       return;
     }
+    // 成行で、持っているポジションと反対の向きを押したら、金額の欄に関係なく、1回で全部決済する
+    // (以前は金額の欄の分だけ減らしていたため、押しても決済されたのか分かりにくかった)
+    if (had && Math.sign(had.qty) !== dir) { closeAll(sym, quick); return; }
     // 成行:取引所に注文が届くまでの遅れ(約 0.2 秒)を待ち、そのときの板・気配値で約定させる。
     // 待っている間は、もう一度押しても注文しない(二重の注文を防ぐ)
     if (sending) return;
@@ -5088,19 +5112,28 @@ function bindTrade() {
     const held = () => { const p = T.positions[sym]; return p ? { side: p.qty > 0 ? 'sell' : 'buy', want: { qty: Math.abs(p.qty) } } : null; };
     afterLatency(sym, held).then(late => { sending = false; run(late); renderTrade(); draw(); });
   };
-  $('pClose').addEventListener('click', () => {
-    const sym = state.symbol, q = quoteOf(sym), held = T.positions[sym];
+  /* ポジションを1回で全部決済する(「全部決済する」・注文の欄の反対向きのボタン・チャート上のボタンで共通)。
+   * 決済したことがはっきり分かるよう、結果(何を・いくらで・確定した損益)を、枠で目立たせて出す */
+  function closeAll(sym, quick) {
+    const q = quoteOf(sym), held = T.positions[sym];
+    if (!held) { renderTrade(); return; }
+    const long = held.qty > 0, side = long ? '買い' : '売り'; // 決済すると held の数量が変わるので、向きを先に覚えておく
     const said = err => {
-      if (err) { setTxt('pMsg', err, 'msg down'); return; }
+      if (err) { setTxt('pMsg', err, 'msg down'); setTxt('trMsg', err, 'msg down'); if (quick) toast(err); return; }
       setTxt('pMsg', '');
-      const h = T.history[0];
-      setTxt('trMsg', `決済しました(損益 ${fmtMoney(netOf(h), q, true)} ${q})`, 'msg');
+      const h = T.history[0], net = netOf(h);
+      const text = `✓ 決済しました:${side}のポジション ${fmtQty(h.qty)} を ${fmtPrice(h.price)} で${long ? '売りました' : '買い戻しました'}。` +
+        `確定した損益 ${fmtMoney(net, q, true)} ${q}(手数料込み)。いまは何も持っていません。` + (lastFill && lastFill.over ? deepNote(lastFill) : '');
+      setTxt('trMsg', text, 'msg done');
+      toast(`決済しました(損益 ${fmtMoney(net, q, true)} ${q})`);
       renderTrade(); draw();
     };
     // 取引所から消えた銘柄は、注文を出す先がないので、最後の価格でそのまま清算する(待たない)
-    if (dead[sym] && held) { said(closePosition(sym, 'manual', { price: T.last[sym] > 0 ? T.last[sym] : held.avg, away: false })); return; }
+    if (dead[sym]) { said(closePosition(sym, 'manual', { price: T.last[sym] > 0 ? T.last[sym] : held.avg, away: false })); return; }
+    setTxt('trMsg', SENDING_MSG, 'msg');
     sendClose(sym, 'pMsg', late => said(late || closePosition(sym, 'manual')));
-  });
+  }
+  $('pClose').addEventListener('click', () => closeAll(state.symbol));
   // 半分だけ決済する(残りはそのまま持ち続ける)
   $('pHalf').addEventListener('click', () => {
     const sym = state.symbol, q = quoteOf(sym);

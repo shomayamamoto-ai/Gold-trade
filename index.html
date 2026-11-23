@@ -161,33 +161,40 @@
       <small class="dim">指値は、触れただけでは約定しません(同じ価格の順番待ちがあるため)。ページを閉じている間に指値を越えた場合は、次に開いたときに約定します。</small>
     </section>
 
-    <section id="trPos" class="tr-card" hidden>
-      <h3>保有中のポジション</h3>
-      <dl class="tr-dl">
-        <dt>方向</dt><dd id="pSide"></dd>
+    <section id="trPos" class="tr-card tr-pos" hidden>
+      <div class="pos-head">
+        <h3>保有中のポジション</h3>
+        <span id="pSide" class="pos-badge"></span>
+      </div>
+      <!-- いちばん知りたい「いま決済したらいくらか」と、決済のボタンを、いちばん上に置く -->
+      <div class="pos-hero">
+        <span class="pos-hero-lbl">いま全部決済すると(手数料込み)</span>
+        <span id="pNet" class="pos-hero-val"></span>
+        <small id="pNetWhy" class="dim"></small>
+      </div>
+      <button id="pClose" class="pos-close" type="button">全部決済する</button>
+      <div class="tr-btns tr-btns-sub">
+        <button id="pHalf" class="ctl btn" type="button">半分を決済</button>
+        <button id="pBe" class="ctl btn" type="button" title="損切りを、建てたときの価格に動かします">損切りを建値へ</button>
+      </div>
+      <p id="pMsg" class="msg" role="status"></p>
+      <p id="pWarn" class="pos-warn" hidden></p>
+      <dl class="tr-dl pos-dl">
         <dt>数量</dt><dd id="pQty"></dd>
-        <dt>平均取得価格</dt><dd id="pAvg"></dd>
+        <dt>建てた価格<small>平均</small></dt><dd id="pAvg"></dd>
+        <dt>値動きの損益<small>手数料を引く前</small></dt><dd id="pPnl"></dd>
         <dt>レバレッジ</dt><dd id="pLev"></dd>
         <dt>強制決済の価格</dt><dd id="pLiq"></dd>
         <dt>資金調達料<small>8時間ごと</small></dt><dd id="pFund"></dd>
-        <dt>評価損益<small>手数料を引く前</small></dt><dd id="pPnl"></dd>
-        <dt>いま決済すると<small>手数料込み</small></dt><dd id="pNet"></dd>
       </dl>
       <div id="pSparkBox" class="tr-spark" hidden>
         <canvas id="pSpark" role="img" aria-label="建ててからの含み損益の推移"></canvas>
         <small id="pSparkNote" class="dim"></small>
       </div>
+      <h4 class="pos-sub">自動で決済する価格</h4>
       <label class="row"><span class="lbl">利確の価格<small id="pTpEst" class="tr-est"></small></span><input id="pTp" class="ctl" type="number" inputmode="decimal" min="0" step="any" placeholder="なし"></label>
       <label class="row"><span class="lbl">損切りの価格<small id="pSlEst" class="tr-est"></small></span><input id="pSl" class="ctl" type="number" inputmode="decimal" min="0" step="any" placeholder="なし"></label>
-      <div class="tr-btns tr-btns-sub">
-        <button id="pBe" class="ctl btn" type="button" title="損切りを、建てたときの価格に動かします">損切りを建値へ</button>
-        <button id="pHalf" class="ctl btn" type="button">半分を決済</button>
-      </div>
-      <div class="tr-btns">
-        <button id="pSave" class="ctl btn" type="button">利確・損切りを保存</button>
-        <button id="pClose" class="ctl btn primary" type="button">決済する</button>
-      </div>
-      <p id="pMsg" class="msg" role="status"></p>
+      <button id="pSave" class="ctl btn wide-btn" type="button">利確・損切りを保存</button>
       <small class="tr-hint">チャート上の利確・損切りの線は、上下にドラッグして動かせます。まだ置いていないときは、建値の線を引っぱると新しく置けます。</small>
     </section>
 
