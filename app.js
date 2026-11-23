@@ -1640,6 +1640,15 @@ function render() {
   const ab = $('autoY'), mp = panes[0], manual = !!(n && mp && yMan && yMan.key === mp.ykey);
   if (ab.hidden === manual) ab.hidden = !manual;
   if (manual) { const top = Math.round(mp.y + mp.h - (ab.offsetHeight || 24) - 6) + 'px'; if (ab.style.top !== top) ab.style.top = top; }
+  // 手で動かして、いまの価格が枠の外へ出たときは、枠の上(または下)の端に「▲ 価格」を出す。押すと、いまの価格が真ん中に来る
+  const ob = $('offPx'), ly = manual ? mp.yOf(bars[n - 1].c) : NaN, out = manual && isFinite(ly) && (ly < mp.y || ly > mp.y + mp.h) ? (ly < mp.y ? 'up' : 'down') : '';
+  if (ob.hidden === !!out) ob.hidden = !out;
+  if (out) {
+    const txt = `${out === 'up' ? '▲' : '▼'} ${fmtPrice(bars[n - 1].c)}`;
+    if (ob.textContent !== txt) { ob.textContent = txt; ob.title = `いまの価格は${out === 'up' ? '上' : '下'}にあります。押すと、いまの価格を真ん中に表示します`; }
+    const top = Math.round(out === 'up' ? mp.y + 4 : mp.y + mp.h - (ob.offsetHeight || 24) - (manual ? (ab.offsetHeight || 24) + 10 : 4)) + 'px';
+    if (ob.style.top !== top) ob.style.top = top;
+  }
   const title = n ? `${fmtPrice(bars[n - 1].c)} ${curSymbol().label}${state.live ? '' : '(デモ)'} | Gold Trade Chart` : 'Gold Trade Chart';
   if (document.title !== title) document.title = title;
 }
@@ -3176,6 +3185,14 @@ function buildTopbar() {
   $('retryBtn').addEventListener('click', loadData);
   $('toLatest').addEventListener('click', () => { state.end = state.bars.length + 5; draw(); });
   $('autoY').addEventListener('click', () => { yMan = null; draw(); });
+  $('offPx').addEventListener('click', () => {
+    // 範囲の幅はそのままで、いまの価格が真ん中に来るように動かす
+    const mp = panes[0], n = state.bars.length, m = manualY();
+    if (!m || !n) return;
+    const v = mp.log ? Math.log(state.bars[n - 1].c) : state.bars[n - 1].c, half = (m.b - m.a) / 2;
+    if (isFinite(v)) { m.a = v - half; m.b = v + half; }
+    draw();
+  });
 
   document.querySelectorAll('.tab').forEach(t =>
     t.addEventListener('click', () => { dlg.tab = t.dataset.tab; renderDialog(); }));
@@ -3221,7 +3238,7 @@ function paneWeight(k, v) {
 }
 function bindPointer() {
   const pts = new Map();
-  let pinch = 0, pinchV = false, resizing = null, moved = 0, dragD = null, dragT = null, panY = null;
+  let axisTap = 0, swipe = null, pinch = 0, pinchV = false, resizing = null, moved = 0, dragD = null, dragT = null, panY = null;
   const pos = e => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
 
   canvas.addEventListener('pointerdown', e => {
@@ -3264,6 +3281,7 @@ function bindPointer() {
       }
       // ローソク足の枠の中なら上下にも動かす。右の価格の目盛りの上なら、上下のドラッグで縦に伸び縮みさせる
       const mp = panes[0];
+      swipe = { dx: 0, dy: 0, touch: e.pointerType !== 'mouse', y: false };
       panY = pts.size === 1 && mp && !mp.ind && p.y >= mp.y && p.y <= mp.y + mp.h ? (p.x > plotW() ? 'scale' : 'move') : null;
       state.hover = p;
       canvas.classList.add('grabbing');
@@ -3304,7 +3322,13 @@ function bindPointer() {
     if (prev && pts.size === 1) {
       moved += Math.abs(p.x - prev.x) + Math.abs(p.y - prev.y);
       if (panY !== 'scale') state.end -= (p.x - prev.x) / state.barW;
-      const mp = panes[0], dy = p.y - prev.y;
+      const mp = panes[0];
+      let dy = p.y - prev.y;
+      if (swipe && swipe.touch && panY === 'move' && !swipe.y) {
+        // 指では、横にスワイプしたつもりでも少し上下にぶれる。はっきり上下に動かしたときだけ、上下の移動を始める
+        swipe.dx += Math.abs(p.x - prev.x); swipe.dy += dy;
+        if (Math.abs(swipe.dy) > 12 && Math.abs(swipe.dy) > swipe.dx * 0.5) { swipe.y = true; dy = swipe.dy; } else dy = 0;
+      }
       const m = panY && dy ? manualY() : null;
       if (m) {
         if (panY === 'move') { const d = dy / mp.h * (m.b - m.a); m.a += d; m.b += d; }
@@ -3338,6 +3362,11 @@ function bindPointer() {
       if (d && d.type === 'a' && isFinite(last) && moved > 3 && d.p1.price !== dragD.orig.p1.price) { d.above = d.p1.price > last; d.done = false; }
       dragD = null; state.dragging = null; save(); draw();
     }
+    // スマホ:価格の目盛りを2回すばやくタップすると、縦の範囲を自動に戻す(ダブルクリックの代わり)
+    if (!special && moved <= 8 && e.type === 'pointerup' && e.pointerType !== 'mouse' && onPriceAxis(pos(e))) {
+      const now = Date.now();
+      if (now - axisTap < 350) { yMan = null; axisTap = 0; } else axisTap = now;
+    }
     if (!special && moved <= 8 && e.type === 'pointerup' && !pts.size) {
       handleTap(pos(e), e.pointerType === 'mouse' ? 6 : 16);
     }
@@ -3368,6 +3397,12 @@ function bindPointer() {
     const span = plotW() / state.barW;
     if (e.key === 'ArrowLeft') state.end -= Math.max(1, span * 0.1);
     else if (e.key === 'ArrowRight') state.end += Math.max(1, span * 0.1);
+    else if (e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      // Shift + ↑↓:上下の価格へ動かす(1回で枠の高さの1割)
+      const m = manualY(); if (!m) return;
+      const d = (m.b - m.a) * 0.1 * (e.key === 'ArrowUp' ? 1 : -1); m.a += d; m.b += d;
+    }
+    else if (e.key === 'a' || e.key === 'A') yMan = null; // A:縦の範囲を自動に戻す
     else if (e.key === 'ArrowUp' || e.key === '+') zoomAt(plotW(), 1.2);
     else if (e.key === 'ArrowDown' || e.key === '-') zoomAt(plotW(), 1 / 1.2);
     else if (e.key === 'End') state.end = state.bars.length + 5;

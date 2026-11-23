@@ -133,9 +133,12 @@ body {
   max-width: calc(100% - 80px);
   padding: 1px 4px; border-radius: 4px;
   font-size: 12px; line-height: 1.7;
-  pointer-events: auto;
+  /* 欄の上でドラッグしても、チャートが動くようにする(文字が選ばれてしまわないように)。
+     押せるのは、名前・数字(説明が出る・ダブルクリックで設定)と、ボタンだけ */
+  pointer-events: none; user-select: none; -webkit-user-select: none;
   background: color-mix(in srgb, var(--bg) 72%, transparent);
 }
+.legend .name, .legend .params, .legend button { pointer-events: auto; }
 .stack {
   position: absolute; left: 6px; top: 4px;
   display: flex; flex-direction: column; align-items: flex-start;
@@ -152,7 +155,7 @@ body {
 .legend-fold[hidden] { display: none; }
 @media (pointer: coarse) { .legend-fold { min-height: 32px; font-size: 12px; } }
 .legend .more { display: none; }
-.legend:hover { background: var(--panel); box-shadow: 0 0 0 1px var(--line); }
+.legend:has(.name:hover, .params:hover, button:hover) { background: var(--panel); box-shadow: 0 0 0 1px var(--line); }
 .legend .name { font-weight: 600; }
 .legend .dim { color: var(--muted); }
 .legend .vals { font-variant-numeric: tabular-nums; }
@@ -205,8 +208,10 @@ body {
   font-size: 12px; font-weight: 600; cursor: pointer;
 }
 .autoy:hover { background: var(--hover); }
+.offpx { color: #fff; background: #2962ff; border-color: transparent; font-variant-numeric: tabular-nums; }
+.offpx:hover { filter: brightness(1.1); background: #2962ff; }
 @media (pointer: coarse) { .autoy { height: 36px; min-width: 52px; } }
-.autoy[hidden], .loading[hidden], .fab[hidden], .banner[hidden], .hint[hidden] { display: none; }
+.autoy[hidden], .offpx[hidden], .loading[hidden], .fab[hidden], .banner[hidden], .hint[hidden] { display: none; }
 
 .banner {
   display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
