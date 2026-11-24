@@ -285,11 +285,13 @@ function customFromText(text) {
 function defaultParams(type) {
   const vis = {};
   INTERVALS.forEach(iv => { vis[iv.id] = true; });
-  if (GT.DEFS[type]) return Object.assign(GT.defaults(type), GT.DEFS[type].overlay ? {} : { weight: 1 }, GT.DEFS[type].custom ? { alert: false } : {}, { vis });
-  if (type === 'ma') return { kind: 'sma', len: 20, source: 'close', color: '#f5a623', width: 1.5, vis };
-  if (type === 'rsi') return { len: 14, source: 'close', upper: 70, lower: 30, color: '#7e57c2', showMa: true, maLen: 14, cMa: '#f5a623', weight: 1, vis };
+  // 売買サインのあるもの(GT.SIGNALS)は、表示する・種類・合図のお知らせ の設定を持つ(sig は最初からオン)
+  const sig = GT.SIGNALS[type] ? Object.assign({ alert: false }, GT.sigDefaults(type)) : {};
+  if (GT.DEFS[type]) return Object.assign(GT.defaults(type), GT.DEFS[type].overlay ? {} : { weight: 1 }, GT.DEFS[type].custom ? { alert: false } : {}, sig, { vis });
+  if (type === 'ma') return Object.assign({ kind: 'sma', len: 20, source: 'close', color: '#f5a623', width: 1.5, vis }, sig);
+  if (type === 'rsi') return Object.assign({ len: 14, source: 'close', upper: 70, lower: 30, color: '#7e57c2', showMa: true, maLen: 14, cMa: '#f5a623', weight: 1, vis }, sig);
   if (type === 'macd') {
-    return { fast: 12, slow: 26, signal: 9, source: 'close', colMacd: '#2f80ed', colSignal: '#f5a623', weight: 1, vis };
+    return Object.assign({ fast: 12, slow: 26, signal: 9, source: 'close', colMacd: '#2f80ed', colSignal: '#f5a623', weight: 1, vis }, sig);
   }
   return Object.assign({
     baseline: true,
@@ -350,6 +352,7 @@ const state = {
   compare: null,      // 重ねて比べる銘柄(ないときは null)
   quickTrade: true,   // チャートの左上に、売買ボタンを出すか
   btSlip: 0.05,       // 過去データで試すときの、すべり(片道の %)
+  showSig: true,      // インジケーターの売買サイン(「買」「売」)を、まとめて表示するか(ツールで切りかえ)
 };
 let nextId = 1;
 
@@ -364,7 +367,7 @@ function save() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({
       symbol: state.symbol, interval: state.interval, theme: state.theme, mainWeight: state.mainWeight, drawings: state.drawings, chartType: state.chartType,
-      tradeOpen: state.tradeOpen, logScale: state.logScale, legendFold: state.legendFold, compare: state.compare, quickTrade: state.quickTrade, btSlip: state.btSlip,
+      tradeOpen: state.tradeOpen, logScale: state.logScale, legendFold: state.legendFold, compare: state.compare, quickTrade: state.quickTrade, btSlip: state.btSlip, showSig: state.showSig,
       custom: SYMBOLS.slice(BUILTIN).map(x => ({ id: x.id, label: x.label, quote: x.quote || null })),
       customInds: customDefs, favs: favs.filter(t => IND_TYPES[t]), defaults2: defaults2Done,
       indicators: state.indicators.map(i => ({ type: i.type, hidden: i.hidden, p: i.p })),
@@ -451,6 +454,7 @@ function load() {
   state.logScale = !!s && s.logScale === true;
   state.legendFold = !!s && s.legendFold === true;
   state.quickTrade = !s || s.quickTrade !== false;
+  state.showSig = !s || s.showSig !== false;
   state.btSlip = s && typeof s.btSlip === 'number' && s.btSlip >= 0 && s.btSlip <= 5 ? s.btSlip : 0.05;
   state.compare = s && typeof s.compare === 'string' && SYMBOLS.some(x => x.id === s.compare) ? s.compare : null;
   if (s && Array.isArray(s.customInds)) s.customInds.slice(0, CUSTOM_MAX).forEach(d => { if (d && CUSTOM_ID.test(d.id)) registerCustom(d); });
@@ -600,6 +604,7 @@ function recompute() {
     ind.stale = false;
     try {
       ind.out = IND_TYPES[ind.type].generic ? GT.DEFS[ind.type].compute(state.bars, ind.p) : (fns[ind.type] || computeCC)(state.bars, ind.p);
+      if (ind.out && GT.SIGNALS[ind.type]) attachSignals(ind);
       ind.err = '';
     } catch (e) {
       // 1つの計算が失敗しても、ほかの表示は続ける。理由(期間が長すぎる、など)は、線の名前の横に出す
@@ -608,6 +613,28 @@ function recompute() {
   });
   checkAlerts();
 }
+/* 売買サイン:いちばん右の足が、まだ確定していなければ、その位置(確定していれば -1)。
+ * 確定していない足は、値が動くたびに合図が出たり消えたりする(リペイント)ので、合図を付けない。足が確定すると、次の計算で付く */
+function formingIdx() {
+  const n = state.bars.length, iv = curInterval();
+  return n && iv && barEnd(state.bars[n - 1].t, iv) > Date.now() ? n - 1 : -1;
+}
+/* 売買サインを計算して、ind.out.marks に入れる(自作インジケーターの合図と同じ形なので、過去データで試す・お知らせがそのまま使える)。
+ * 計算は recompute のたび(足の更新ごと)に1回だけ。描くときは、ここで作った配列を読むだけ */
+function attachSignals(ind) {
+  const r = GT.signals(ind.type, state.bars, ind.p, ind.out);
+  if (!r) return;
+  const f = formingIdx();
+  let last = null;
+  r.marks.forEach(m => {
+    if (f >= 0) m.val[f] = 0;
+    for (let i = m.val.length - 1; i >= 0; i--) if (m.val[i]) { if (!last || i > last.i) last = { i, dir: m.dir, name: m.name }; break; }
+  });
+  ind.out.marks = r.marks;
+  ind.out.sig = { kind: r.kind, last };
+}
+// 売買サインを画面に出すか(全体の切りかえと、そのインジケーターの設定の両方がオン)
+const sigOn = ind => !!(state.showSig && ind.p.sig && ind.out && ind.out.sig);
 /* 「合図が出たら知らせる」をオンにした自作インジケーターについて、足が確定したときに合図を調べる。
  * 知らせるのは、見ている間に新しく確定した足だけ(開いた直後や、銘柄・時間足を変えた直後には出さない) */
 function checkAlerts() {
@@ -624,7 +651,8 @@ function checkAlerts() {
     ind.out.marks.forEach(m => {
       if (!(m.val[n - 2] > 0 || m.val[n - 2] < 0)) return;
       const iv = INTERVALS.find(x => x.id === state.interval);
-      const text = `${m.dir === 'up' ? '▲' : '▼'} ${labelOf(state.symbol)}(${iv ? iv.label : ''})で「${IND_TYPES[ind.type].name}」の合図:${m.name}`;
+      const text = m.sig ? `${m.dir === 'up' ? '▲ 買' : '▼ 売'}の合図(決まりが成り立っただけで、おすすめではありません):${labelOf(state.symbol)}(${iv ? iv.label : ''})「${IND_TYPES[ind.type].name}」${m.name}`
+        : `${m.dir === 'up' ? '▲' : '▼'} ${labelOf(state.symbol)}(${iv ? iv.label : ''})で「${IND_TYPES[ind.type].name}」の合図:${m.name}`;
       toast(text);
       try { if (window.Notification && Notification.permission === 'granted' && document.hidden) new Notification('Gold Trade Chart', { body: text }); } catch (e) { /* 通知を出せなくても、画面の表示は出ている */ }
     });
@@ -1703,6 +1731,24 @@ function heikin(bars) {
   }
   return out;
 }
+/* 売買サインの札(TradingView の label のような形)。y は先端(足に近い側)の位置。up なら下向きに伸びる。描いた高さを返す */
+const SIG_TAG = { w: 17, h: 15, tip: 4 };
+function drawSigTag(x, y, up) {
+  const { w, h, tip } = SIG_TAG, top = up ? y + tip : y - tip - h, cx = Math.round(x);
+  ctx.fillStyle = up ? UP : DOWN;
+  ctx.beginPath();
+  ctx.moveTo(cx, y); ctx.lineTo(cx - tip, up ? top : top + h); ctx.lineTo(cx + tip, up ? top : top + h); ctx.closePath(); ctx.fill();
+  const r = 3, l = cx - w / 2;
+  ctx.beginPath();
+  ctx.moveTo(l + r, top); ctx.lineTo(l + w - r, top); ctx.quadraticCurveTo(l + w, top, l + w, top + r); ctx.lineTo(l + w, top + h - r);
+  ctx.quadraticCurveTo(l + w, top + h, l + w - r, top + h); ctx.lineTo(l + r, top + h); ctx.quadraticCurveTo(l, top + h, l, top + h - r);
+  ctx.lineTo(l, top + r); ctx.quadraticCurveTo(l, top, l + r, top); ctx.closePath(); ctx.fill();
+  ctx.save();
+  ctx.font = '700 11px -apple-system, "Segoe UI", "Hiragino Sans", sans-serif'; ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(up ? '買' : '売', cx, top + h / 2 + 0.5);
+  ctx.restore();
+  return h + tip;
+}
 function drawMain(pane, i0, i1, th) {
   const bars = state.bars, pw = plotW(), bw = state.barW;
   let lo = Infinity, hi = -Infinity, vmax = 0;
@@ -1783,23 +1829,39 @@ function drawMain(pane, i0, i1, th) {
     lines.forEach(l => strokeSeries(l, yOf, i0, i1));
   });
   if (cmpLine) strokeSeries({ val: cmpLine.val, color: CMP_COLOR, width: 1.8 }, yOf, i0, i1);
-  // 自分で作ったインジケーターの合図(▲ は足の下、▼ は足の上)。下の枠に出しているものの合図も、ここに出す
-  let slot = 0;
+  // 合図の印(▲ は足の下、▼ は足の上)。下の枠に出しているものの合図も、ここに出す(どれもローソク足の上で見る、と決めておく)。
+  // 売買サインは「買」「売」の札で描く。同じ足に複数の印があるときは、足から離れる向きに積み重ねて、重ならないようにする
+  const size = clamp(bw * 0.45, 4.5, 7), offUp = new Map(), offDn = new Map(), placed = [];
+  // 札は足の幅より広いので、となりの足の札とも重なりうる。置いた札の範囲を覚えておき、重なるなら足から離れる向きにずらす
+  const placeTag = (x, y, up) => {
+    const hh = SIG_TAG.h + SIG_TAG.tip;
+    for (let k = 0, moved = true; moved && k < 30; k++) {
+      moved = false;
+      for (const r of placed) {
+        if (Math.abs(r.x - x) > SIG_TAG.w) continue;
+        const a = up ? y : y - hh, b = up ? y + hh : y;
+        if (a < r.b + 1 && b > r.a - 1) { y = up ? r.b + 2 : r.a - 2; moved = true; }
+      }
+    }
+    placed.push({ x, a: up ? y : y - hh, b: up ? y + hh : y });
+    drawSigTag(x, y, up);
+    return y;
+  };
   state.indicators.forEach(ind => {
     if (ind.hidden || !ind.out || !ind.out.marks || !ind.out.marks.length || !shownHere(ind)) return;
-    const size = clamp(bw * 0.45, 4.5, 7);
+    if (ind.out.sig && !sigOn(ind)) return; // 売買サインを隠しているもの(合図の計算は、過去データで試す・お知らせのために残してある)
     ind.out.marks.forEach(m => {
-      const up = m.dir === 'up', gap = 5 + slot * (size * 2 + 3);
+      const up = m.dir === 'up', off = up ? offUp : offDn;
       ctx.fillStyle = up ? UP : DOWN;
-      ctx.beginPath();
       for (let i = i0; i <= i1; i++) {
         if (!(m.val[i] > 0 || m.val[i] < 0)) continue;
-        const x = xOf(i), y = up ? yOf(bars[i].l) + gap : yOf(bars[i].h) - gap;
-        ctx.moveTo(x, y); ctx.lineTo(x - size, y + (up ? 1 : -1) * size * 1.6); ctx.lineTo(x + size, y + (up ? 1 : -1) * size * 1.6); ctx.closePath();
+        const o = off.get(i) || 0, x = xOf(i), y0 = up ? yOf(bars[i].l) : yOf(bars[i].h);
+        if (m.sig && bw >= 5) { const y = placeTag(x, y0 + (up ? 4 + o : -4 - o), up); off.set(i, Math.abs(y - y0) + SIG_TAG.h + SIG_TAG.tip - 2); continue; }
+        const y = up ? y0 + 5 + o : y0 - 5 - o;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - size, y + (up ? 1 : -1) * size * 1.6); ctx.lineTo(x + size, y + (up ? 1 : -1) * size * 1.6); ctx.closePath(); ctx.fill();
+        off.set(i, o + size * 1.6 + 3);
       }
-      ctx.fill();
     });
-    slot++;
   });
   // 最新の価格ライン
   const last = bars[bars.length - 1];
@@ -2424,6 +2486,51 @@ function drawCrosshair(th) {
   ctx.fillStyle = th.tagBg; ctx.fillRect(tx, H - TIME_H + 2, tw, TIME_H - 4);
   ctx.fillStyle = th.tagText; ctx.textAlign = 'center';
   ctx.fillText(text, tx + tw / 2, H - TIME_H / 2);
+  if (pane === panes[0]) drawSigTip(i, x, hv.y, th);
+}
+// 文字を、幅 maxW に収まるように1文字ずつ折り返す(日本語は単語の区切りがないため)
+function wrapLines(text, maxW) {
+  const out = [];
+  let cur = '';
+  for (const ch of text) {
+    if (cur && ctx.measureText(cur + ch).width > maxW) { out.push(cur); cur = ch.trim() ? ch : ''; } else cur += ch;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+/* 十字線(スマホではタップ)を売買サインの札に近づけると、その意味を吹き出しで説明する。
+ * 札は足の安値の下(買)・高値の上(売)にあるので、十字線の高さがそこから 70px 以内のものだけを出す(関係のない所で出続けないように) */
+function drawSigTip(i, x, y, th) {
+  const items = [], mp = panes[0], b = state.bars[i];
+  if (!b || !mp.yOf) return;
+  state.indicators.forEach(ind => {
+    if (ind.hidden || !shownHere(ind) || !sigOn(ind)) return;
+    ind.out.marks.forEach(m => {
+      if (!(m.val[i] > 0)) return;
+      const ty = mp.yOf(m.dir === 'up' ? b.l : b.h), dy = m.dir === 'up' ? y - ty : ty - y;
+      if (dy > -12 && dy < 70) items.push([m.dir === 'up', `${IND_TYPES[ind.type].short || IND_TYPES[ind.type].name}:${m.text}`]);
+    });
+  });
+  if (!items.length) return;
+  const pw = plotW(), maxW = Math.min(260, pw - 40);
+  ctx.save();
+  ctx.font = '12px -apple-system, "Segoe UI", "Hiragino Sans", sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  const rows = [];
+  items.forEach(([up, t]) => { rows.push([up ? 'buy' : 'sell', up ? '買いの合図' : '売りの合図']); wrapLines(t, maxW).forEach(l => rows.push(['', l])); });
+  wrapLines('決まりが成り立った印で、おすすめではありません。確定した足だけに付けます', maxW).forEach(l => rows.push(['note', l]));
+  const lh = 16, bw = maxW + 16, bh = rows.length * lh + 12;
+  let bx = x + 14;
+  if (bx + bw > pw - 4) bx = x - 14 - bw;
+  bx = clamp(bx, 4, Math.max(4, pw - bw - 4));
+  const by = clamp(y + 14, mp.y + 4, Math.max(mp.y + 4, mp.y + mp.h - bh - 4));
+  ctx.fillStyle = th.bg; ctx.strokeStyle = th.cross; ctx.globalAlpha = 0.96;
+  ctx.fillRect(bx, by, bw, bh); ctx.globalAlpha = 1; ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+  rows.forEach(([k, t], r) => {
+    ctx.font = `${k === 'buy' || k === 'sell' ? '700 ' : ''}${k === 'note' ? 11 : 12}px -apple-system, "Segoe UI", "Hiragino Sans", sans-serif`;
+    ctx.fillStyle = k === 'buy' ? UP : k === 'sell' ? DOWN : k === 'note' ? th.cross : th.text;
+    ctx.fillText(t, bx + 8, by + 6 + r * lh);
+  });
+  ctx.restore();
 }
 
 // ---------------------------------------------------------------- 凡例
@@ -2487,7 +2594,7 @@ function legendFor(key, ind, parent) {
   if (el) return el;
   el = document.createElement('div');
   el.className = 'legend';
-  el.innerHTML = '<span class="name"></span><span class="dim params"></span><span class="vals"></span>';
+  el.innerHTML = '<span class="name"></span><span class="dim params"></span><span class="vals"></span><span class="sigl" hidden></span>';
   if (ind) {
     const tools = document.createElement('span');
     tools.className = 'tools';
@@ -2531,6 +2638,21 @@ function setVals(el, items) {
   const t = el.querySelector('.vals');
   if (t.innerHTML !== html) t.innerHTML = html;
 }
+/* 凡例の「最後の合図:買 3本前」。売買サインを出しているものだけ。何本前かは、いちばん右の足から数える */
+function setSigLegend(el, ind) {
+  const t = el.querySelector('.sigl');
+  if (!t) return;
+  let html = '';
+  if (ind && sigOn(ind)) {
+    const L = ind.out.sig.last, ago = L ? state.bars.length - 1 - L.i : 0;
+    html = L ? `<span class="dim">${compact ? '' : '最後の合図:'}</span><b class="${L.dir === 'up' ? 'buy' : 'sell'}">${L.dir === 'up' ? '買' : '売'}</b> ${ago ? `${ago}本前` : '最新の足'}`
+      : `<span class="dim">${compact ? '合図なし' : '最後の合図:この範囲になし'}</span>`;
+    t.title = `${ind.out.sig.kind.label}。${L ? `いちばん新しい合図は「${L.name}」(${fmtBarTime(state.bars[L.i].t, curInterval())} の足)` : '読み込んだ足の中に合図はありません'}。確定した足だけに付けます`;
+  }
+  if (t.innerHTML !== html) t.innerHTML = html;
+  t.hidden = !html;
+  el.classList.toggle('has-sig', !!html); // スマホでは、下の枠の凡例の値を1つに減らして、最後の合図と合わせて1行に収める
+}
 function updateLegends() {
   const i = hoverIndex(), used = new Set();
   panes.forEach(pane => {
@@ -2545,6 +2667,7 @@ function updateLegends() {
         const k = 'ind' + ov.id, le = legendFor(k, ov, mainStack());
         used.add(k);
         le.classList.toggle('off', !!ov.hidden);
+        setSigLegend(le, ov);
         if (IND_TYPES[ov.type].generic) {
           setText(le, '.name', IND_TYPES[ov.type].short);
           setText(le, '.params', ov.out ? ov.out.label : ov.err ? `計算できません:${ov.err}` : '');
@@ -2614,6 +2737,7 @@ function updateLegends() {
     }
     const ind = pane.ind, p = ind.p, T = IND_TYPES[ind.type];
     el.classList.toggle('off', !!ind.hidden);
+    setSigLegend(el, ind);
     // スマホでは短い名前にする(長い名前だと凡例が2行になり、線を隠すため)
     setText(el, '.name', compact && T.short ? T.short : T.name);
     if (T.simple) {
@@ -2788,6 +2912,46 @@ function descP(text, type) {
   if (IND_GUIDE[type]) { p.appendChild(document.createTextNode(' ')); p.appendChild(el('a', { class: 'glink', href: `guide.html#${IND_GUIDE[type]}`, target: '_blank', rel: 'noopener', text: '教科書で読む ›' })); }
   return p;
 }
+/* 設定の画面の「売買サイン」の欄。表示する・種類・決まりの説明・調べた結果の1行・過去データで試す・お知らせ */
+function sigSection(ind) {
+  const S = GT.SIGNALS[ind.type];
+  if (!S) return [];
+  const p = ind.p, k = S.kinds.find(x => x.id === p.sigKind) || S.kinds[0];
+  const box = el('div', { class: 'sigbox' });
+  const add = (...nodes) => nodes.forEach(nd => box.appendChild(nd));
+  add(el('div', { class: 'sect', text: '売買サイン(「買」「売」の合図)' }));
+  add(fCheck('sig', 'チャートに「買」「売」の合図を出す', '下の決まりが成り立った足に、ローソク足の下に「買」、上に「売」を付けます'));
+  if (S.kinds.length > 1) {
+    const row = fSelect('sigKind', '合図の種類', S.kinds.map(x => [x.id, x.label]));
+    row.querySelector('select').classList.add('wide');
+    row.querySelector('select').addEventListener('change', () => renderDialog());
+    add(row);
+  }
+  if (ind.type === 'mas') {
+    // どの線どうしの交差を見るか(最初は 線2 = 25本 と 線3 = 75本)
+    const opts = Array.from({ length: 8 }, (_, j) => [String(j + 1), `線${j + 1}(${p[`len${j + 1}`]}本)${p[`on${j + 1}`] ? '' : '・非表示'}`]);
+    if (k.id === 'cross') add(fSelect('sigA', '交差を見る線(1本目)', opts), fSelect('sigB', '交差を見る線(2本目)', opts, '期間の短いほうが長いほうを上に抜けると「買」'));
+    else add(fSelect('sigA', '終値と比べる線', opts));
+  }
+  const rule = el('p', { class: 'msg sigrule' }, [el('strong', { text: '決まり:' }), document.createTextNode(k.rule)]);
+  const note = el('p', { class: 'msg signote' }, [el('strong', { text: '調べた結果:' }), document.createTextNode(k.note)]);
+  if (k.guide) { note.appendChild(document.createTextNode(' ')); note.appendChild(el('a', { class: 'glink', href: `guide.html#${k.guide}`, target: '_blank', rel: 'noopener', text: '教科書で読む ›' })); }
+  add(rule, note, el('p', { class: 'msg small', text: `合図は機械的な決まりで、おすすめではありません。いちばん右の、まだ確定していない足には付けません(確定してから付き、あとから消えたり動いたりしません)。${k.tv ? `TradingView の「${k.tv}」と同じ考え方です。` : ''}` }));
+  if (!state.showSig) {
+    const on = el('button', { class: 'ctl btn', type: 'button', text: 'すべての売買サインを表示する' });
+    on.addEventListener('click', () => { state.showSig = true; save(); renderDialog(); applyLive(); });
+    add(el('p', { class: 'msg warn', text: 'いまは「ツール → 売買サインを表示 / 隠す」で、すべての売買サインを隠しています。' }), on);
+  }
+  const bt = el('button', { class: 'ctl btn primary', type: 'button', text: 'このサインを過去データで試す' });
+  bt.addEventListener('click', () => { closeDialog(true); openBacktest(ind); });
+  add(el('div', { class: 'mk-actions' }, [bt]), el('p', { class: 'msg small', text: '合図の出た足が確定したら、次の足の始値で売買したものとして、手数料とすべりを引いて計算します。' }));
+  const chk = fCheck('alert', '合図が出たら知らせる', 'このページを開いている間、足が確定して合図が出たら画面に表示します(表示のオン・オフとは別)');
+  chk.querySelector('input').addEventListener('change', e => {
+    try { if (e.target.checked && window.Notification && Notification.permission === 'default') Notification.requestPermission(); } catch (err) { /* 通知が使えない環境 */ }
+  });
+  add(chk);
+  return [box, el('div', { class: 'sect', text: '計算の設定' })];
+}
 function renderDialog() {
   const ind = dlg.ind, T = IND_TYPES[ind.type], L = T.labels || {};
   const body = $('dlgBody');
@@ -2801,6 +2965,7 @@ function renderDialog() {
 
   if (T.generic && dlg.tab === 'params') {
     if (T.desc) add(T.custom ? el('p', { class: 'msg', text: `式: ${T.desc}` }) : descP(T.desc, ind.type));
+    add(...sigSection(ind));
     if (T.custom) {
       const edit = el('button', { class: 'ctl btn', type: 'button', text: '式を編集する' });
       edit.addEventListener('click', () => { const id = ind.type; closeDialog(true); openMaker(id); });
@@ -2835,6 +3000,7 @@ function renderDialog() {
   } else if (ind.type === 'ma' && dlg.tab === 'params') {
     add(
       descP('ローソク足に重ねる平均線。向きで流れを見る道具で、合図は必ず遅れる', 'ma'),
+      ...sigSection(ind),
       fSelect('kind', '種類', MA_KINDS),
       fNumber('len', '期間', 1, 500, 1, '何本分の足を平均するか'),
       fSelect('source', 'ソース', SOURCES),
@@ -2844,6 +3010,7 @@ function renderDialog() {
   } else if (ind.type === 'rsi' && dlg.tab === 'params') {
     add(
       descP('上げ幅と下げ幅の比(0〜100)。70超は「強い」で、売りの合図ではない', 'rsi'),
+      ...sigSection(ind),
       fNumber('len', '期間', 1, 500, 1),
       fSelect('source', 'ソース', SOURCES),
       fNumber('upper', '上の基準線', 50, 100, 1, '「買われすぎ」と呼ばれるが、強い上げでは上に張り付く(売りの合図ではない)'),
@@ -2856,6 +3023,7 @@ function renderDialog() {
   } else if (ind.type === 'macd' && dlg.tab === 'params') {
     add(
       descP('2本の平均線の差と、その平均。移動平均線と同じ情報を形を変えて見る', 'macd'),
+      ...sigSection(ind),
       fNumber('fast', '短期の期間', 1, 500, 1),
       fNumber('slow', '長期の期間', 1, 500, 1),
       fNumber('signal', 'シグナルの期間', 1, 500, 1),
@@ -3190,6 +3358,10 @@ function buildTopbar() {
    ['長方形', '2つの角を決めて、値動きの範囲を囲む', () => setTool('r')],
    ['フィボナッチ', '上げ(下げ)の始まりと終わりを決めて、戻りの目安を引く。61.8% が特別だという証拠はない', () => setTool('f')],
    ['売買ルールを試す', 'ゴールデンクロスや RSI など、よく知られたルールで売買していたら、どうなっていたかを過去データで計算', () => openRules()],
+   ['売買サインを表示 / 隠す', () => (state.showSig ? 'いまは「表示」。押すと、インジケーターの「買」「売」の合図をすべて隠します(設定は残ります)' : 'いまは「隠す」。押すと、インジケーターの「買」「売」の合図を表示します'), () => {
+     state.showSig = !state.showSig; save(); draw();
+     toast(state.showSig ? '売買サインを表示しました。合図は機械的な決まりで、おすすめではありません。種類は、各インジケーターの設定(歯車)で選べます。' : '売買サインを隠しました(各インジケーターの設定は残っています)。');
+   }],
    ['表示を切りかえ', 'ローソク足 → 平均足 → ライン の順。平均足の値は実際の価格と違うので、損切りの位置決めには使わない', () => {
      const k = CHART_TYPES.findIndex(c => c[0] === state.chartType);
      state.chartType = CHART_TYPES[(k + 1) % CHART_TYPES.length][0];

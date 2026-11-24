@@ -190,8 +190,8 @@ DEFS.psar = {
   params: [P.num('start', '加速因子の初期値', 0.02, 0.001, 1, 0.01), P.num('step', '加速因子の増え方', 0.02, 0.001, 1, 0.01),
     P.num('max', '加速因子の上限', 0.2, 0.01, 2, 0.01), P.color('color', '点の色', '#2f80ed')],
   compute(bars, p) {
-    const n = bars.length, out = nans(n);
-    if (n < 2) return { lines: [{ name: 'SAR', val: out, color: p.color, dots: true }], label: `${p.start} ${p.max}` };
+    const n = bars.length, out = nans(n), dir = nans(n); // dir:点が価格の下(上昇)なら 1、上(下降)なら -1。売買サインに使う
+    if (n < 2) return { lines: [{ name: 'SAR', val: out, color: p.color, dots: true }], dir, label: `${p.start} ${p.max}` };
     // 手順は TradingView の ta.sar と同じ(公開されている Pine の手順をそのまま移したもの)。
     // 最初の向きは、最初の2本の終値で決める(上がっていれば上昇から)。
     // 向きが変わったかは、SAR を直前2本の高値・安値の内側に寄せる「前」に調べる(寄せたあとで調べると、切り替わりが1本以上遅れることがある)
@@ -216,9 +216,9 @@ DEFS.psar = {
       // 上昇中の SAR は、直前2本の安値より上には置かない(下降中は、直前2本の高値より下には置かない)
       if (below) { res = Math.min(res, bars[i - 1].l); if (i > 1) res = Math.min(res, bars[i - 2].l); }
       else { res = Math.max(res, bars[i - 1].h); if (i > 1) res = Math.max(res, bars[i - 2].h); }
-      out[i] = res;
+      out[i] = res; dir[i] = below ? 1 : -1;
     }
-    return { lines: [{ name: 'SAR', val: out, color: p.color, dots: true }], label: `${p.start} ${p.max}` };
+    return { lines: [{ name: 'SAR', val: out, color: p.color, dots: true }], dir, label: `${p.start} ${p.max}` };
   },
 };
 DEFS.supertrend = {
@@ -1378,6 +1378,285 @@ DEFS.volshock = {
   },
 };
 
+// ================================================================ 売買サイン(定番インジケーターの、よく知られた合図)
+/* インジケーターの線から「買」「売」の合図を出す決まり。どれも、よく使われる定義をそのまま機械的に当てはめたもので、おすすめではない。
+ * 共通の決まり:
+ *   ・合図は、条件が「成り立っていない → 成り立った」に変わった足にだけ付ける(成り立っている間ずっとではない)。
+ *     交差は「i 本目で a > b、1本前は a <= b」(このサイトの式の crossover と同じ。下抜けは逆)。前の足の値がないときは付けない
+ *   ・使うのは、その足とそれより前の足の値だけ(先読みをしない)。いちばん右の、まだ確定していない足の合図は、画面の側で消す
+ *     (足が確定するまで値が変わり、合図が出たり消えたりするため。確定した足の合図は、あとから変わらない)
+ *   ・TradingView の組み込みの「ストラテジー」と同じ考え方にしたものは、kinds の tv に名前を書いた。
+ *     ただし TradingView のストラテジーの多くは「次の足で、合図の価格に逆指値を置く」形で、このサイトは「確定した足の合図で、次の足の始値で売買」
+ * kinds の各項目:
+ *   id: 保存に使う名前 / label: 選ぶ欄の文字 / rule: 決まり(やさしい言葉) / note: 調べた結果の1行 / guide: 教科書の節 / tv: 参考にした TradingView の形
+ * compute(bars, p, out, kind) は { up, down, upName, downName, upText, downText } を返す(up・down は足ごとの 0 / 1) */
+const SIGNALS = {};
+const sigAt = (x, i) => (typeof x === 'number' ? x : x[i]);
+// a が b を下から上に抜けた足で 1(up = false なら、上から下に抜けた足)。b は数でもよい
+function crossSig(a, b, up) {
+  return a.map((v, i) => {
+    if (!i) return 0;
+    const q = sigAt(b, i), pv = a[i - 1], pq = sigAt(b, i - 1);
+    if (!(isFinite(v) && isFinite(q) && isFinite(pv) && isFinite(pq))) return 0;
+    return +(up ? v > q && pv <= pq : v < q && pv >= pq);
+  });
+}
+// 状態(1 = 成り立つ / 0 = 成り立たない / NaN = まだ分からない)が 0 から 1 に変わった足で 1
+const turnOn = s => s.map((v, i) => +(i > 0 && v === 1 && s[i - 1] === 0));
+const both = (a, b) => a.map((v, i) => +(v === 1 && b[i] === 1));
+const lineOf = (out, k) => (out.lines[k] ? out.lines[k].val : []);
+
+const MAS_SIG_SLOTS = MAS_SLOTS.map((s, i) => [String(i + 1), `線${i + 1}`]);
+SIGNALS.mas = {
+  extra: [{ key: 'sigA', def: '2' }, { key: 'sigB', def: '3' }], // 最初は 25本 と 75本(日本でよく使われる組み合わせ)
+  kinds: [
+    { id: 'cross', label: '2本の線の交差', guide: 'ytcheck', tv: 'MovingAvg2Line Cross',
+      rule: '選んだ2本のうち、期間の短い線が長い線を下から上に抜けた足で「買」(ゴールデンクロス)、上から下に抜けた足で「売」(デッドクロス)',
+      note: '教科書の検証では、ゴールデンクロス(50本・200本)は12通りすべてでプラスでしたが、持ち続けるより良かったのは5通りだけ。主な効き目は「下落を浅くする」ことでした' },
+    { id: 'price', label: '終値と線の交差', guide: 'ma', tv: 'MovingAvg Cross',
+      rule: '終値が、選んだ線(1本目)を下から上に抜けた足で「買」、上から下に抜けた足で「売」',
+      note: '教科書の検証では、終値が200日線の上か下かだけでは、そのあとの値動きに偶然と区別できる差はありませんでした(BTC・ETH)。横ばいでは交差が続きます' },
+  ],
+  compute(bars, p, out, kind) {
+    const a = col(bars, p.source), vol = bars.map(b => b.v);
+    const lenOf = k => Math.min(1000, int(p[`len${Math.min(8, Math.max(1, int(k, 1)))}`], 20));
+    const close = col(bars, 'close');
+    if (kind === 'price') {
+      const n = lenOf(p.sigA), m = maOf(p.kind, a, n, vol);
+      return { up: crossSig(close, m, true), down: crossSig(close, m, false), upName: `${n}本線を上抜け`, downName: `${n}本線を下抜け`,
+        upText: `終値が ${n}本の平均線を下から上に抜けた`, downText: `終値が ${n}本の平均線を上から下に抜けた` };
+    }
+    let s = lenOf(p.sigA), l = lenOf(p.sigB);
+    if (s > l) [s, l] = [l, s];
+    if (s === l) { const z = close.map(() => 0); return { up: z, down: z, upName: 'ゴールデンクロス', downName: 'デッドクロス', upText: '', downText: '' }; }
+    const f = maOf(p.kind, a, s, vol), g = maOf(p.kind, a, l, vol);
+    return { up: crossSig(f, g, true), down: crossSig(f, g, false), upName: 'ゴールデンクロス', downName: 'デッドクロス',
+      upText: `${s}本の平均線が ${l}本の線を下から上に抜けた(ゴールデンクロス)`, downText: `${s}本の平均線が ${l}本の線を上から下に抜けた(デッドクロス)` };
+  },
+};
+// 移動平均線(1本):app.js で計算した線(out.val)を使う
+SIGNALS.ma = {
+  kinds: [{ id: 'price', label: '終値と線の交差', guide: 'ma', tv: 'MovingAvg Cross',
+    rule: '終値が線を下から上に抜けた足で「買」、上から下に抜けた足で「売」',
+    note: SIGNALS.mas.kinds[1].note }],
+  compute(bars, p, out) {
+    const c = col(bars, 'close'), n = int(p.len, 20);
+    return { up: crossSig(c, out.val, true), down: crossSig(c, out.val, false), upName: '線を上抜け', downName: '線を下抜け',
+      upText: `終値が ${n}本の平均線を下から上に抜けた`, downText: `終値が ${n}本の平均線を上から下に抜けた` };
+  },
+};
+SIGNALS.macd = {
+  kinds: [
+    { id: 'signal', label: 'シグナルとの交差', guide: 'ytcheck', tv: 'MACD Strategy',
+      rule: 'MACD の線がシグナルの線を下から上に抜けた足で「買」、上から下に抜けた足で「売」(棒グラフが 0 をまたいだ足と同じ)',
+      note: '教科書の検証では、交差のたびに売買を入れかえると、プラスは12通り中2通りだけ。BTC の1時間足は約6,200回の売買で、手数料などを入れると年率 -88% でした' },
+    { id: 'zero', label: '0 の線との交差', guide: 'macd', tv: '',
+      rule: 'MACD の線が 0 を下から上に抜けた足で「買」、上から下に抜けた足で「売」',
+      note: 'MACD が 0 をまたぐ足は、短期と長期の指数平均線(最初は12本と26本)のゴールデンクロス・デッドクロスと同じ足です。この形そのものは検証していません' },
+  ],
+  compute(bars, p, out, kind) {
+    const m = lineOf(out, 0), s = lineOf(out, 1);
+    if (kind === 'zero') return { up: crossSig(m, 0, true), down: crossSig(m, 0, false), upName: '0 を上抜け', downName: '0 を下抜け',
+      upText: 'MACD が 0 を下から上に抜けた(短期の平均線が長期の線を上抜け)', downText: 'MACD が 0 を上から下に抜けた(短期の平均線が長期の線を下抜け)' };
+    return { up: crossSig(m, s, true), down: crossSig(m, s, false), upName: 'シグナルを上抜け', downName: 'シグナルを下抜け',
+      upText: 'MACD がシグナルを下から上に抜けた', downText: 'MACD がシグナルを上から下に抜けた' };
+  },
+};
+const RSI_REVERT_NOTE = '教科書の検証では、RSI 30/70 の逆張りは12通りすべてでマイナスでした。勝率は5〜6割あったのに、平均の勝ちが平均の負けの0.37〜0.71倍しかなかったためです';
+SIGNALS.rsi = {
+  kinds: [
+    { id: 'revert', label: '30・70 から戻る', guide: 'ytcheck', tv: 'RSI Strategy',
+      rule: 'RSI が下の基準線(最初は30)を下から上に抜けた足で「買」、上の基準線(最初は70)を上から下に抜けた足で「売」',
+      note: RSI_REVERT_NOTE },
+    { id: 'mid', label: '50 の線の交差', guide: 'rsi', tv: '',
+      rule: 'RSI が 50 を下から上に抜けた足で「買」、上から下に抜けた足で「売」',
+      note: 'この形は検証していません。教科書の実測では、RSI が70を超えたあとは、むしろ上がりやすい結果でした(BTC の日足)。横ばいでは交差が続きます' },
+  ],
+  compute(bars, p, out, kind) {
+    const r = lineOf(out, 0);
+    if (kind === 'mid') return { up: crossSig(r, 50, true), down: crossSig(r, 50, false), upName: '50 を上抜け', downName: '50 を下抜け',
+      upText: 'RSI が 50 を下から上に抜けた', downText: 'RSI が 50 を上から下に抜けた' };
+    const lo = +p.lower, hi = +p.upper;
+    return { up: crossSig(r, lo, true), down: crossSig(r, hi, false), upName: `${lo} から戻る`, downName: `${hi} から戻る`,
+      upText: `RSI が ${lo} を下から上に抜けた(売られすぎと呼ばれる範囲から戻った)`, downText: `RSI が ${hi} を上から下に抜けた(買われすぎと呼ばれる範囲から戻った)` };
+  },
+};
+// ストキャスティクス:TradingView の「Stochastic Slow Strategy」と同じく、%K が %D を抜けた足のうち、%K が下の線より下(上の線より上)のものだけ
+function stochSig(out, lo, hi, kind, name) {
+  const k = lineOf(out, 0), d = lineOf(out, 1), cu = crossSig(k, d, true), cd = crossSig(k, d, false);
+  if (kind === 'cross') return { up: cu, down: cd, upName: '%K が %D を上抜け', downName: '%K が %D を下抜け', upText: `${name}の %K が %D を下から上に抜けた`, downText: `${name}の %K が %D を上から下に抜けた` };
+  return { up: cu.map((v, i) => +(v === 1 && k[i] < lo)), down: cd.map((v, i) => +(v === 1 && k[i] > hi)), upName: `${lo} より下で上抜け`, downName: `${hi} より上で下抜け`,
+    upText: `${name}の %K が、${lo} より下で %D を下から上に抜けた`, downText: `${name}の %K が、${hi} より上で %D を上から下に抜けた` };
+}
+const STOCH_KINDS = [
+  { id: 'zone', label: '基準線の外の交差', guide: 'others', tv: 'Stochastic Slow Strategy',
+    rule: '%K が下の基準線(最初は20)より下で %D を下から上に抜けた足で「買」、上の基準線(最初は80)より上で %D を上から下に抜けた足で「売」',
+    note: 'この形は検証していません。RSI と同じ逆張りの使い方で、反応が速いぶん、だましも多くなります。RSI の逆張りは、教科書の検証で12通りすべてマイナスでした' },
+  { id: 'cross', label: 'すべての交差', guide: 'others', tv: '',
+    rule: '%K が %D を下から上に抜けた足で「買」、上から下に抜けた足で「売」(場所を問わない)',
+    note: 'この形は検証していません。合図の数がとても多く、そのぶん手数料がかさみます' },
+];
+SIGNALS.stoch = { kinds: STOCH_KINDS, compute: (bars, p, out, kind) => stochSig(out, +p.lower, +p.upper, kind, 'ストキャスティクス') };
+SIGNALS.stochrsi = { kinds: STOCH_KINDS, compute: (bars, p, out, kind) => stochSig(out, 20, 80, kind, 'ストキャスティクス RSI') };
+SIGNALS.willr = {
+  kinds: [{ id: 'revert', label: '-80 から戻る・-20 から戻る(逆張り)', guide: 'others', tv: '',
+    rule: '%R が -80 を下から上に抜けた足で「買」、-20 を上から下に抜けた足で「売」',
+    note: 'この形は検証していません。%R はストキャスティクスの %K と同じ計算で、使い方は RSI と同じ逆張りです' }],
+  compute(bars, p, out) {
+    const r = lineOf(out, 0);
+    return { up: crossSig(r, -80, true), down: crossSig(r, -20, false), upName: '-80 から戻る', downName: '-20 から戻る',
+      upText: '%R が -80 を下から上に抜けた', downText: '%R が -20 を上から下に抜けた' };
+  },
+};
+SIGNALS.cci = {
+  kinds: [
+    { id: 'revert', label: '±100 から戻る', guide: 'others', tv: '',
+      rule: 'CCI が -100 を下から上に抜けた足で「買」、+100 を上から下に抜けた足で「売」',
+      note: 'この形は検証していません。教科書の実測では、±100 の中に入ったのは57〜62%だけで、外に出ることは想定よりずっと多くありました' },
+    { id: 'break', label: '±100 を抜ける', guide: 'others', tv: '',
+      rule: 'CCI が +100 を下から上に抜けた足で「買」、-100 を上から下に抜けた足で「売」(考案者のランバート氏の、もとの使い方に近い形)',
+      note: 'この形は検証していません。±100 の外に出ることが多いので、合図も多めです' },
+  ],
+  compute(bars, p, out, kind) {
+    const c = lineOf(out, 0);
+    if (kind === 'break') return { up: crossSig(c, 100, true), down: crossSig(c, -100, false), upName: '+100 を上抜け', downName: '-100 を下抜け',
+      upText: 'CCI が +100 を下から上に抜けた', downText: 'CCI が -100 を上から下に抜けた' };
+    return { up: crossSig(c, -100, true), down: crossSig(c, 100, false), upName: '-100 から戻る', downName: '+100 から戻る',
+      upText: 'CCI が -100 を下から上に抜けた', downText: 'CCI が +100 を上から下に抜けた' };
+  },
+};
+SIGNALS.bb = {
+  kinds: [
+    { id: 'revert', label: '帯の外から戻る', guide: 'ytcheck', tv: 'Bollinger Bands Strategy',
+      rule: '終値が下の線を下から上に抜けた(帯の外から中に戻った)足で「買」、上の線を上から下に抜けた足で「売」',
+      note: '教科書の検証では、帯を使った逆張りは12通りすべてでマイナスでした(勝率53〜62%)。強い流れが出ると負け続けます' },
+    { id: 'break', label: '帯の外で終わる', guide: 'bb', tv: '',
+      rule: '終値が上の線を下から上に抜けた(帯の上の外で終わった)足で「買」、下の線を上から下に抜けた足で「売」',
+      note: '教科書の実測では、BTC の日足で上の線の外で終わった日のあとの10日間は平均 +3.43%(すべての日は +0.80%)。この形で売買した成績は検証していません' },
+  ],
+  compute(bars, p, out, kind) {
+    const s = col(bars, p.source), u = lineOf(out, 0), l = lineOf(out, 2);
+    if (kind === 'break') return { up: crossSig(s, u, true), down: crossSig(s, l, false), upName: '上の線の外へ', downName: '下の線の外へ',
+      upText: '終値が上の線を超えて、帯の外で終わった', downText: '終値が下の線を割って、帯の外で終わった' };
+    return { up: crossSig(s, l, true), down: crossSig(s, u, false), upName: '下の外から戻る', downName: '上の外から戻る',
+      upText: '終値が下の線の外から、帯の中に戻った', downText: '終値が上の線の外から、帯の中に戻った' };
+  },
+};
+SIGNALS.ichimoku = {
+  kinds: [
+    { id: 'sanyaku', label: '三役好転・逆転', guide: 'ytcheck', tv: '',
+      rule: '「転換線が基準線の上」「終値が雲の上」「終値が26本前の終値の上(遅行スパンが価格の上)」の3つがそろった足で「買」(三役好転)。3つとも逆になった足で「売」(三役逆転)。雲は、26本前に計算した先行スパンA・B',
+      note: '教科書の検証では、三役好転で買い・三役逆転で売る形は、日足では4銘柄すべてでプラス、1時間足ではすべてマイナスでした' },
+    { id: 'tk', label: '転換線と基準線', guide: 'ichimoku', tv: '',
+      rule: '転換線が基準線を下から上に抜けた足で「買」、上から下に抜けた足で「売」',
+      note: 'この形は検証していません。三役好転よりずっと多く出ます。研究では、標準の設定の一目均衡表の規則は、後半の期間で一貫した成果が出なかったと報告されています' },
+  ],
+  compute(bars, p, out, kind) {
+    const conv = lineOf(out, 0), base = lineOf(out, 1), sa = lineOf(out, 2), sb = lineOf(out, 3), sh = int(p.shift, 26), c = col(bars, 'close');
+    if (kind === 'tk') return { up: crossSig(conv, base, true), down: crossSig(conv, base, false), upName: '転換線が基準線を上抜け', downName: '転換線が基準線を下抜け',
+      upText: '転換線が基準線を下から上に抜けた', downText: '転換線が基準線を上から下に抜けた' };
+    // 3つの条件がそろっているか(どれかの値がまだないときは NaN)
+    const state = sign => c.map((v, i) => {
+      const a = sa[i - sh], b = sb[i - sh], pc = c[i - sh];
+      if (i < sh || !(isFinite(conv[i]) && isFinite(base[i]) && isFinite(a) && isFinite(b) && isFinite(pc))) return NaN;
+      return sign > 0 ? +(conv[i] > base[i] && v > Math.max(a, b) && v > pc) : +(conv[i] < base[i] && v < Math.min(a, b) && v < pc);
+    });
+    return { up: turnOn(state(1)), down: turnOn(state(-1)), upName: '三役好転', downName: '三役逆転',
+      upText: `転換線が基準線の上・終値が雲の上・終値が${sh}本前より上の3つがそろった(三役好転)`, downText: `転換線が基準線の下・終値が雲の下・終値が${sh}本前より下の3つがそろった(三役逆転)` };
+  },
+};
+// 向き(+1 / -1)が入れ替わった足。前の足の向きが分からないときは付けない
+const flipSig = dir => [dir.map((v, i) => +(i > 0 && v === 1 && dir[i - 1] === -1)), dir.map((v, i) => +(i > 0 && v === -1 && dir[i - 1] === 1))];
+SIGNALS.psar = {
+  kinds: [{ id: 'flip', label: '点の向きの入れ替わり', guide: 'flips', tv: 'Parabolic SAR Strategy',
+    rule: '点が価格の上から下に移った(上昇に変わった)足で「買」、下から上に移った(下降に変わった)足で「売」。向きは足の高値・安値で決まり、その足が確定した時点で判断します',
+    note: 'この形は検証していません。BTC の日足では、向きが1年に約29回入れ替わりました。横ばいでは、だましが続きます' }],
+  compute(bars, p, out) {
+    const [up, down] = flipSig(out.dir || []);
+    return { up, down, upName: '上昇に転換', downName: '下降に転換', upText: 'パラボリック SAR の点が、価格の下に移った(上昇に転換)', downText: 'パラボリック SAR の点が、価格の上に移った(下降に転換)' };
+  },
+};
+SIGNALS.supertrend = {
+  kinds: [{ id: 'flip', label: '線の向きの入れ替わり', guide: 'flips', tv: 'Supertrend Strategy',
+    rule: '終値が上の線を超えて、線が上昇(緑)に変わった足で「買」、下の線を割って下降(赤)に変わった足で「売」',
+    note: 'この形は検証していません。BTC の日足(10・3)では、向きの入れ替わりは1年に約9回、1時間足では約200回でした' }],
+  compute(bars, p, out) {
+    const u = lineOf(out, 0), d = lineOf(out, 1), dir = u.map((v, i) => (isFinite(v) ? 1 : isFinite(d[i]) ? -1 : NaN));
+    const [up, down] = flipSig(dir);
+    return { up, down, upName: '上昇に転換', downName: '下降に転換', upText: 'スーパートレンドが上昇(緑)に変わった', downText: 'スーパートレンドが下降(赤)に変わった' };
+  },
+};
+SIGNALS.donchian = {
+  kinds: [{ id: 'break', label: '前の足までの高値・安値の更新', guide: 'ytcheck', tv: 'ChannelBreakOutStrategy',
+    rule: '終値が、1本前までの n 本の高値(上の線)を超えた足で「買」、1本前までの n 本の安値(下の線)を割った足で「売」。超えた状態が続いても、最初の足だけ',
+    note: '教科書の検証では、よく似た形(20本の高値抜けで買い、10本の安値割れで売り)は、12通り中4通りでプラス(日足と4時間足だけ)。短い足では負けました' }],
+  compute(bars, p, out) {
+    const c = col(bars, 'close'), u = lineOf(out, 0), l = lineOf(out, 2), n = int(p.len, 20);
+    const pu = u.map((_, i) => (i ? u[i - 1] : NaN)), pl = l.map((_, i) => (i ? l[i - 1] : NaN));
+    return { up: crossSig(c, pu, true), down: crossSig(c, pl, false), upName: `${n}本の高値を更新`, downName: `${n}本の安値を更新`,
+      upText: `終値が、前の足までの ${n}本の高値を超えた`, downText: `終値が、前の足までの ${n}本の安値を割った` };
+  },
+};
+SIGNALS.keltner = {
+  kinds: [{ id: 'break', label: '帯の外に抜ける(流れに乗る)', guide: '', tv: 'Keltner Channels Strategy',
+    rule: '終値が上の線を下から上に抜けた足で「買」、下の線を上から下に抜けた足で「売」',
+    note: 'この形は検証していません。ボリンジャーバンドの「帯の外で終わる」と同じ考え方で、幅に ATR を使います' }],
+  compute(bars, p, out) {
+    const s = col(bars, p.source), u = lineOf(out, 0), l = lineOf(out, 2);
+    return { up: crossSig(s, u, true), down: crossSig(s, l, false), upName: '上の線を上抜け', downName: '下の線を下抜け',
+      upText: '終値がケルトナーチャネルの上の線を上に抜けた', downText: '終値がケルトナーチャネルの下の線を下に抜けた' };
+  },
+};
+SIGNALS.adx = {
+  kinds: [
+    { id: 'filter', label: 'ADX で絞った交差', guide: 'others', tv: '',
+      rule: '+DI が -DI を下から上に抜けた足で「買」、-DI が +DI を下から上に抜けた足で「売」。どちらも、その足の ADX が基準線(最初は25)以上のときだけ',
+      note: 'この形は検証していません。暗号資産では ADX が25を超える足が5〜6割あり、基準線のふるい分けの効き目は小さめです' },
+    { id: 'cross', label: 'ADX を見ない交差', guide: 'others', tv: '',
+      rule: '+DI が -DI を下から上に抜けた足で「買」、上から下に抜けた足で「売」',
+      note: 'この形は検証していません。流れのない時期にも交差が多く出ます' },
+  ],
+  compute(bars, p, out, kind) {
+    const adx = lineOf(out, 0), pdi = lineOf(out, 1), mdi = lineOf(out, 2), lv = +p.level;
+    let up = crossSig(pdi, mdi, true), down = crossSig(pdi, mdi, false);
+    if (kind !== 'cross') { up = up.map((v, i) => +(v === 1 && adx[i] >= lv)); down = down.map((v, i) => +(v === 1 && adx[i] >= lv)); }
+    const f = kind !== 'cross' ? `(ADX ${lv} 以上)` : '';
+    return { up, down, upName: '+DI が上抜け', downName: '-DI が上抜け', upText: `+DI が -DI を下から上に抜けた${f}`, downText: `-DI が +DI を下から上に抜けた${f}` };
+  },
+};
+SIGNALS.tsmom = {
+  kinds: [{ id: 'sign', label: '長い期間の値上がり率の符号が変わる', guide: 'evidence2', tv: '',
+    rule: '過去 n 本(最初は252本)の値上がり率が、マイナスからプラスに変わった足で「買」、プラスからマイナスに変わった足で「売」',
+    note: '論文は、58種類の先物をまとめて持つ形で効き目を報告しました。銘柄を1つずつ調べると予測の証拠はほとんどなかった、という反論もあります。この形は検証していません' }],
+  compute(bars, p, out) {
+    const r = out.hist || [], n = int(p.len1, 252);
+    return { up: crossSig(r, 0, true), down: crossSig(r, 0, false), upName: 'プラスに変わる', downName: 'マイナスに変わる',
+      upText: `過去 ${n}本の値上がり率がプラスに変わった`, downText: `過去 ${n}本の値上がり率がマイナスに変わった` };
+  },
+};
+// 売買サインの設定の初期値:sig(表示する)、sigKind(種類)と、種類ごとの追加の設定
+function sigDefaults(type) {
+  const S = SIGNALS[type];
+  if (!S) return {};
+  const o = { sig: true, sigKind: S.kinds[0].id };
+  (S.extra || []).forEach(x => { o[x.key] = x.def; });
+  return o;
+}
+const sigKindOf = (type, p) => { const S = SIGNALS[type]; return S.kinds.find(k => k.id === p.sigKind) || S.kinds[0]; };
+/* 合図を計算する。out は、そのインジケーターの計算結果(線の値を使う)。
+ * 返り値の marks は、自作インジケーターの合図と同じ形 [{ name, dir, val }](過去データで試す・お知らせでそのまま使える)。
+ * 合図の足は val が 1、それ以外は 0。text は、その合図の説明(画面の吹き出しに出す) */
+function signals(type, bars, p, out) {
+  const S = SIGNALS[type];
+  if (!S || !out) return null;
+  const k = sigKindOf(type, p), r = S.compute(bars, p, out, k.id), n = bars.length;
+  const fit = a => { const v = new Array(n).fill(0); for (let i = 0; i < n; i++) if (a[i] === 1) v[i] = 1; return v; };
+  return {
+    kind: k,
+    marks: [{ name: r.upName, dir: 'up', val: fit(r.up), text: r.upText, sig: true }, { name: r.downName, dir: 'down', val: fit(r.down), text: r.downText, sig: true }],
+  };
+}
+
 // ================================================================ 合図どおりに売買した場合の成績(過去データでの試算)
 /* 決まり:
  *   ・合図は、足が確定してから分かるものとして扱う。売買は「次の足の始値」で行う(先読みをしない)
@@ -1649,5 +1928,5 @@ function defaults(id) {
   return out;
 }
 
-return { DEFS, GROUPS, FUNCS, defaults, backtest, stats, makeCustom, checkFormula, parseFormula, evalFormula, MA_OPTIONS, helpers: { maOf, sma, ema, rma, wma, hma, dema, tema, kama, vwma, linreg, stdev, highest, lowest, sum, atr, rsi, trueRange, src } };
+return { DEFS, GROUPS, FUNCS, defaults, SIGNALS, signals, sigDefaults, backtest, stats, makeCustom, checkFormula, parseFormula, evalFormula, MA_OPTIONS, helpers: { maOf, sma, ema, rma, wma, hma, dema, tema, kama, vwma, linreg, stdev, highest, lowest, sum, atr, rsi, trueRange, src } };
 });

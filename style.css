@@ -957,3 +957,20 @@ a.glink:hover { text-decoration: underline; }
 .pos-badge.up { background: #0f7a6c; }
 .pos-badge.down { background: #c62f28; }
 :root[data-theme="dark"] .pos-warn { color: #ff9a92; background: color-mix(in srgb, #e0463f 18%, transparent); }
+
+/* ---- 売買サイン:凡例の「最後の合図」と、設定の画面の欄 */
+.legend .sigl { white-space: nowrap; font-size: 11px; pointer-events: auto; }
+.legend .sigl[hidden] { display: none; }
+.legend .sigl b { display: inline-block; min-width: 16px; padding: 0 3px; border-radius: 3px; color: #fff; text-align: center; line-height: 15px; }
+.legend .sigl b.buy { background: #26a69a; }
+.legend .sigl b.sell { background: #ef5350; }
+.legend.off .sigl { opacity: .45; }
+.sigbox { margin: 8px 0 4px; padding: 2px 10px 6px; border: 1px solid var(--line); border-left: 3px solid #26a69a; border-radius: 6px; }
+.sigbox .sect:first-child { color: var(--text); font-size: 12px; font-weight: 700; }
+.sigbox .msg { line-height: 1.55; }
+.sigbox .msg strong { color: var(--text); }
+.sigbox .msg.warn { color: var(--down, #c0392b); }
+.sigbox + .sect { margin-top: 10px; }
+/* 合図の種類の名前は長いので、選ぶ欄を広くする(スマホで名前が切れないように) */
+.sigbox .row select.ctl.wide { width: 58%; max-width: 230px; flex: 0 1 auto; }
+@media (max-width: 760px) { #legends > .legend.has-sig:not(.open) .vals > span:nth-child(n+2) { display: none; } }
