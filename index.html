@@ -67,7 +67,7 @@
   </div>
   <div id="loading" class="loading" hidden><span class="spinner" aria-hidden="true"></span>読み込み中…</div>
   <button id="autoY" class="autoy" type="button" hidden aria-label="縦の範囲を自動に戻す" title="縦の範囲を自動に戻す(価格の目盛りをダブルクリック、スマホでは2回タップ、キーボードの A でも戻ります)">自動</button>
-  <button id="offPx" class="autoy offpx" type="button" hidden></button>
+  <button id="offPx" class="autoy offpx" type="button" hidden aria-label="いまの価格は表示の外にあります。押すと、いまの価格を真ん中に表示します"></button>
   <button id="toLatest" class="fab" type="button" hidden aria-label="最新の足へ移動" title="最新の足へ移動">
     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 3l5 5-5 5M9 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
   </button>
@@ -178,7 +178,7 @@
         <button id="pBe" class="ctl btn" type="button" title="損切りを、建てたときの価格に動かします">損切りを建値へ</button>
       </div>
       <p id="pMsg" class="msg" role="status"></p>
-      <p id="pWarn" class="pos-warn" hidden></p>
+      <p id="pWarn" class="pos-warn" role="alert" hidden></p>
       <dl class="tr-dl pos-dl">
         <dt>数量</dt><dd id="pQty"></dd>
         <dt>建てた価格<small>平均</small></dt><dd id="pAvg"></dd>
@@ -245,7 +245,7 @@
 
 <div id="tradeBar" class="trade-bar">
   <span id="tbText"></span>
-  <button id="tbClose" class="ctl btn" type="button" hidden>決済</button>
+  <button id="tbClose" class="ctl btn" type="button" hidden title="ポジションを全部決済します(押しまちがいを防ぐため、2回押して確定)">全部決済</button>
   <button id="tbOpen" class="ctl btn primary" type="button">注文する</button>
 </div>
 <div id="toast" class="toast" role="status" hidden></div>

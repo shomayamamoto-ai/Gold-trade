@@ -1000,6 +1000,17 @@ function renderQuick() {
   if (!show) return;
   const sym = state.symbol, lq = liveQuote(sym), px = T.last[sym];
   setTxt('qtSellPx', lq ? fmtPrice(lq.bid, lq.ask) : fmtPrice(px)); setTxt('qtBuyPx', fmtPrice(lq ? lq.ask : px));
+  // ポジションと反対向きのボタンは、押すと決済になるので、「売」「買」ではなく「決済」と書く
+  const pos = T.positions[sym], mkt = $('trLimitRow').hidden;
+  [['qtSell', '売', pos && pos.qty > 0], ['qtBuy', '買', pos && pos.qty < 0]].forEach(([id, word, closing]) => {
+    const w = $(id).querySelector('.qt-word'), t = closing ? (mkt ? '決済' : '決済指値') : word;
+    if (w && w.textContent !== t) {
+      w.textContent = t;
+      // 説明も、押すと何が起きるかに合わせる(決済のときは、金額の欄は使わない)
+      $(id).title = closing ? (mkt ? 'ポジションを全部決済します(金額の欄は使いません)。2回押すと決済します' : '注文画面の指値の価格で、ポジションを減らすだけの「決済用の指値」を予約します。2回押すと予約します')
+        : `いまの価格で${word === '買' ? '買う' : '売る'}。金額・レバレッジ・利確・損切りは、デモトレードの画面で入れたものを使います(画面が「指値」のときは、その価格で予約します)。2回押すと注文します`;
+    }
+  });
   const off = $('trBuy').disabled;
   if ($('qtBuy').disabled !== off) $('qtBuy').disabled = $('qtSell').disabled = off;
 }
@@ -1639,15 +1650,30 @@ function render() {
   // 縦の範囲を手で動かしているときだけ、「自動」に戻すボタンを、価格の目盛りの下に出す
   const ab = $('autoY'), mp = panes[0], manual = !!(n && mp && yMan && yMan.key === mp.ykey);
   if (ab.hidden === manual) ab.hidden = !manual;
-  if (manual) { const top = Math.round(mp.y + mp.h - (ab.offsetHeight || 24) - 6) + 'px'; if (ab.style.top !== top) ab.style.top = top; }
+  /* ボタンの置き場所。ふだんは価格の目盛りの上に置くが、そこに価格のラベル(いまの価格・利確・損切りなど)があるときは、
+   * ラベルを隠さないよう、目盛りのすぐ左(チャートの中)へずらす。高さはいつも同じ(上下に跳ねると押しにくいため) */
+  const putBtn = (b, top, right0) => {
+    const h = b.offsetHeight || 24, t = Math.round(clamp(top, mp.y + 2, Math.max(mp.y + 2, mp.y + mp.h - h - 2)));
+    const free = !placedTags.some(y => y > t - 11 && y < t + h + 11);
+    const right = (free ? right0 : right0 + axisW) + 'px';
+    if (b.style.top !== t + 'px') b.style.top = t + 'px';
+    if (b.style.right !== right) b.style.right = right;
+    return t;
+  };
+  let abTop = NaN;
+  if (manual) abTop = putBtn(ab, mp.y + mp.h - (ab.offsetHeight || 24) - 6, 4);
   // 手で動かして、いまの価格が枠の外へ出たときは、枠の上(または下)の端に「▲ 価格」を出す。押すと、いまの価格が真ん中に来る
   const ob = $('offPx'), ly = manual ? mp.yOf(bars[n - 1].c) : NaN, out = manual && isFinite(ly) && (ly < mp.y || ly > mp.y + mp.h) ? (ly < mp.y ? 'up' : 'down') : '';
   if (ob.hidden === !!out) ob.hidden = !out;
   if (out) {
     const txt = `${out === 'up' ? '▲' : '▼'} ${fmtPrice(bars[n - 1].c)}`;
-    if (ob.textContent !== txt) { ob.textContent = txt; ob.title = `いまの価格は${out === 'up' ? '上' : '下'}にあります。押すと、いまの価格を真ん中に表示します`; }
-    const top = Math.round(out === 'up' ? mp.y + 4 : mp.y + mp.h - (ob.offsetHeight || 24) - (manual ? (ab.offsetHeight || 24) + 10 : 4)) + 'px';
-    if (ob.style.top !== top) ob.style.top = top;
+    if (ob.textContent !== txt) { ob.textContent = txt; ob.title = `いまの価格(${fmtPrice(bars[n - 1].c)})は${out === 'up' ? '上' : '下'}にあります。押すと、いまの価格を真ん中に表示します`; ob.setAttribute('aria-label', ob.title); }
+    const oh = ob.offsetHeight || 24, ah = ab.offsetHeight || 24;
+    // 枠が低くて「自動」の上に置く場所がないときは、「自動」の左に並べる
+    const roomAbove = abTop - oh - 6 >= mp.y + 2;
+    if (out === 'up') putBtn(ob, mp.y + 4, 4);
+    else if (roomAbove) putBtn(ob, abTop - oh - 6, 4);
+    else { putBtn(ob, abTop + ah - oh, 4 + (ab.offsetWidth || 52) + 6); }
   }
   const title = n ? `${fmtPrice(bars[n - 1].c)} ${curSymbol().label}${state.live ? '' : '(デモ)'} | Gold Trade Chart` : 'Gold Trade Chart';
   if (document.title !== title) document.title = title;
@@ -1706,7 +1732,9 @@ function drawMain(pane, i0, i1, th) {
   const room = Math.min(Math.max(compact ? 78 : 44, legendH + 10), pane.h * 0.42);
   let tmin = !log && lo > 0 ? Math.max(0, a - padV * 1.6) : a - padV * 1.6, tmax = b + padV * 0.5 + (b - tmin) * room / (pane.h - room);
   const key = yKey(log);
-  if (yMan && yMan.key === key) { tmin = yMan.a; tmax = yMan.b; } // 手で動かした範囲を使う
+  // 銘柄・時間足・目盛りの種類が変わったら、手で動かした範囲は捨てる(元に戻したときに、古い範囲がよみがえらないように)
+  if (yMan && yMan.key !== key) yMan = null;
+  if (yMan) { tmin = yMan.a; tmax = yMan.b; } // 手で動かした範囲を使う
   pane.tmin = tmin; pane.tmax = tmax; pane.ykey = key;
   const min = bk(tmin), max = bk(tmax);
   // 対数目盛りでは、0 以下の値(一部のインジケーターの線など)は描けない。位置なし(NaN)にして、線をそこで切る
@@ -2555,6 +2583,14 @@ function updateLegends() {
       mainStack().classList.toggle('folded', !!state.legendFold && nOv > 0);
       const ft = state.legendFold ? `▾ インジケーター ${nOv} 個の名前を表示` : '▴ 名前をたたむ';
       if (fb.textContent !== ft) { fb.textContent = ft; fb.setAttribute('aria-expanded', String(!state.legendFold)); }
+      /* ローソク足の枠が低い(横向きのスマホ・下のペインが多い)と、名前の欄が枠からはみ出し、下のペインに重なる。
+       * そのときは、はみ出た分を隠し、「たたむ」ボタンを上(銘柄名のすぐ下)に移す(いちばん必要なときに、ボタンが隠れないように) */
+      {
+        const st = mainStack(), mh = Math.max(40, Math.round(panes[0].h - 6)) + 'px';
+        if (st.style.maxHeight !== mh) st.style.maxHeight = mh;
+        const tight = st.scrollHeight > panes[0].h - 5;
+        if (st.classList.contains('tight') !== tight) st.classList.toggle('tight', tight);
+      }
       setText(el, '.name', `${curSymbol().label} · ${curInterval().label}${state.chartType === 'heikin' ? ' · 平均足' : ''}${panes[0].log ? ' · 対数' : ''}`);
       const lt = feed.lastTick ? new Date(feed.lastTick) : null;
       setText(el, '.params', state.live
@@ -3324,10 +3360,12 @@ function bindPointer() {
       if (panY !== 'scale') state.end -= (p.x - prev.x) / state.barW;
       const mp = panes[0];
       let dy = p.y - prev.y;
-      if (swipe && swipe.touch && panY === 'move' && !swipe.y) {
-        // 指では、横にスワイプしたつもりでも少し上下にぶれる。はっきり上下に動かしたときだけ、上下の移動を始める
+      if (swipe && panY && !swipe.y) {
+        // 横にドラッグしたつもりでも、指やマウスは少し上下にぶれる。クリックしただけでも1〜2ピクセル動くことがある。
+        // はっきり上下に動かしたときだけ、上下の移動(手動の範囲)を始める。そうしないと、クリックしただけで「自動」のボタンが出て、何が起きたか分からない
         swipe.dx += Math.abs(p.x - prev.x); swipe.dy += dy;
-        if (Math.abs(swipe.dy) > 12 && Math.abs(swipe.dy) > swipe.dx * 0.5) { swipe.y = true; dy = swipe.dy; } else dy = 0;
+        const need = swipe.touch ? 12 : 4;
+        if (Math.abs(swipe.dy) > need && (panY === 'scale' || Math.abs(swipe.dy) > swipe.dx * 0.5)) { swipe.y = true; dy = swipe.dy; } else dy = 0;
       }
       const m = panY && dy ? manualY() : null;
       if (m) {
@@ -3376,6 +3414,25 @@ function bindPointer() {
     draw();
   };
   canvas.addEventListener('pointerup', up);
+  /* 左上の名前・数字の欄は、押せる(説明が出る・ダブルクリックで設定)ので、そのままではチャートを動かせない。
+   * 押したまま少し(6ピクセル)動かしたら、チャートを押したことにして、そこからのドラッグをチャートに渡す。
+   * 押して離すだけ(クリック・ダブルクリック)のときは、これまでどおり名前の操作になる */
+  legendsEl.addEventListener('pointerdown', e => {
+    const t = e.target.closest('.legend .name, .legend .params');
+    if (!t || e.button > 0) return;
+    const id = e.pointerId, sx = e.clientX, sy = e.clientY;
+    try { t.setPointerCapture(id); } catch (err) { /* つかめないときは、名前の上で動かした分だけ見る */ }
+    const stop = () => { t.removeEventListener('pointermove', mv); t.removeEventListener('pointerup', stop); t.removeEventListener('pointercancel', stop); };
+    const mv = ev => {
+      if (ev.pointerId !== id || Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
+      stop();
+      try { t.releasePointerCapture(id); } catch (err) { /* すでに離れている */ }
+      const fake = (type, x, y) => new PointerEvent(type, { pointerId: id, pointerType: e.pointerType, isPrimary: true, clientX: x, clientY: y, button: type === 'pointerdown' ? 0 : -1, buttons: 1, bubbles: true });
+      canvas.dispatchEvent(fake('pointerdown', sx, sy));
+      canvas.dispatchEvent(fake('pointermove', ev.clientX, ev.clientY));
+    };
+    t.addEventListener('pointermove', mv); t.addEventListener('pointerup', stop); t.addEventListener('pointercancel', stop);
+  });
   canvas.addEventListener('pointercancel', up);
   canvas.addEventListener('pointerleave', e => { if (!pts.size && e.pointerType === 'mouse') { state.hover = null; draw(); } });
   canvas.addEventListener('wheel', e => {
@@ -3547,7 +3604,7 @@ const DEEP_GAP_MS = 2000;    // これより新しい板の奥があれば、取
 const DEEP_ORDER_MS = 3000;  // 成行注文には、これより新しい板の奥だけを使う
 const DEEP_USE_MS = 30000;   // 見込みの表示に使う板の奥の古さの上限
 const DEEP_KEEP_MS = 10000;  // 見込みの表示のために取り寄せた板の奥を、取り直さずに使う長さ
-const deep = { sym: '', at: -1e9, bids: [], asks: [], limit: 0, busy: null, busySym: '', busyLim: 0 };
+const deep = { sym: '', at: -1e9, req: -1e9, bids: [], asks: [], limit: 0, busy: null, busySym: '', busyLim: 0 };
 const DEEP_MAX = 5000; // 損切り・強制決済で、1000段でも足りないときに取り寄せる段数
 // 板の奥を取り寄せる。成功したら true(古さが fresh ミリ秒より新しく、limit 段以上あるものが手元にあれば、取り寄せずに true)。
 // limit: 段数(ふつうは 1000。損切り・強制決済が 1000 段でも足りないときだけ 5000。重みは 50 と 250)
@@ -3559,6 +3616,8 @@ function loadDeep(sym, fresh, limit) {
   const ac = new AbortController(), timer = setTimeout(() => ac.abort(), 2500);
   const lv = a => (Array.isArray(a) ? a.map(x => [+x[0], +x[1]]).filter(x => x[0] > 0 && x[1] > 0) : []);
   deep.busySym = sym; deep.busyLim = lim;
+  // 取り寄せを始めた時刻も覚えておく(届いた時刻だけだと、「損切りに届く前から取り寄せ中だった板」を見分けられないため)
+  const started = mono();
   const job = (async () => {
     for (const host of HOSTS) {
       try {
@@ -3566,7 +3625,7 @@ function loadDeep(sym, fresh, limit) {
         if (!res.ok) continue;
         const d = await res.json(), bids = lv(d.bids), asks = lv(d.asks);
         if (!bids.length || !asks.length) continue;
-        Object.assign(deep, { sym, at: mono(), bids, asks, limit: lim });
+        Object.assign(deep, { sym, at: mono(), req: started, bids, asks, limit: lim });
         return true;
       } catch (e) { if (ac.signal.aborted) break; }
     }
@@ -3579,9 +3638,10 @@ function loadDeep(sym, fresh, limit) {
  * maxAge: 使ってよい板の奥の古さ(ミリ秒。0 なら板の奥は使わない)。
  * 板が取れていない(古い・別の銘柄・計算値の銘柄)ときは null。
  * 戻り値の over: 上位5段では足りなかった / deep: 板の奥を使った / beyond: 板の奥(または5段)でも足りず、見積もった分がある */
-function bookFill(sym, side, want, maxAge) {
-  const bk = feed.book;
-  if (!bk || bk.sym !== sym || mono() - bk.at > 5000) return null;
+function bookFill(sym, side, want, maxAge, book) {
+  // book: 損切りに届いた瞬間に覚えておいた板(待っている間に銘柄を切りかえても、その銘柄の板で計算するため)
+  const bk = book || feed.book;
+  if (!bk || bk.sym !== sym || (!book && mono() - bk.at > 5000)) return null;
   const lv = side === 'buy' ? bk.asks : bk.bids;
   if (!lv.length) return null;
   const byQty = want.qty !== undefined, goal = byQty ? want.qty : want.notional;
@@ -3775,6 +3835,22 @@ const labelOf = id => {
 function acct(q) {
   if (!T.accounts[q]) { const c = START_CASH[q] || 10000; T.accounts[q] = { cash: c, start: c }; }
   return T.accounts[q];
+}
+/* いま全部を決済したときの見込み。注文の画面・下のバー・カードで、同じ数字を出すために1か所で計算する。
+ * 決済できる価格 xp:買いのポジションは「売れる価格」、売りは「買える価格」(気配値がなければ最新の価格)。
+ * g:値動きの損益(レバレッジのときは、証拠金より多くは失わないので、そこで止める。raw は止める前)
+ * fees:建てたときと決済するときの手数料。net = g − fees(手数料込みの損益) */
+function closeNow(sym) {
+  const pos = T.positions[sym];
+  if (!pos) return null;
+  const lq = liveQuote(sym), px = T.last[sym];
+  // 大きなポジションは、板の上位5段では足りず、板を食った平均の価格で決済される。そのときは、その見込みの価格で計算する(walked)
+  const bf = lq ? bookFill(sym, pos.qty > 0 ? 'sell' : 'buy', { qty: Math.abs(pos.qty) }) : null, walked = !!(bf && bf.over);
+  const xp = walked ? bf.px : lq ? (pos.qty > 0 ? lq.bid : lq.ask) : px;
+  if (!(xp > 0)) return { xp: NaN, raw: NaN, g: NaN, fees: NaN, net: NaN, capped: false, walked: false };
+  const raw = pos.qty * (xp - pos.avg), g = pos.lev > 1 ? Math.max(raw, -pos.margin) : raw;
+  const fees = Math.abs(pos.qty) * xp * FEE + (pos.feeOpen || 0);
+  return { xp, raw, g, fees, net: g - fees, capped: g !== raw, walked };
 }
 function unrealized(sym) {
   const p = T.positions[sym], px = T.last[sym];
@@ -4315,20 +4391,25 @@ function checkTriggers(sym, lo, hi, path) {
     if (pendingExit[sym]) return;
     pendingExit[sym] = true;
     const id = p.id, t0 = mono(), bound = fill;
+    // 届いた瞬間の板(上位5段)を覚えておく。待っている間に別の銘柄を表示しても、この銘柄の板で計算できるように
+    const fb = feed.book, snap = fb && fb.sym === sym ? { sym, at: fb.at, bids: fb.bids.slice(), asks: fb.asks.slice() } : null;
+    const bookNow = () => (feed.book && feed.book.sym === sym && mono() - feed.book.at <= 5000 ? undefined : snap || undefined);
+    renderTrade(); // 手での決済のボタンを、待っている間は押せなくする
     const finish = async () => {
       let ok = await loadDeep(sym, 1);
-      if (ok && deep.at < t0) ok = await loadDeep(sym, 1); // 届く前から取り寄せ中だったものは使わず、取り直す
-      let bf = ok ? bookFill(sym, side, want, mono() - t0 + 50) : null;
+      // 届く前から取り寄せ中だったもの(始めた時刻が前)は使わず、取り直す。届いた直後なので、手元の板を使わないよう -1(必ず取り寄せる)を渡す
+      if (ok && deep.req < t0) ok = await loadDeep(sym, -1);
+      let bf = ok ? bookFill(sym, side, want, mono() - t0 + 50, bookNow()) : null;
       // 1000段でも足りなければ、5000段まで取り寄せる(それでも足りない分だけ、2次式で見積もる)
-      if (bf && bf.beyond && (await loadDeep(sym, 1, DEEP_MAX))) bf = bookFill(sym, side, want, mono() - t0 + 50) || bf;
+      if (bf && bf.beyond && (await loadDeep(sym, 1, DEEP_MAX))) bf = bookFill(sym, side, want, mono() - t0 + 50, bookNow()) || bf;
       // 板の奥が取れなかったときは、上位5段だけから、先へ行くほど急に不利になる形で見積もる(実際より不利なことが多い)
-      if (!bf || !bf.deep) bf = bookFill(sym, side, want, 0) || bf;
+      if (!bf || !bf.deep) bf = bookFill(sym, side, want, 0, bookNow()) || bf;
       return bf;
     };
     finish().catch(() => null).then(bf => {
       delete pendingExit[sym];
       const now = T.positions[sym];
-      if (!now || now.id !== id) return; // 待っている間に、手で決済された
+      if (!now || now.id !== id) { renderTrade(); return; } // 待っている間に、別のタブなどで決済された
       let px = bound;
       if (bf) px = long ? Math.min(px, bf.px) : Math.max(px, bf.px);
       exitDone(sym, reason, px, bf);
@@ -4342,7 +4423,9 @@ function checkTriggers(sym, lo, hi, path) {
   }
   exitDone(sym, reason, fill, thin);
 }
-const pendingExit = {}; // sym -> true: 損切り・強制決済が、板の奥の取り寄せを待っている
+const pendingExit = {}; // sym -> true: 損切り・強制決済が、板の奥の取り寄せを待っている(その間は、手での決済を受け付けない)
+// 待っている間に手で決済すると、戻った価格で決済できてしまい、損切りを逃れられる。そのときに出す文
+const PENDING_EXIT_MSG = '損切り(または強制決済)の価格に届いたため、いま決済しています。数秒お待ちください(届いた価格より有利な価格で、手で決済することはできません)。';
 // 利確・損切り・強制決済で決済して、知らせる
 function exitDone(sym, reason, fill, thin) {
   const q = quoteOf(sym);
@@ -4394,7 +4477,19 @@ function stopOut(q) {
   if (acctStats(q).equity > 0) return;
   const list = Object.keys(T.positions).filter(s => quoteOf(s) === q && priceOk(s) && reconciled[s] === true);
   let closed = 0;
-  list.forEach(s => { if (closePosition(s, 'liq') === null) closed++; });
+  /* 決まった価格で決済する(損切り・強制決済と同じ決め方)。決済できる価格(買いなら売れる価格。気配値がなければ最新の価格)と
+   * 最新の価格の、不利なほう。いま見ている銘柄で板が取れていれば、数量の分だけ板を食った価格(5段で足りなければ、不利に見積もる)。
+   * 以前は成行の決済として出していたため、板の5段より大きいポジションや、見ていない銘柄(気配値がない)では断られ、
+   * 評価額がマイナスのまま残っていた */
+  list.forEach(s => {
+    const p = T.positions[s];
+    if (!p || pendingExit[s]) return;
+    const long = p.qty > 0, px = T.last[s], lq = liveQuote(s), qx = lq ? (long ? lq.bid : lq.ask) : NaN;
+    let fill = qx > 0 ? (long ? Math.min(qx, px) : Math.max(qx, px)) : px;
+    const bf = s === state.symbol ? bookFill(s, long ? 'sell' : 'buy', { qty: Math.abs(p.qty) }, 0) : null;
+    if (bf) fill = long ? Math.min(fill, bf.px) : Math.max(fill, bf.px);
+    if (fill > 0 && closePosition(s, 'liq', { price: fill, away: false }) === null) closed++;
+  });
   if (closed) toast(`${q} の口座の評価額がゼロ以下になったため、ポジションを強制的に決済しました。`);
 }
 let toastTimer = 0;
@@ -4508,8 +4603,9 @@ function renderTrade() {
   // ポジションを持っているときは、どちらのボタンが「決済」になるかをボタンに書く
   // 成行で反対の向きを押すと、金額の欄に関係なく、ポジションを1回で全部決済する(一部だけなら「半分を決済」か指値で)
   const mkt = $('trLimitRow').hidden; // 指値の価格の欄が出ていなければ、成行
-  setTxt('trSellSub', pos ? (pos.qty > 0 ? (mkt ? '買いを全部決済する' : '買いを減らす(指値)') : '売りを増やす') : '下がると利益');
-  setTxt('trBuySub', pos ? (pos.qty < 0 ? (mkt ? '売りを全部決済する' : '売りを減らす(指値)') : '買いを増やす') : '上がると利益');
+  // 指値で反対向きを押すと、ポジションを減らすだけの「決済用の指値」になる(反対向きに持ちかえることはない)
+  setTxt('trSellSub', pos ? (pos.qty > 0 ? (mkt ? '買いを全部決済する' : '決済用の指値を予約') : mkt ? '売りを増やす' : '売りを増やす(指値)') : mkt ? '下がると利益' : '指値で売りを予約');
+  setTxt('trBuySub', pos ? (pos.qty < 0 ? (mkt ? '売りを全部決済する' : '決済用の指値を予約') : mkt ? '買いを増やす' : '買いを増やす(指値)') : mkt ? '上がると利益' : '指値で買いを予約');
   // 気配値(買える価格・売れる価格)が届いていないとき(つなぎ直した直後・配信が止まったとき)も、売買できない
   const quoteOk = !!liveQuote(sym);
   const tradable = px > 0 && priceOk(sym) && reconciled[sym] === true && clockReady && quoteOk && !state.replay;
@@ -4537,13 +4633,20 @@ function renderTrade() {
   else if (!waiting && mine) setTxt('trMsg', '');
   // 取引所から消えた銘柄は価格が取れないので、建値での清算だけできるようにする
   const gone = !!dead[sym] && !!pos;
-  $('pClose').disabled = (!tradable && !gone) || sending;
+  const pend = !!pendingExit[sym];
+  $('pClose').disabled = (!tradable && !gone) || sending || pend;
   {
-    const lq = liveQuote(sym), xp = pos ? (lq ? (pos.qty > 0 ? lq.bid : lq.ask) : px) : NaN;
-    setTxt('pClose', gone ? '最後の価格で清算する' : pos ? `全部決済する(${xp > 0 ? fmtPrice(xp) + ' で' : ''}${pos.qty > 0 ? '売る' : '買い戻す'})` : '全部決済する');
+    // ボタンには、いま決済できる価格を出す(板を食う大きさなら、その平均の見込み)
+    const cn = pos ? closeNow(sym) : null, xp = cn ? cn.xp : NaN;
+    setTxt('pClose', gone ? '最後の価格で清算する' : pos ? `全部決済する(${xp > 0 ? (cn.walked ? '平均 約 ' : '') + fmtPrice(xp) + ' で' : ''}${pos.qty > 0 ? '売る' : '買い戻す'})` : '全部決済する');
   }
   $('pSave').disabled = !tradable;
   if (gone) setTxt('pMsg', 'この銘柄は取引所で取引できなくなっています。最後に取得できた価格で清算できます。', 'msg');
+  if (pend && pos) setTxt('pMsg', PENDING_EXIT_MSG, 'msg');
+  else if ($('pMsg').textContent === PENDING_EXIT_MSG) setTxt('pMsg', '');
+  if (!pend && $('trMsg').textContent === PENDING_EXIT_MSG) setTxt('trMsg', '');
+  // 「いまは何も持っていません」の知らせは、そのあと指値の約定などでポジションができたら消す(食い違って見えるため)
+  if (pos && $('trMsg').classList.contains('done') && $('trMsg').textContent.includes('いまは何も持っていません')) setTxt('trMsg', '', 'msg');
   if (!(px > 0)) setTxt('trMsg', state.loading ? '' : '実際の価格を取得できていないため、いまは注文できません。');
   else if ($('trMsg').textContent.startsWith('実際の価格')) setTxt('trMsg', '');
 
@@ -4553,9 +4656,11 @@ function renderTrade() {
     // 順番待ちの様子。前に並んでいた数量が分からない注文は、指値を越えた取引が出るまで約定しない
     const own = o.notional / o.price, line = o.qAhead === null || o.qAhead === undefined ? '指値を越えたら約定'
       : `順番待ち ${fmtQty(Math.min(o.qDone || 0, o.qAhead + own))} / ${fmtQty(o.qAhead + own)}`;
-    return `<div class="ord"><span><span class="${o.side === 'buy' ? 'up' : 'down'}">${o.side === 'buy' ? '買い' : '売り'}</span> ${esc(labelOf(o.sym))} @ ${fmtPrice(o.price)}</span>` +
+    // 1行目:向き・価格・銘柄。2行目:金額・順番待ち。決済用の指値は、ポジションを減らすだけなので、目印をつける
+    return `<div class="ord"><span><span class="${o.side === 'buy' ? 'up' : 'down'}">${o.side === 'buy' ? '買い' : '売り'}</span> <b>${fmtPrice(o.price)}</b> <span class="dim">${esc(labelOf(o.sym))}${o.lev > 1 && !o.reduce ? ' ×' + o.lev : ''}</span>` +
+      `${o.reduce ? ' <span class="ord-tag" title="持っているポジションを減らすだけの注文です。約定しても、反対向きのポジションは持ちません。ポジションがなくなると、自動で取り消します">決済用</span>' : ''}</span>` +
       `<button type="button" class="ctl btn small" data-oid="${esc(o.id)}">取消</button>` +
-      `<span class="dim">${fmtMoney(o.notional, oq)} ${esc(oq)} 分${o.reduce ? ' ・ 決済用' : ''} ・ ${line}${extra ? ' ・ ' + esc(extra) : ''}</span></div>`;
+      `<span class="dim">${fmtMoney(o.notional, oq)} ${esc(oq)} 分 ・ ${line}${extra ? ' ・ ' + esc(extra) : ''}</span></div>`;
   }).join(''));
   $('trPos').hidden = !pos;
   if (pos) {
@@ -4575,25 +4680,19 @@ function renderTrade() {
       two('pFund', k > 0 ? f.slice(0, k) : f, k > 0 ? f.slice(k + 1).replace(/\)/, '').replace(/^ ・ /, '') : '');
     } else two('pFund', 'かかりません', '1倍のため');
     two('pLiq', L !== null ? fmtPrice(L) : 'なし', isFinite(liqPct) ? `いまから ${liqPct.toFixed(2)}% 動くと` : '', isFinite(liqPct) && liqPct < 3 ? 'down' : '');
-    two('pPnl', `${fmtMoney(u, q, true)} ${q}`, `${pct2(base ? u / base * 100 : 0)}%`, pnlClass(u, q));
+    const cn = closeNow(sym);
+    // 値動きの損益は、上の「いま全部決済すると」の内訳と同じ数字(決済できる価格で計算し、証拠金で止めたもの)にする
+    if (isFinite(cn.g)) two('pPnl', `${fmtMoney(cn.g, q, true)} ${q}`, `${pct2(base ? cn.g / base * 100 : 0)}% ・ ${cn.walked ? '平均 約 ' : ''}${fmtPrice(cn.xp)} で決済した場合`, pnlClass(cn.g, q));
+    else two('pPnl', `${fmtMoney(u, q, true)} ${q}`, `${pct2(base ? u / base * 100 : 0)}%`, pnlClass(u, q));
     // 強制決済が近いときは、目立つ場所で知らせる
     const warn = isFinite(liqPct) && liqPct < 3 ? `強制決済まで、あと ${liqPct.toFixed(2)}% の値動きです。強制決済になると、証拠金(${fmtMoney(pos.margin, q)} ${q})をすべて失います。` : '';
     $('pWarn').hidden = !warn; if (warn) setTxt('pWarn', warn);
     // いま全部を決済した場合の損益:決済できる価格(買いは売れる価格、売りは買える価格)で、決済の手数料と、建てたときの手数料も引く
-    {
-      const lq = liveQuote(sym), xp = lq ? (pos.qty > 0 ? lq.bid : lq.ask) : px;
-      let net = NaN;
-      if (xp > 0) {
-        const g = pos.qty * (xp - pos.avg);
-        net = (pos.lev > 1 ? Math.max(g, -pos.margin) : g) - Math.abs(pos.qty) * xp * FEE - (pos.feeOpen || 0);
-      }
-      setTxt('pNet', isFinite(net) ? `${fmtMoney(net, q, true)} ${q}` : '—', 'pos-hero-val ' + pnlClass(net, q));
-      // 値動きの損益と大きく違うことがあるので、手数料の分を内訳で見せる(レバレッジが高いと、手数料が証拠金に比べて大きい)
-      if (xp > 0) {
-        const fees = Math.abs(pos.qty) * xp * FEE + (pos.feeOpen || 0), g = pos.qty * (xp - pos.avg);
-        setTxt('pNetWhy', `値動きの損益 ${fmtMoney(g, q, true)} − 手数料 ${fmtMoney(fees, q)}(建てたとき+決済するとき)`);
-      } else setTxt('pNetWhy', '');
-    }
+    setTxt('pNet', isFinite(cn.net) ? `${fmtMoney(cn.net, q, true)} ${q}` : '—', 'pos-hero-val ' + pnlClass(cn.net, q));
+    // 値動きの損益と大きく違うことがあるので、手数料の分を内訳で見せる(レバレッジが高いと、手数料が証拠金に比べて大きい)。
+    // 内訳の「値動きの損益」は、上の合計と足し算が合うよう、証拠金で止めた後の数字にする(止めたときは、そう書く)
+    setTxt('pNetWhy', isFinite(cn.net) ? `値動きの損益 ${fmtMoney(cn.g, q, true)} − 手数料 ${fmtMoney(cn.fees, q)}(建てたとき+決済するとき)` +
+      (cn.capped ? `。値動きの損は、証拠金 ${fmtMoney(pos.margin, q)} までで止まります(計算上は ${fmtMoney(cn.raw, q, true)})` : '') : '');
     // 利確・損切りに届いたときの損益の目安(手数料も引いた額)。入力中の値で計算する
     const est = (id, out) => {
       const v = parseFloat($(id).value);
@@ -4617,18 +4716,19 @@ function renderTrade() {
 
   const ts = tradeStats(q);
   const total = st.equity - st.start;
-  setTxt('aEq', `${fmtMoney(st.equity, q)}(${fmtMoney(total, q, true)})`, pnlClass(total, q));
+  setHtml($('aEq'), `${esc(fmtMoney(st.equity, q))}<small class="${pnlClass(total, q)}">始めから ${esc(fmtMoney(total, q, true))}</small>`);
   setTxt('aCash', fmtMoney(st.cash, q));
   setTxt('aAvail', fmtMoney(st.avail, q));
   setTxt('aReal', fmtMoney(st.cash - st.start, q, true), pnlClass(st.cash - st.start, q));
   setTxt('aStat', ts.n ? `${ts.n} 回 / ${(ts.wins / ts.n * 100).toFixed(0)}%` : 'まだありません');
 
   const others = Object.keys(T.positions).filter(s => s !== sym);
-  setHtml($('trOthers'), others.map(s => {
+  // ほかの銘柄のポジション:見出しをつけ、押すとその銘柄のチャートに切りかわることを書く
+  setHtml($('trOthers'), others.length ? `<h4 class="pos-sub">ほかの銘柄のポジション<small>押すと、その銘柄に切りかえて決済などができます</small></h4>` + others.map(s => {
     const p = T.positions[s], u = unrealized(s), oq = quoteOf(s);
-    return `<button type="button" data-sym="${esc(s)}"><span>${esc(labelOf(s))} <span class="dim">${p.qty > 0 ? '買い' : '売り'}</span></span>` +
-      `<span class="${pnlClass(u)}">${fmtMoney(u, oq, true)} ${esc(oq)}</span></button>`;
-  }).join(''));
+    return `<button type="button" data-sym="${esc(s)}"><span>${esc(labelOf(s))} <span class="${p.qty > 0 ? 'up' : 'down'}">${p.qty > 0 ? '買い' : '売り'}${p.lev > 1 ? ' ×' + p.lev : ''}</span></span>` +
+      `<span class="${pnlClass(u)}">${fmtMoney(u, oq, true)} ${esc(oq)}<small class="dim">含み損益 ›</small></span></button>`;
+  }).join('') : '');
 
   const hf = $('trHistFilter').value;
   const hist = histKeyPeek(hf, sym) === lastHistKey ? [] : T.history.filter(h => hf === 'sym' ? h.sym === sym : hf === 'win' ? h.pnl !== null && h.reason !== 'fund' && netOf(h) > 0 : hf === 'loss' ? h.pnl !== null && h.reason !== 'fund' && netOf(h) <= 0 : hf === 'auto' ? ['tp', 'sl', 'liq', 'limit'].includes(h.reason) : true);
@@ -4649,11 +4749,12 @@ function renderTrade() {
   }).join('') : `<span class="dim">${T.history.length ? 'この条件に合う取引はありません。' : 'まだ取引がありません。上の「買い」「売り」で注文すると、ここに記録されます(仮想の資金なので、損をしても大丈夫です)。'}</span>`);
   }
 
-  const u = pos ? unrealized(sym) : 0;
-  $('tbClose').hidden = !pos; $('tbClose').disabled = !tradable || sending;
-  setTxt('tbText', pos
-    ? `${pos.qty > 0 ? '買い' : '売り'}${pos.lev > 1 ? ` ×${pos.lev}` : ''}を保有中 損益 ${fmtMoney(u, q, true)} ${q}`
-    : `デモ資金 ${fmtMoney(st.equity, q)} ${q}`, pos ? pnlClass(u) : '');
+  $('tbClose').hidden = !pos; $('tbClose').disabled = (!tradable && !gone) || sending || pend;
+  // 保有中は、ポジションのカードの大きな数字と同じ「いま全部決済すると(手数料込み)」を出す(場所によって数字が違うと迷うため)
+  const cb = pos ? closeNow(sym) : null, bn = cb && isFinite(cb.net) ? cb.net : pos ? unrealized(sym) : 0;
+  setHtml($('tbText'), pos
+    ? `<b class="${pos.qty > 0 ? 'up' : 'down'}">${pos.qty > 0 ? '買い' : '売り'}${pos.lev > 1 ? ` ×${pos.lev}` : ''} 保有中</b><small>いま決済すると <span class="${pnlClass(bn, q)}">${esc(fmtMoney(bn, q, true))} ${esc(q)}</span></small>`
+    : `デモ資金 ${esc(fmtMoney(st.equity, q))} ${esc(q)}`);
 }
 
 // 画面上の位置が、取引の線(利確・損切り・指値・建値)の上かどうか
@@ -4748,7 +4849,7 @@ function drawTrade(pane, i0, i1) {
     T.orders.forEach(o => {
       if (o.sym !== sym) return;
       const moving = dl && dl.kind === 'order' && dl.id === o.id;
-      line(moving ? dl.price : o.price, '#5b7fd6', [2, 4], `${o.side === 'buy' ? '買い指値' : '売り指値'} ↕${moving ? ' ' + fmtPrice(dl.price) : ''}`);
+      line(moving ? dl.price : o.price, '#5b7fd6', [2, 4], `${o.reduce ? '決済' : ''}${o.side === 'buy' ? '買い指値' : '売り指値'} ↕${moving ? ' ' + fmtPrice(dl.price) : ''}`);
     });
     if (pos) {
       const q = quoteOf(sym), u = unrealized(sym);
@@ -4945,8 +5046,8 @@ function bindTrade() {
     setNotional(floorMoney(v, q));
     renderRisk();
   });
-  /* quick = チャート上の売買ボタンから。注文画面で「指値」を選んでいても、いつも成行で出す。
-   * 注文画面が閉じていると結果の文が見えないので、同じ文をお知らせ(画面の上)にも出す。それ以外は、注文画面のボタンとまったく同じ */
+  /* quick = チャート上の売買ボタン・下のバーから。注文画面とまったく同じ注文になる(注文画面が「指値」なら、指値の予約)。
+   * 注文画面が閉じていると結果の文が見えないので、同じ文をお知らせ(画面の上)にも出す */
   const order = (side, quick) => {
     const sym = state.symbol, px = T.last[sym], dir = side === 'buy' ? 1 : -1, q = quoteOf(sym);
     const tp = numOrNull('trTp'), sl = numOrNull('trSl'), note = cleanNote($('trNote').value);
@@ -4967,18 +5068,20 @@ function bindTrade() {
       else if (T.orders.length >= 20) err = '予約できる指値注文は20件までです。';
       else if (opening && notional * ((curLev() > 1 ? 1 / curLev() : 1) + FEE) > acctStats(q).avail + 1e-9) err = `使える金額が足りません(使える金額: ${fmtMoney(acctStats(q).avail, q)} ${q})。金額を減らしてください。`;
       else if (opening) err = checkLevels(dir, lp, tp, sl);
-      if (err) { setTxt('trMsg', err, 'msg down'); return; }
+      if (err) { say(err, 'msg down'); return; }
       // ポジションを減らすために置いた指値は「決済用」として覚えておく(ポジションがなくなったら、いっしょに取り消す)
       // qAhead: 置いたときに、同じ価格で前に並んでいた数量(板の上位5段に、その価格があったときだけ。なければ null = 分からない)
       T.orders.push({ id: tnow() + Math.random(), sym, side, price: lp, notional, tp: opening ? tp : null, sl: opening ? sl : null, t: tnow(), note, reduce: !opening, lev: opening ? curLev() : 1, qAhead: queueAhead(sym, side, lp), qDone: 0 });
       saveTrade();
-      setTxt('trMsg', `${side === 'buy' ? '買い' : '売り'}の指値注文を予約しました(${fmtPrice(lp)} で ${fmtMoney(notional, q)} ${q} 分)。`, 'msg');
+      // 決済用の指値は、ポジションを減らすだけで、反対向きには持たないことを、はっきり書く
+      say(opening ? `✓ ${side === 'buy' ? '買い' : '売り'}の指値注文を予約しました:${fmtPrice(lp)} で ${fmtMoney(notional, q)} ${q} 分。その価格まで${dir > 0 ? '下がる' : '上がる'}と約定します(下の「予約中の指値注文」で取り消せます)。`
+        : `✓ 決済用の指値を予約しました:${fmtPrice(lp)} で${had.qty > 0 ? '売って' : '買い戻して'}、ポジションを減らします(最大 ${fmtMoney(notional, q)} ${q} 分)。持っている分より多くは決済せず、反対向きのポジションは持ちません。`, 'msg done');
       done();
       return;
     }
     // 成行で、持っているポジションと反対の向きを押したら、金額の欄に関係なく、1回で全部決済する
     // (以前は金額の欄の分だけ減らしていたため、押しても決済されたのか分かりにくかった)
-    if (had && Math.sign(had.qty) !== dir) { closeAll(sym, quick); return; }
+    if (had && Math.sign(had.qty) !== dir) { closeAll(sym, quick, note); return; }
     // 成行:取引所に注文が届くまでの遅れ(約 0.2 秒)を待ち、そのときの板・気配値で約定させる。
     // 待っている間は、もう一度押しても注文しない(二重の注文を防ぐ)
     if (sending) return;
@@ -5020,14 +5123,14 @@ function bindTrade() {
         saveTrade();
       }
       const closedAll = !opening && !T.positions[sym], capped = closedAll && notional > h.qty * h.price * 1.02;
-      say((closedAll ? `${hadDir > 0 ? '買い' : '売り'}のポジションをすべて決済しました` : `${side === 'buy' ? '買い' : '売り'}ました`) + `:${fmtQty(h.qty)} @ ${fmtPrice(h.price)}` +
+      say((closedAll ? `✓ ${hadDir > 0 ? '買い' : '売り'}のポジションをすべて決済しました` : `✓ ${side === 'buy' ? '買い' : '売り'}ました`) + `:${fmtQty(h.qty)} @ ${fmtPrice(h.price)}` +
         (h.pnl === null ? '' : `(損益 ${fmtMoney(netOf(h), q, true)} ${q})`) +
         (capped ? '。保有分を超える金額は注文していません。反対向きに持つには、もう一度注文してください。' : '') +
         (lastFill && lastFill.over ? `。${deepNote(lastFill)}` : '') +
         (!opening && (tp !== null || sl !== null) ? '。入力した利確・損切りは、決済の注文では使いません(変えるときは「保有中のポジション」の欄で)。' : '') +
         (dropped ? `。約定した価格(${fmtPrice(h.price)})に対して向きが合わないため、${dropped}は付けませんでした。「保有中のポジション」の欄で付け直してください` : '') +
         // 新しく建てたときは、次にどこを見ればよいかも書く(初めての人が、買ったあとに何をすればよいか迷わないように)
-        (opening && !had && !dropped ? `。手数料 ${fmtMoney(h.fee, q)} ${q}。損益の確認・${pos && (pos.tp !== null || pos.sl !== null) ? '利確/損切りの変更' : '利確/損切りの設定'}・決済は、${quick ? 'デモトレードの画面の' : 'この下の'}「保有中のポジション」でできます` : ''), 'msg');
+        (opening && !had && !dropped ? `。手数料 ${fmtMoney(h.fee, q)} ${q}。損益の確認・${pos && (pos.tp !== null || pos.sl !== null) ? '利確/損切りの変更' : '利確/損切りの設定'}・決済は、${quick ? 'デモトレードの画面の' : 'この下の'}「保有中のポジション」でできます` : ''), dropped ? 'msg' : 'msg done');
       done();
     };
     afterLatency(sym, () => ({ side, want: { notional } })).then(late => { sending = false; fire(late); });
@@ -5036,8 +5139,12 @@ function bindTrade() {
     const b = e.target.closest('button[data-oid]');
     if (!b) return;
     syncIfStale();
-    T.orders = T.orders.filter(o => String(o.id) !== b.dataset.oid);
+    const o = T.orders.find(x => String(x.id) === b.dataset.oid);
+    // 取り消す前に約定していたとき(ページを開いた直後の確認など)は、そう伝える
+    if (!o) { setTxt('trMsg', 'この指値注文は、すでに約定したか、取り消されています。', 'msg'); renderTrade(); return; }
+    T.orders = T.orders.filter(x => x !== o);
     saveTrade(); renderTrade(); draw();
+    setTxt('trMsg', `✓ 指値注文を取り消しました:${o.reduce ? '決済用の' : ''}${o.side === 'buy' ? '買い' : '売り'} ${labelOf(o.sym)} ${fmtPrice(o.price)}。`, 'msg done');
   });
   $('trHistFilter').addEventListener('change', renderTrade);
   $('trBuy').addEventListener('click', () => order('buy'));
@@ -5053,7 +5160,7 @@ function bindTrade() {
   };
   const qtMake = (side, word, tip) => {
     const b = el('button', { type: 'button', id: side === 'buy' ? 'qtBuy' : 'qtSell', class: 'qt ' + side, title: tip }, [
-      el('span', { class: 'qt-idle' }, [document.createTextNode(word + ' '), el('b', { id: side === 'buy' ? 'qtBuyPx' : 'qtSellPx' })]),
+      el('span', { class: 'qt-idle' }, [el('span', { class: 'qt-word', text: word }), document.createTextNode(' '), el('b', { id: side === 'buy' ? 'qtBuyPx' : 'qtSellPx' })]),
       el('span', { class: 'qt-arm', text: `もう一度押すと${side === 'buy' ? '買います' : '売ります'}` }),
     ]);
     b.setAttribute('aria-pressed', 'false');
@@ -5064,8 +5171,10 @@ function bindTrade() {
       if (qt.side !== side || qt.sym !== state.symbol) {
         qtDisarm();
         qt.side = side; qt.at = now; qt.sym = state.symbol; b.classList.add('armed'); b.setAttribute('aria-pressed', 'true');
-        // 注文画面が「指値」のときは、指値の予約になることを、押す前に伝える
-        b.querySelector('.qt-arm').textContent = `もう一度押すと${orderType === 'limit' ? '指値で' : ''}${side === 'buy' ? '買います' : '売ります'}`;
+        // 何が起きるかを、押す前に伝える:ポジションと反対向きなら決済(成行は全部、指値は決済用の予約)。注文画面が「指値」なら指値の予約
+        const had = T.positions[state.symbol], closing = had && (had.qty > 0) !== (side === 'buy');
+        b.querySelector('.qt-arm').textContent = closing ? (orderType === 'limit' ? 'もう一度押すと決済用の指値を予約' : 'もう一度押すと全部決済')
+          : `もう一度押すと${orderType === 'limit' ? '指値で' : ''}${side === 'buy' ? '買います' : '売ります'}`;
         qt.timer = setTimeout(qtDisarm, 3000);
         return;
       }
@@ -5101,26 +5210,34 @@ function bindTrade() {
     if (err) { setTxt('pMsg', err, 'msg down'); return; }
     pos.tp = tp; pos.sl = sl; pos.levelsAt = tnow();
     saveTrade(); renderTrade(); draw();
-    setTxt('pMsg', '保存しました。', 'msg');
+    const parts = [tp !== null ? `利確 ${fmtPrice(tp)}` : '', sl !== null ? `損切り ${fmtPrice(sl)}` : ''].filter(Boolean);
+    setTxt('pMsg', parts.length ? `✓ 保存しました:${parts.join(' ・ ')}。届いたら自動で決済します(チャートの線でも確かめられます)。` : '✓ 利確・損切りを外しました。自動では決済しません。', 'msg done');
   });
   /* 手での決済も成行の注文なので、成行の買い・売りと同じく、届くまでの遅れ(約 0.2 秒)を待ってから約定させる。
    * run(late): 待ち終わったときに呼ぶ。late は、待っている間に価格が古くなったなどで取り消すときの理由(なければ null) */
   const sendClose = (sym, msgId, run) => {
     if (sending) return;
+    if (pendingExit[sym]) { if (msgId) setTxt(msgId, PENDING_EXIT_MSG, 'msg down'); else toast(PENDING_EXIT_MSG); return; }
     sending = true; if (msgId) setTxt(msgId, SENDING_MSG, 'msg'); renderTrade();
     // 決済する数量(全部)で、板の奥が要るかを調べる(半分の決済でも、多めに見て取り寄せておく)
     const held = () => { const p = T.positions[sym]; return p ? { side: p.qty > 0 ? 'sell' : 'buy', want: { qty: Math.abs(p.qty) } } : null; };
-    afterLatency(sym, held).then(late => { sending = false; run(late); renderTrade(); draw(); });
+    // 送っている間に損切り・強制決済に届いたときは、手での決済は取り消す(そちらが先に決済する)
+    afterLatency(sym, held).then(late => { sending = false; run(late || (pendingExit[sym] ? PENDING_EXIT_MSG : null)); renderTrade(); draw(); });
   };
   /* ポジションを1回で全部決済する(「全部決済する」・注文の欄の反対向きのボタン・チャート上のボタンで共通)。
    * 決済したことがはっきり分かるよう、結果(何を・いくらで・確定した損益)を、枠で目立たせて出す */
-  function closeAll(sym, quick) {
+  function closeAll(sym, quick, note) {
     const q = quoteOf(sym), held = T.positions[sym];
     if (!held) { renderTrade(); return; }
+    if (sending) return; // 注文を送っている途中(二重の決済を防ぐ)
+    if (pendingExit[sym]) { setTxt('trMsg', PENDING_EXIT_MSG, 'msg down'); setTxt('pMsg', PENDING_EXIT_MSG, 'msg down'); if (quick) toast(PENDING_EXIT_MSG); return; }
+    // メモは、決済の行に付ける(注文の欄から反対向きを押したとき)。付けたら欄を空にする(次の注文に付かないように)
+    const opt = note ? { note } : undefined;
     const long = held.qty > 0, side = long ? '買い' : '売り'; // 決済すると held の数量が変わるので、向きを先に覚えておく
     const said = err => {
       if (err) { setTxt('pMsg', err, 'msg down'); setTxt('trMsg', err, 'msg down'); if (quick) toast(err); return; }
       setTxt('pMsg', '');
+      if (note) $('trNote').value = '';
       const h = T.history[0], net = netOf(h);
       const text = `✓ 決済しました:${side}のポジション ${fmtQty(h.qty)} を ${fmtPrice(h.price)} で${long ? '売りました' : '買い戻しました'}。` +
         `確定した損益 ${fmtMoney(net, q, true)} ${q}(手数料込み)。いまは何も持っていません。` + (lastFill && lastFill.over ? deepNote(lastFill) : '');
@@ -5129,9 +5246,9 @@ function bindTrade() {
       renderTrade(); draw();
     };
     // 取引所から消えた銘柄は、注文を出す先がないので、最後の価格でそのまま清算する(待たない)
-    if (dead[sym]) { said(closePosition(sym, 'manual', { price: T.last[sym] > 0 ? T.last[sym] : held.avg, away: false })); return; }
+    if (dead[sym]) { said(closePosition(sym, 'manual', { price: T.last[sym] > 0 ? T.last[sym] : held.avg, away: false, note })); return; }
     setTxt('trMsg', SENDING_MSG, 'msg');
-    sendClose(sym, 'pMsg', late => said(late || closePosition(sym, 'manual')));
+    sendClose(sym, 'pMsg', late => said(late || closePosition(sym, 'manual', opt)));
   }
   $('pClose').addEventListener('click', () => closeAll(state.symbol));
   // 半分だけ決済する(残りはそのまま持ち続ける)
@@ -5143,8 +5260,9 @@ function bindTrade() {
       const held = T.positions[sym];
       const err = late || (held ? execute(sym, held.qty > 0 ? 'sell' : 'buy', 0, 'manual', Math.abs(held.qty) / 2, { closeOnly: true }) : 'ポジションがありません。');
       if (err) { setTxt('pMsg', err, 'msg down'); return; }
-      const h = T.history[0];
-      setTxt('pMsg', `半分を決済しました(損益 ${fmtMoney(netOf(h), q, true)} ${q})。残りは持ち続けています。`, 'msg');
+      const h = T.history[0], rest = T.positions[sym];
+      setTxt('pMsg', `✓ 半分(${fmtQty(h.qty)})を ${fmtPrice(h.price)} で決済しました。確定した損益 ${fmtMoney(netOf(h), q, true)} ${q}(手数料込み)。` +
+        (rest ? `残りの ${fmtQty(Math.abs(rest.qty))} は持ち続けています。` : ''), 'msg done');
     });
   });
   // 損切りを、買った(売った)ときの価格に動かす。利益が出ているときに使うと、そこから下がっても損にならない
@@ -5162,17 +5280,19 @@ function bindTrade() {
     // ほかの理由で断られたとき(利確の欄の値がおかしい、など)は、入力欄だけ元に戻す。理由は保存のときの表示のまま
     const now = T.positions[state.symbol];
     if (now && now.sl !== parseFloat($('pSl').value)) $('pSl').value = before;
+    else if (now) setTxt('pMsg', `✓ 損切りを建値(${fmtPrice(now.sl)})に動かしました。ここまで戻って決済されても、損は手数料の分だけです。`, 'msg done');
   });
-  // スマホの下のバーから、シートを開かずに決済できる。押しまちがいを防ぐため、2回押して確定する
+  /* スマホの下のバーから、シートを開かずに全部決済できる。注文のボタンのすぐ横で押しまちがえやすいので、ここだけは2回押して確定する
+   * (1回目で「もう一度で全部決済」に変わる)。決済の中身と知らせる文は、「全部決済する」のボタンと同じ */
   let tbArmed = 0, tbSym = '';
-  const tbDisarm = () => { tbArmed = 0; tbSym = ''; $('tbClose').textContent = '決済'; $('tbClose').classList.remove('armed'); };
+  const tbDisarm = () => { tbArmed = 0; tbSym = ''; $('tbClose').textContent = '全部決済'; $('tbClose').classList.remove('armed'); };
   $('symbol').addEventListener('change', tbDisarm);        // 銘柄を変えたら、押しかけの状態は取り消す
   $('symbol').addEventListener('symbolpicked', tbDisarm);
   $('tbClose').addEventListener('click', () => {
-    const sym = state.symbol, q = quoteOf(sym), now = Date.now();
+    const sym = state.symbol, now = Date.now();
     if (!T.positions[sym]) return;
     if (tbSym !== sym || now - tbArmed > 4000) {
-      tbArmed = now; tbSym = sym; $('tbClose').textContent = 'もう一度で決済'; $('tbClose').classList.add('armed');
+      tbArmed = now; tbSym = sym; $('tbClose').textContent = 'もう一度で\n全部決済'; $('tbClose').classList.add('armed');
       setTimeout(() => { if (Date.now() - tbArmed >= 3900) tbDisarm(); }, 4000);
       return;
     }
@@ -5180,10 +5300,7 @@ function bindTrade() {
     tbDisarm();
     if (sending) return;
     toast(SENDING_MSG);
-    sendClose(sym, null, late => {
-      const err = late || closePosition(sym, 'manual');
-      toast(err || `決済しました(損益 ${fmtMoney(netOf(T.history[0]), q, true)} ${q})`);
-    });
+    closeAll(sym, true);
   });
   $('trOthers').addEventListener('click', e => {
     const b = e.target.closest('button[data-sym]');
@@ -5202,17 +5319,18 @@ function bindTrade() {
   let armed = 0;
   reset.addEventListener('click', () => {
     if (Date.now() - armed > 4000) {
-      armed = Date.now(); reset.textContent = 'もう一度押すとリセット(取り消せません)';
-      setTimeout(() => { reset.textContent = '口座をリセット'; }, 4000);
+      armed = Date.now(); reset.textContent = 'もう一度押すとリセット(取り消せません)'; reset.classList.add('armed');
+      setTimeout(() => { if (Date.now() - armed >= 3900) { reset.textContent = '口座をリセット'; reset.classList.remove('armed'); } }, 4000);
       return;
     }
-    armed = 0; reset.textContent = '口座をリセット';
+    armed = 0; reset.textContent = '口座をリセット'; reset.classList.remove('armed');
     const last = T.last, quotes = T.quotes, rev = T.rev;
     T = freshTrade(); T.last = last; T.quotes = quotes;
     T.rev = rev; // 保存の通し番号は引きつぐ(0 に戻すと「古い内容」とみなされ、リセット前の状態に戻されてしまう)
     Object.keys(reconciled).forEach(k => delete reconciled[k]);
     saveTrade(); renderTrade(); draw();
-    setTxt('trMsg', '口座をリセットしました。', 'msg');
+    setTxt('pMsg', '');
+    setTxt('trMsg', '✓ 口座をリセットしました。ポジション・指値注文・取引履歴を消し、資金を最初の金額に戻しました。', 'msg done');
   });
   const onSymbol = () => {
     if ($('symbol').value === '__add') return;

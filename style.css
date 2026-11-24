@@ -139,6 +139,12 @@ body {
   background: color-mix(in srgb, var(--bg) 72%, transparent);
 }
 .legend .name, .legend .params, .legend button { pointer-events: auto; }
+/* 名前の上から上下にドラッグしても、ページがスクロールせず、チャートが動くように */
+.legend .name, .legend .params { touch-action: none; }
+/* ローソク足の枠が低くて、名前の欄が入りきらないとき:はみ出た分は隠し、「たたむ」ボタンを銘柄名のすぐ下へ */
+.stack.tight { overflow: hidden; }
+.stack.tight .legend.main { order: -2; }
+.stack.tight .legend-fold, .stack.tight .quick-trade { order: -1; }
 .stack {
   position: absolute; left: 6px; top: 4px;
   display: flex; flex-direction: column; align-items: flex-start;
@@ -914,3 +920,37 @@ a.glink:hover { text-decoration: underline; }
 /* スマホ:下の枠のインジケーターは、値を2つまで出す(線が3本以上あると凡例が2〜3行になり、線を隠すため)。「⋯」で開くと全部出す */
 @media (max-width: 760px) { #legends > .legend:not(.open) .vals > span:nth-child(n+3) { display: none; } }
 @media (max-width: 760px) { details.fold > summary small { flex-basis: 100%; } }
+
+/* ---- デモトレードの仕上げ:数字は2行、結果ははっきり、折り返しは自然に ---- */
+/* 口座の欄も、数字の下に小さく補足を出す(1行に詰めると、せまい画面で途中で折り返すため) */
+.tr-dl dd small { display: block; font-size: 10.5px; line-height: 1.35; }
+/* 「数量で入力」は折り返さない。見込みの文が長いときは、文のほうを折り返す */
+.tr-unit { flex-wrap: wrap; align-items: flex-start; }
+.tr-unit > span { flex: 1 1 160px; min-width: 0; line-height: 1.45; padding-top: 4px; }
+.tr-unit .tr-link { flex: 0 0 auto; white-space: nowrap; }
+/* 予約中の指値:決済用(ポジションを減らすだけ)の目印 */
+.ord b { font-weight: 700; }
+.ord-tag { display: inline-block; margin-left: 2px; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; color: var(--muted); font-size: 10.5px; line-height: 1.5; white-space: nowrap; }
+/* ほかの銘柄のポジション */
+#trOthers .pos-sub { margin-top: 10px; }
+#trOthers .pos-sub small { display: block; font-weight: 400; font-size: 11px; }
+#trOthers button > span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+#trOthers button small { display: block; font-size: 10.5px; }
+/* リセットは、1回目で赤くして「もう一度押すと消える」ことを目立たせる */
+#aReset.armed { background: #e0463f; border-color: #e0463f; color: #fff; }
+/* 下のバー:保有中は「買い ×10 保有中」と「いま決済すると …」の2行 */
+#tbText b { font-weight: 700; }
+#tbText small { display: block; font-size: 11.5px; color: var(--muted); }
+#tbText small span { font-weight: 700; }
+/* チャート上の売買ボタン:「決済」と書いたときも、幅が変わりすぎないように */
+.qt .qt-word { white-space: nowrap; }
+/* 文を消したあと、緑の枠だけが残らないように */
+.msg.done:empty { display: none; }
+.toast { pointer-events: none; } /* お知らせの上から始めたドラッグも、チャートに届くように(文字が選ばれてしまわないように) */
+/* 下のバーの「もう一度で全部決済」は2行に折って、左の損益の文が3行にならないようにする */
+.trade-bar #tbClose.armed { white-space: pre-line; line-height: 1.2; max-width: 108px; padding: 0 10px; }
+#tbText small span { white-space: nowrap; }
+/* 文字の読みやすさ(コントラスト 4.5:1 以上):向きの印は少し濃い色に、強制決済の注意はダークでも読める色に */
+.pos-badge.up { background: #0f7a6c; }
+.pos-badge.down { background: #c62f28; }
+:root[data-theme="dark"] .pos-warn { color: #ff9a92; background: color-mix(in srgb, #e0463f 18%, transparent); }
