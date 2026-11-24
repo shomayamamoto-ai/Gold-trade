@@ -145,7 +145,7 @@ const DEFS = {};
 // ===== トレンド(重ねて表示) =====
 DEFS.bb = {
   name: 'ボリンジャーバンド', short: 'BB', group: 'volatility', overlay: true,
-  desc: '移動平均線の上下に、値動きのばらつきの幅で線を引く',
+  desc: '平均線の上下に、ばらつき(標準偏差)の何倍かの帯。2倍なら、中で終わる足は約88%(95%ではない)',
   params: [P.len(20), P.num('mult', '幅(標準偏差の何倍か)', 2, 0.1, 10, 0.1), P.source(),
     P.color('cMid', '中心線の色', '#f5a623'), P.color('cBand', '上下の線の色', '#2f80ed')],
   compute(bars, p) {
@@ -162,7 +162,7 @@ DEFS.bb = {
 };
 DEFS.ichimoku = {
   name: '一目均衡表', short: '一目', group: 'trend', overlay: true,
-  desc: '5本の線と「雲」で、流れ・支え・時間を見る',
+  desc: '5本の線と「雲」で、流れ・支え・時間を見る。9・26・52 は週6日の取引の時代の数',
   params: [P.int('conv', '転換線の期間', 9), P.int('base', '基準線の期間', 26), P.int('spanB', '先行スパンB の期間', 52),
     P.int('shift', 'ずらす本数', 26, '先行スパンを右へ、遅行スパンを左へずらす本数'),
     P.color('cConv', '転換線の色', '#2f80ed'), P.color('cBase', '基準線の色', '#c0392b'),
@@ -186,7 +186,7 @@ DEFS.ichimoku = {
 };
 DEFS.psar = {
   name: 'パラボリック SAR', short: 'SAR', group: 'trend', overlay: true,
-  desc: '流れの向きと、損切りを引き上げる位置の目安を点で示す',
+  desc: '流れの向きと、損切りを引き上げる位置の目安を点で示す。横ばいでは向きがよく入れ替わる',
   params: [P.num('start', '加速因子の初期値', 0.02, 0.001, 1, 0.01), P.num('step', '加速因子の増え方', 0.02, 0.001, 1, 0.01),
     P.num('max', '加速因子の上限', 0.2, 0.01, 2, 0.01), P.color('color', '点の色', '#2f80ed')],
   compute(bars, p) {
@@ -285,7 +285,7 @@ function periodStart(t, per) {
 }
 DEFS.vwap = {
   name: 'VWAP(出来高加重平均価格)', short: 'VWAP', group: 'volume', overlay: true,
-  desc: '期間内に売買された価格を、出来高で重みづけした平均',
+  desc: '期間内の売買価格を、出来高で重みづけした平均。もとは注文の執行を測る基準で、合図ではない',
   params: [{ key: 'anchor', label: '計算をやり直す区切り', type: 'select', def: 'auto',
     options: [['auto', '自動(時間足に合わせる)'], ['day', '1日ごと'], ['week', '1週間ごと'], ['month', '1か月ごと']] },
     P.color('color', '線の色', '#e67e22')],
@@ -319,7 +319,7 @@ DEFS.vwap = {
 // ===== オシレーター(勢い) =====
 DEFS.stoch = {
   name: 'ストキャスティクス', short: 'Stoch', group: 'momentum',
-  desc: '直近の高値と安値の幅の中で、終値がどの位置にあるか',
+  desc: '直近の高値〜安値の中で、終値がどこにあるか(0〜100)。80超は強さの印でもある',
   params: [P.int('kLen', '%K の期間', 14), P.int('kSmooth', '%K をならす期間', 1), P.int('dLen', '%D の期間', 3),
     P.num('upper', '上の基準線', 80, 50, 100, 1), P.num('lower', '下の基準線', 20, 0, 50, 1),
     P.color('cK', '%K の色', '#2f80ed'), P.color('cD', '%D の色', '#f5a623')],
@@ -348,7 +348,7 @@ DEFS.stochrsi = {
 };
 DEFS.cci = {
   name: 'CCI(商品チャネル指数)', short: 'CCI', group: 'momentum',
-  desc: '価格が、平均からどれだけ離れているか',
+  desc: '価格が平均からどれだけ離れているか。±100 の外に出るのは、もとの想定より多い',
   params: [P.len(20), P.color('color', '線の色', '#16a085')],
   compute(bars, p) {
     const n = int(p.len, 20), tp = col(bars, 'hlc3'), ma = sma(tp, n);
@@ -358,7 +358,7 @@ DEFS.cci = {
 };
 DEFS.willr = {
   name: 'ウィリアムズ %R', short: '%R', group: 'momentum',
-  desc: '直近の高値から、終値がどれだけ下にあるか(-100〜0)',
+  desc: 'ストキャスティクスの %K から 100 を引いたもの(同じ計算。-100〜0)',
   params: [P.len(14), P.color('color', '線の色', '#8e44ad')],
   compute(bars, p) {
     const n = int(p.len, 14), hh = highest(col(bars, 'high'), n), ll = lowest(col(bars, 'low'), n);
@@ -405,8 +405,8 @@ DEFS.trix = {
 };
 DEFS.adx = {
   name: 'ADX / DMI', short: 'ADX', group: 'trend',
-  desc: '流れの強さ(ADX)と、上向き・下向きの勢い(+DI・-DI)',
-  params: [P.len(14), P.num('level', '基準線', 25, 0, 100, 1, 'ADX がこれより上なら、流れがはっきりしている目安'),
+  desc: '流れの強さ(ADX)と向き(+DI・-DI)。ADX は強さだけで、向きは示さない',
+  params: [P.len(14), P.num('level', '基準線', 25, 0, 100, 1, 'ADX がこれより上なら、流れがはっきりしている目安。ただし暗号資産では、半分以上の足が 25 を超える'),
     P.color('cAdx', 'ADX の色', '#f5a623'), P.color('cPlus', '+DI の色', UP), P.color('cMinus', '-DI の色', DOWN)],
   compute(bars, p) {
     const n = int(p.len, 14), len = bars.length, pdm = lead(len), mdm = lead(len), tr = trueRange(bars);
@@ -444,13 +444,13 @@ DEFS.aroon = {
 // ===== ボラティリティ(値動きの大きさ) =====
 DEFS.atr = {
   name: 'ATR(平均的な値幅)', short: 'ATR', group: 'volatility',
-  desc: '1本の足が平均してどれだけ動くか。損切りの幅の目安に使う',
+  desc: '1本の足の平均的な値幅。損切りの幅の物差し(2倍の幅でも、10本以内に約3割かかる)',
   params: [P.len(14), P.color('color', '線の色', '#c0392b')],
   compute(bars, p) { const n = int(p.len, 14); return { lines: [{ name: 'ATR', val: atr(bars, n), color: p.color }], bands: [], price: true, label: String(n) }; },
 };
 DEFS.bbw = {
   name: 'ボリンジャーバンド幅', short: 'BBW', group: 'volatility',
-  desc: 'バンドの幅を%で示す。小さいほど値動きが縮んでいる',
+  desc: 'バンドの幅を%で示す。小さいほど値動きが縮んでいる(次に動く向きは分からない)',
   params: [P.len(20), P.num('mult', '幅(標準偏差の何倍か)', 2, 0.1, 10, 0.1), P.source(), P.color('color', '線の色', '#2f80ed')],
   compute(bars, p) {
     const n = int(p.len, 20), a = col(bars, p.source), mid = sma(a, n), sd = stdev(a, n);
@@ -835,7 +835,7 @@ DEFS.mas = {
 
 DEFS.pivot = {
   name: 'ピボットポイント', short: 'Pivot', group: 'trend', overlay: true,
-  desc: '前の日(週・月)の高値・安値・終値から、今日の支え・壁の目安を5本引く',
+  desc: '前の日(週・月)の高値・安値・終値から引く5本の目安。止まりやすさは、でたらめな線とほぼ同じ',
   params: [{ key: 'period', label: '何の区切りで計算するか', type: 'select', def: 'auto',
     options: [['auto', '自動(時間足に合わせる)'], ['D', '前の日'], ['W', '前の週'], ['M', '前の月']], hint: '自動:日足より短い足は前の日、日足は前の週、それより長い足は前の月' },
   P.color('cP', 'ピボット(P)の色', '#f5a623'), P.color('cR', '上の線(R)の色', DOWN), P.color('cS', '下の線(S)の色', UP)],
@@ -1112,6 +1112,7 @@ const FUNCS = {
   or: { args: 'xx', desc: 'どちらかが成り立てば 1', eg: 'or(rsi(close, 14) < 30, rsi(close, 14) > 70)' },
   not: { args: 'x', desc: '成り立たなければ 1', eg: 'not(close > open)' },
   if: { args: 'xxx', desc: '条件が成り立てば2つ目、そうでなければ3つ目', eg: 'if(close > open, volume, 0)' },
+  valuewhen: { args: 'xx', desc: '条件が最後に成り立った足での、2つ目の値', eg: 'valuewhen(volume > sma(volume, 20), close)' },
 };
 class FormulaError extends Error { constructor(m) { super(m); this.name = 'FormulaError'; } }
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k); // constructor などの、もとからある名前を部品とまちがえない
@@ -1247,6 +1248,8 @@ function evalFormula(ast, bars, vars) {
           case 'or': return each2(a[0], a[1], (x, y) => (isFinite(x) && isFinite(y) ? +(x !== 0 || y !== 0) : NaN));
           case 'not': return Array.isArray(a[0]) ? a[0].map(v => (isFinite(v) ? +(v === 0) : NaN)) : +(a[0] === 0);
           case 'if': { const c = arr(a[0]), t = arr(a[1]), f = arr(a[2]); return c.map((v, i) => (isFinite(v) ? (v ? t[i] : f[i]) : NaN)); }
+          // 「最後に条件が成り立った足」の値を、次に成り立つまで持ち続ける(ブレイクした線の高さを覚えておく、などに使う)
+          case 'valuewhen': { const c = arr(a[0]), s = arr(a[1]); let last = NaN; return c.map((v, i) => { if (isFinite(v) && v !== 0) last = s[i]; return last; }); }
           default: throw new FormulaError(`「${nd.f}」は計算できません。`);
         }
       }
@@ -1549,7 +1552,22 @@ function btStats(r, bpy, gross) {
     tstat: sr * Math.sqrt(mo.n), tradesPerYear: years > 0 ? r.n / years : NaN,
     breakEven: isFinite(G) ? breakEvenCost(G, K) : NaN,
     costShare: isFinite(G) && G > 1 ? (G - (1 + r.total)) / (G - 1) : NaN, grossTotal: isFinite(G) ? G - 1 : NaN,
+    // 1年の手数料の目安:1年の売買の回数 × 往復のコスト(手数料 + すべり、片道ずつ2回)。毎回、資金の全額で売買したときの、資金に対する割合
+    costPerYear: years > 0 ? r.n / years * 2 * ((r.fee || 0) + (r.slip || 0)) : NaN,
   };
+}
+/* 勝ちと負けの大きさ(手じまった売買の、手数料・すべりを引いたあとの損益から)。
+ *   ペイオフレシオ payoff = 平均の勝ち ÷ 平均の負け(負けは大きさで見る)
+ *   損益分岐の勝率 beWin = 1 ÷ (1 + payoff)。勝率がこれより低いと、1回あたりの平均の損益がマイナスになる
+ *   期待値 expect = 勝率 × 平均の勝ち − 負ける割合 × 平均の負け(= 1回あたりの平均の損益)
+ * 負けがない(または負けがすべて 0)なら payoff は ∞ で beWin は 0、勝ちがなければ payoff は 0 で beWin は 1 */
+function payoff(r) {
+  const n = r.n || 0;
+  if (!n) return { winRate: NaN, payoff: NaN, beWin: NaN, expect: NaN };
+  const aw = r.wins ? r.avgWin : 0, al = r.losses ? -r.avgLoss : 0;
+  const po = al > 0 ? aw / al : aw > 0 ? Infinity : NaN;
+  const be = al > 0 ? 1 / (1 + po) : aw > 0 ? 0 : NaN;
+  return { winRate: r.wins / n, payoff: po, beWin: be, expect: r.wins / n * aw - r.losses / n * al };
 }
 /* 決まった種から作る乱数(mulberry32)。同じ種なら、いつ・どの端末で計算しても同じ結果になる(試算の数字が開くたびに変わらないように) */
 function seededRandom(seed) {
@@ -1615,7 +1633,7 @@ function effectiveN(series, thr) {
   });
   return { n: reps.length, group, reps };
 }
-const stats = { normCdf, normInv, moments, sortino, psr, minTRL, expMaxSR, dsr, dsrVar, minBTL, breakEvenCost, btStats, barsPerYear, barMs, realizedVol, seededRandom, quantile, maxDrawdownOf, ddBootstrap, corr, effectiveN };
+const stats = { normCdf, normInv, moments, sortino, psr, minTRL, expMaxSR, dsr, dsrVar, minBTL, breakEvenCost, btStats, payoff, barsPerYear, barMs, realizedVol, seededRandom, quantile, maxDrawdownOf, ddBootstrap, corr, effectiveN };
 
 const GROUPS = [
   ['trend', 'トレンド(流れの向き)'],

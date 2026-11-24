@@ -895,6 +895,9 @@ a.ctl.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .verdict .v-chips span { padding: 1px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); font-size: 11px; font-variant-numeric: tabular-nums; }
 :root[data-theme="dark"] .verdict.v-good { border-left-color: #26a69a; }
 :root[data-theme="dark"] .verdict.v-bad { border-left-color: #ff6b63; }
+/* 「勝率が高いのに負ける」ときの、ひとことの説明(成績の数字のすぐ下) */
+.bt-alert { margin: 8px 0 0; padding: 8px 10px; border-left: 4px solid #c62f28; border-radius: 6px; background: var(--hover); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+:root[data-theme="dark"] .bt-alert { border-left-color: #ff6b63; }
 details.fold { margin: 8px 0 0; border: 1px solid var(--line); border-radius: 8px; }
 details.fold > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-height: 44px; padding: 6px 12px 6px 30px; position: relative; cursor: pointer; list-style: none; font-size: 13px; font-weight: 600; }
 details.fold > summary::-webkit-details-marker { display: none; }

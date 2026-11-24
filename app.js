@@ -2779,6 +2779,15 @@ function fRange(key, text, min, max, step) {
   input.addEventListener('input', () => { p[key] = parseFloat(input.value); applyLive(); });
   return el('label', { class: 'row' }, [labelCell(text), input]);
 }
+/* 設定の画面の説明に付ける、教科書の節(新しいタブで開く)。ここにないものは、リンクを付けない */
+const IND_GUIDE = { ma: 'ma', mas: 'ma', rsi: 'rsi', macd: 'macd', bb: 'bb', bbw: 'bb', atr: 'atr', natr: 'atr', ichimoku: 'ichimoku', vwap: 'vwap',
+  psar: 'flips', supertrend: 'flips', stoch: 'others', willr: 'others', cci: 'others', adx: 'others', pivot: 'others', volma: 'vol', obv: 'vol' };
+// 説明の1行(と、教科書へのリンク)
+function descP(text, type) {
+  const p = el('p', { class: 'msg', text });
+  if (IND_GUIDE[type]) { p.appendChild(document.createTextNode(' ')); p.appendChild(el('a', { class: 'glink', href: `guide.html#${IND_GUIDE[type]}`, target: '_blank', rel: 'noopener', text: '教科書で読む ›' })); }
+  return p;
+}
 function renderDialog() {
   const ind = dlg.ind, T = IND_TYPES[ind.type], L = T.labels || {};
   const body = $('dlgBody');
@@ -2791,7 +2800,7 @@ function renderDialog() {
   const add = (...nodes) => nodes.forEach(nd => body.appendChild(nd));
 
   if (T.generic && dlg.tab === 'params') {
-    if (T.desc) add(el('p', { class: 'msg', text: T.custom ? `式: ${T.desc}` : T.desc }));
+    if (T.desc) add(T.custom ? el('p', { class: 'msg', text: `式: ${T.desc}` }) : descP(T.desc, ind.type));
     if (T.custom) {
       const edit = el('button', { class: 'ctl btn', type: 'button', text: '式を編集する' });
       edit.addEventListener('click', () => { const id = ind.type; closeDialog(true); openMaker(id); });
@@ -2825,6 +2834,7 @@ function renderDialog() {
     });
   } else if (ind.type === 'ma' && dlg.tab === 'params') {
     add(
+      descP('ローソク足に重ねる平均線。向きで流れを見る道具で、合図は必ず遅れる', 'ma'),
       fSelect('kind', '種類', MA_KINDS),
       fNumber('len', '期間', 1, 500, 1, '何本分の足を平均するか'),
       fSelect('source', 'ソース', SOURCES),
@@ -2833,10 +2843,11 @@ function renderDialog() {
     );
   } else if (ind.type === 'rsi' && dlg.tab === 'params') {
     add(
+      descP('上げ幅と下げ幅の比(0〜100)。70超は「強い」で、売りの合図ではない', 'rsi'),
       fNumber('len', '期間', 1, 500, 1),
       fSelect('source', 'ソース', SOURCES),
-      fNumber('upper', '上の基準線', 50, 100, 1, 'これより上は「買われすぎ」の目安'),
-      fNumber('lower', '下の基準線', 0, 50, 1, 'これより下は「売られすぎ」の目安'),
+      fNumber('upper', '上の基準線', 50, 100, 1, '「買われすぎ」と呼ばれるが、強い上げでは上に張り付く(売りの合図ではない)'),
+      fNumber('lower', '下の基準線', 0, 50, 1, '「売られすぎ」と呼ばれるが、強い下げでは下に張り付く(買いの合図ではない)'),
       fColor('color', '線の色'),
       fCheck('showMa', 'RSI の平均線を表示', 'RSI をならした線。RSI がこの線の上なら勢いは上向き'),
       fNumber('maLen', '平均線の期間', 1, 500, 1),
@@ -2844,6 +2855,7 @@ function renderDialog() {
     );
   } else if (ind.type === 'macd' && dlg.tab === 'params') {
     add(
+      descP('2本の平均線の差と、その平均。移動平均線と同じ情報を形を変えて見る', 'macd'),
       fNumber('fast', '短期の期間', 1, 500, 1),
       fNumber('slow', '長期の期間', 1, 500, 1),
       fNumber('signal', 'シグナルの期間', 1, 500, 1),
@@ -3051,8 +3063,8 @@ function buildTopbar() {
     ccOnly: '値動きの向きと強さで重みづけした出来高',
     enhanced: '上の値に、ゼロ上下で色が変わる SMA 線を追加',
     ma: 'ローソク足に重ねる平均線。何本でも追加できます',
-    rsi: '買われすぎ・売られすぎの目安(0〜100)',
-    macd: '2本の平均線の差で、流れの強さと向きを見る',
+    rsi: '上げ幅と下げ幅の比(0〜100)。70超は「強い」で、売りの合図ではない',
+    macd: '2本の平均線の差と、その平均。移動平均線と同じ情報を形を変えて見る',
   };
   let menuQuery = '';
   const fillIndMenu = () => {
@@ -3176,12 +3188,14 @@ function buildTopbar() {
    ['リプレイ', '過去の足を選び、そこから値動きを1本ずつ再生する', () => { if (state.replay) stopReplay(false); setTool('replay'); }],
    ['全画面表示', '画面いっぱいに表示する(もう一度選ぶと戻る)', () => { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (e) { toast('この端末では、全画面表示を使えません。'); } }],
    ['長方形', '2つの角を決めて、値動きの範囲を囲む', () => setTool('r')],
-   ['フィボナッチ', '上げ(下げ)の始まりと終わりを決めて、戻りの目安を引く', () => setTool('f')],
-   ['売買ルールを試す', '移動平均の交差や RSI などで売買していたら、どうなっていたかを過去データで計算', () => openRules()],
-   ['表示を切りかえ', 'ローソク足 → 平均足 → ライン の順に変わります', () => {
+   ['フィボナッチ', '上げ(下げ)の始まりと終わりを決めて、戻りの目安を引く。61.8% が特別だという証拠はない', () => setTool('f')],
+   ['売買ルールを試す', 'ゴールデンクロスや RSI など、よく知られたルールで売買していたら、どうなっていたかを過去データで計算', () => openRules()],
+   ['表示を切りかえ', 'ローソク足 → 平均足 → ライン の順。平均足の値は実際の価格と違うので、損切りの位置決めには使わない', () => {
      const k = CHART_TYPES.findIndex(c => c[0] === state.chartType);
      state.chartType = CHART_TYPES[(k + 1) % CHART_TYPES.length][0];
-     save(); draw(); toast(`表示:${CHART_TYPES.find(c => c[0] === state.chartType)[1]}`);
+     save(); draw();
+     // 平均足は、ならした値で描くので、足の4本値が実際の価格と違う(BTC の日足で終値が中央値 0.75% ずれる)。損切りや検証に使わないよう、切りかえたときに知らせる
+     toast(state.chartType === 'heikin' ? '表示:平均足(ならした足です。価格は実際と違うので、損切りの位置を決めたり、成績を計算したりするのには使わないでください)' : `表示:${CHART_TYPES.find(c => c[0] === state.chartType)[1]}`);
    }],
    ['目盛り:ふつう / 対数', () => (state.logScale ? 'いまは「対数」(同じ%の値動きが、同じ高さ)。押すと「ふつう」に戻ります' : 'いまは「ふつう」。押すと「対数」(同じ%の値動きが、同じ高さ)になります'), () => toggleLogScale()],
    ['銘柄を重ねて比べる…', () => { const c = state.compare && SYMBOLS.find(x => x.id === state.compare); return c ? `いまは ${c.label} を重ねています。別の銘柄に変える・やめるときも、ここから` : 'もう1つの銘柄を、変化率(%)の線で重ねて、値動きを比べる'; }, () => openCompare()],
@@ -6196,10 +6210,79 @@ const RULES = [
     lines: [{ name: '平均', expr: 'sma(close, p1)', color: '#2f80ed' }],
     marks: [{ name: '上抜け', expr: 'crossover(close, sma(close, p1))', dir: 'up' }, { name: '下抜け', expr: 'crossunder(close, sma(close, p1))', dir: 'down' }] },
 ];
-RULES.forEach(r => { r.hist = ''; r.bands = []; });
+/* ここから下は、動画・SNS で人気の手法を、決まりの形にしたもの(教科書 第5章「人気の手法を、実際のデータで試す」と同じ決まり)。
+ * どれも「買うか、休むか」だけ(longOnly)。▼ は「売りから入る」合図ではなく、手じまいの合図なので、売りの入り方は出さない。
+ * 式は、教科書の検証に使った Python のエンジンと、同じ足・同じコストで売買の1回ずつが一致することを確かめてある。
+ * ちがうのは次の点だけ:
+ *   ・データの最初のほうで、RSI・平均線の計算がそろう前の1回目の売買がずれることがある
+ *   ・損切り・利確は、この画面では足の中の高値・安値で判定する(検証は終値で判定し、次の足の始値で手じまう)。
+ *     そのため「勝率90%」型は、ここでは利確がちょうど +1% で早めに決まり、数字が検証と一致しない
+ *   ・パーフェクトオーダーは、検証の「上の時間足でも上げ」の条件を省いた(足を取り寄せずに式だけで書けないため。検証でも差は小さかった)
+ * 一目均衡表の式は長いので、3つの数(転換線・基準線・先行スパンBの期間)で書き、ずらす本数は基準線の期間と同じにしている */
+const ICHI_TK = '(highest(high, p1) + lowest(low, p1)) / 2', ICHI_KJ = '(highest(high, p2) + lowest(low, p2)) / 2';
+const ICHI_SA = 'prev((highest(high, p1) + lowest(low, p1) + highest(high, p2) + lowest(low, p2)) / 4, p2)', ICHI_SB = 'prev((highest(high, p3) + lowest(low, p3)) / 2, p2)';
+const BRK_HH = 'prev(highest(high, p1))', BRK_UP = `close > ${BRK_HH}`;
+const YT = 'ytcheck'; // 教科書の該当の節
+RULES.push(
+  { name: 'ゴールデンクロス(50・200)', group: 'yt', guide: YT, longOnly: true, overlay: true,
+    desc: '50本の平均線が200本の線を上に抜けたら買い、下に抜けたら手じまう(買いだけ)。昔からの定番で、動画では「王道のサイン」と紹介されます。教科書の検証(4銘柄 × 3つの時間足 = 12通り)では12通りすべてでプラスでしたが、持ち続けるより良かったのは5通りで、効き目は主に下落を浅くすることでした。日足では売買が数回しかありません。',
+    inputs: [{ label: '短い期間', def: 50 }, { label: '長い期間', def: 200 }],
+    lines: [{ name: '50本', expr: 'sma(close, p1)', color: '#2f80ed' }, { name: '200本', expr: 'sma(close, p2)', color: '#8e44ad' }],
+    marks: [{ name: 'ゴールデン', expr: 'crossover(sma(close, p1), sma(close, p2))', dir: 'up' }, { name: 'デッド', expr: 'crossunder(sma(close, p1), sma(close, p2))', dir: 'down' }] },
+  { name: '一目均衡表の三役好転(日足)', group: 'yt', guide: YT, longOnly: true, overlay: true,
+    desc: '転換線が基準線の上・終値が雲の上・終値が26本前の終値の上(遅行スパンが価格の上)の3つがそろったら買い、転換線が基準線を下回るか、終値が雲の下に出たら手じまう(買いだけ)。一目山人(細田悟一)の一目均衡表から。教科書の検証(売りも使う形)では、日足は4銘柄すべてでプラス、1時間足はすべてマイナスでした。日足で使う想定です。',
+    inputs: [{ label: '転換線の期間', def: 9 }, { label: '基準線の期間(ずらす本数)', def: 26 }, { label: '先行スパンBの期間', def: 52 }],
+    lines: [{ name: '転換', expr: ICHI_TK, color: '#2f80ed' }, { name: '基準', expr: ICHI_KJ, color: '#c0392b' }],
+    marks: [{ name: '三役好転', expr: `crossover(and(and(${ICHI_TK} > ${ICHI_KJ}, close > max(${ICHI_SA}, ${ICHI_SB})), close > prev(close, p2)), 0.5)`, dir: 'up' },
+      { name: '崩れ', expr: `crossover(or(${ICHI_TK} < ${ICHI_KJ}, close < min(${ICHI_SA}, ${ICHI_SB})), 0.5)`, dir: 'down' }] },
+  { name: 'ドンチャン20 ブレイク', group: 'yt', guide: YT, longOnly: true, overlay: true,
+    desc: '20本の高値を終値で超えたら買い、10本の安値を終値で割ったら手じまう(買いだけ)。ドンチャンの方法で、タートルズが使ったことで知られます。教科書の検証(売りも使う形)では、プラスは12通り中4通りで、どれも日足か4時間足でした。短い足では負けています。',
+    inputs: [{ label: '高値の期間', def: 20 }, { label: '安値の期間', def: 10 }],
+    lines: [{ name: '高値', expr: BRK_HH, color: '#27ae60' }, { name: '安値', expr: 'prev(lowest(low, p2))', color: '#c0392b' }],
+    marks: [{ name: '高値を超える', expr: `crossover(close, ${BRK_HH})`, dir: 'up' }, { name: '安値を割る', expr: 'crossunder(close, prev(lowest(low, p2)))', dir: 'down' }] },
+  { name: 'ブレイク後の押し目(リテスト)', group: 'yt', guide: YT, longOnly: true, overlay: true,
+    desc: '20本の高値を終値で抜けたあと、10本以内に安値がその線まで戻り、終値が線の上で終わったら買い。10本の安値を割ったら手じまう(買いだけ)。「抜けた線が支えに変わる」という教え方を決まりにしたもの。教科書の検証では12通り中7通りでプラス(日足と4時間足だけ)、後半の期間でプラスは4通りでした。',
+    inputs: [{ label: '高値の期間', def: 20 }, { label: '安値の期間', def: 10 }, { label: '戻りを待つ本数', def: 10 }],
+    lines: [{ name: '高値', expr: BRK_HH, color: '#27ae60' }, { name: '安値', expr: 'prev(lowest(low, p2))', color: '#c0392b' }],
+    marks: [{ name: '戻って反発', expr: `and(and(not(${BRK_UP}), prev(highest(${BRK_UP}, p3)) > 0), and(low <= valuewhen(${BRK_UP}, ${BRK_HH}), close > valuewhen(${BRK_UP}, ${BRK_HH})))`, dir: 'up' },
+      { name: '安値を割る', expr: 'close < prev(lowest(low, p2))', dir: 'down' }] },
+  { name: 'パーフェクトオーダーの押し目買い', group: 'yt', guide: YT, longOnly: true, overlay: true,
+    desc: '平均線が 20本 > 50本 > 100本 の順に並んだ上げの中で、直前5本のうちに20本の線を割り、終値で上に戻したら買い。50本の線を割ったら手じまう(買いだけ)。ダウ理論の押し目買いとして紹介される形です。教科書の検証(上の時間足の条件つき)では9通りでプラスでしたが、勝率は16〜46%と低く、「押し目買いは勝率が高い」は誤りでした。ここでは上の時間足の条件を省いています(検証でも差は小さい)。',
+    inputs: [{ label: '短い期間', def: 20 }, { label: '中の期間', def: 50 }, { label: '長い期間', def: 100 }],
+    lines: [{ name: '20本', expr: 'sma(close, p1)', color: '#2f80ed' }, { name: '50本', expr: 'sma(close, p2)', color: '#f5a623' }, { name: '100本', expr: 'sma(close, p3)', color: '#8e44ad' }],
+    marks: [{ name: '押し目', expr: 'and(and(sma(close, p1) > sma(close, p2), sma(close, p2) > sma(close, p3)), and(prev(highest(close < sma(close, p1), 5)) > 0, crossover(close, sma(close, p1))))', dir: 'up' },
+      { name: '50本を割る', expr: 'crossunder(close, sma(close, p2))', dir: 'down' }] },
+  // 反面教師:勝率は高く見えるのに負ける形。比べるために置いてある(説明の最初に【反面教師】と書く)
+  { name: '反面教師:RSI 30/70 逆張り', group: 'bad', guide: YT, longOnly: true, overlay: true,
+    desc: '【反面教師】RSI が30を下から上に抜けたら買い、70以上になったら手じまう(買いだけ)。ワイルダー(1978)の RSI の基準線を「売られすぎで買う」に使う、よく紹介される使い方です。教科書の検証(売りも使う形)では、勝率は47〜64%あったのに、平均の勝ちが平均の負けの0.37〜0.71倍しかなく、12通りすべてでマイナスでした。',
+    inputs: [{ label: '期間', def: 14 }, { label: '下の基準', def: 30 }, { label: '上の基準', def: 70 }], lines: [],
+    marks: [{ name: '30から戻る', expr: 'crossover(rsi(close, p1), p2)', dir: 'up' }, { name: '70以上', expr: 'rsi(close, p1) >= p3', dir: 'down' }] },
+  { name: '反面教師:ボリンジャー逆張り', group: 'bad', guide: YT, longOnly: true, overlay: true,
+    desc: '【反面教師】終値が下の帯(20本の平均 − 標準偏差の2倍)の外で終わったら買い、真ん中の線まで戻ったら手じまう(買いだけ)。「帯の外は行きすぎで戻る」という使い方です。教科書の検証(売りも使う形)では、勝率は53〜62%あったのに、12通りすべてでマイナスでした。流れが出ると、小さな勝ちを大きな負けが消します。',
+    inputs: [{ label: '期間', def: 20 }, { label: '幅(標準偏差の何倍)', def: 2 }],
+    lines: [{ name: '真ん中', expr: 'sma(close, p1)', color: '#f5a623' }, { name: '下', expr: 'sma(close, p1) - stdev(close, p1) * p2', color: '#16a085' }],
+    marks: [{ name: '下の帯の外', expr: 'close < sma(close, p1) - stdev(close, p1) * p2', dir: 'up' }, { name: '真ん中に戻る', expr: 'close >= sma(close, p1)', dir: 'down' }] },
+  { name: '反面教師:「勝率90%」型', group: 'bad', guide: 'ytwin', longOnly: true, overlay: true,
+    // 手じまいの合図はなく、利確 +1%・損切り −10% だけで手じまう。選ぶと、この2つと「本数」(最長 1000 本)を自動で入れる
+    preset: { sl: 10, tp: 1, exit: 'bars', hold: 1000 },
+    desc: '【反面教師】RSI が30未満の足で買い、+1% で利確、−10% で損切り(この2つは自動で入ります)。SNS で「勝率90%」とうたわれる形です。勝率は高く出ますが、平均の勝ちが平均の負けよりずっと小さいので、トントンにするには9割近い勝率が要ります。教科書の検証では12通りのうち8通りで負けました。',
+    inputs: [{ label: 'RSI の期間', def: 14 }, { label: '下の基準', def: 30 }], lines: [],
+    marks: [{ name: 'RSI 30未満', expr: 'rsi(close, p1) < p2', dir: 'up' }] },
+);
+// 選ぶ欄で、まとまりごとに見出しを付ける(group を書いていないものは、上から順に「基本」「論文」)
+RULES.forEach((r, i) => { r.hist = ''; r.bands = []; if (!r.group) r.group = i < 6 ? 'basic' : 'paper'; });
+const RULE_GROUPS = [['basic', '基本の形'], ['paper', '論文で調べられた形'], ['yt', '動画・SNS で人気の手法'], ['bad', '反面教師(勝率が高く見えて負ける形)']];
+/* 「勝率90%」型のように、利確・損切りを決まりの一部として持つルールは、選んだときにその値を入れる(bt.preset = true)。
+ * ほかのルールやインジケーターに移ったら、入れた値を消す(前のルールの利確・損切りが、知らないうちに残らないように) */
+function applyRulePreset() {
+  const pr = bt.rule >= 0 && !bt.ind && RULES[bt.rule] ? RULES[bt.rule].preset : null;
+  if (pr) { Object.assign(bt, pr); bt.preset = true; return; }
+  if (bt.preset) { bt.sl = 0; bt.tp = 0; bt.hold = 10; bt.preset = false; }
+}
 function openRules() {
   bt.ind = null; bt.rule = Math.max(0, bt.rule | 0);
   bt.side = 'long'; bt.exit = 'signal';
+  applyRulePreset();
   $('btOverlay').hidden = false;
   renderBacktest();
   $('btClose').focus();
@@ -6212,6 +6295,7 @@ function ruleMarks() {
 }
 function openBacktest(ind) {
   bt.ind = ind; bt.rule = -1;
+  applyRulePreset();
   $('btOverlay').hidden = false;
   if (!ind.out) recompute(); // 隠しているインジケーターは計算を省いているので、ここで計算する
   const marks = (ind.out && ind.out.marks) || [];
@@ -6240,9 +6324,11 @@ function renderBacktest() {
   if (!byRule) add(verdict);
   if (byRule) {
     const def = RULES[bt.rule];
-    const sel = el('select', { class: 'ctl', id: 'btRule', 'aria-label': '売買ルール' }, RULES.map((r, i) => el('option', { value: String(i), text: r.name })));
+    // まとまりごとに見出し(optgroup)を付ける。value は RULES の番号のまま(前からある番号を変えない)
+    const sel = el('select', { class: 'ctl', id: 'btRule', 'aria-label': '売買ルール' }, RULE_GROUPS.map(([g, label]) =>
+      el('optgroup', { label }, RULES.map((r, i) => [r, i]).filter(([r]) => r.group === g).map(([r, i]) => el('option', { value: String(i), text: r.name })))));
     sel.value = String(bt.rule);
-    sel.addEventListener('change', () => { bt.rule = +sel.value; bt.side = 'long'; bt.exit = 'signal'; renderBacktest(); });
+    sel.addEventListener('change', () => { bt.rule = +sel.value; bt.side = 'long'; bt.exit = 'signal'; applyRulePreset(); renderBacktest(); });
     const addBtn = el('button', { class: 'ctl btn', type: 'button', id: 'btAdd', text: 'チャートに出す' });
     addBtn.addEventListener('click', () => {
       // 自作インジケーターとして登録する。数値や式は、あとから自由に変えられる
@@ -6256,7 +6342,9 @@ function renderBacktest() {
       toast(`「${def.name}」をチャートに追加しました。⚙ から数値を変えたり、式を編集したりできます。`);
     });
     add(el('div', { class: 'bt-rule' }, [el('label', { class: 'bt-ctl' }, [el('span', { class: 'dim', text: '売買ルール' }), sel]), addBtn]), verdict);
-    add(el('p', { class: 'small', text: `${def.desc} 設定: ${def.inputs.map(q => `${q.label} ${q.def}`).join('、')}(「チャートに出す」と、数値を変えて試せます)` }));
+    const desc = el('p', { class: 'small', id: 'btRuleDesc', text: `${def.desc} 設定: ${def.inputs.map(q => `${q.label} ${q.def}`).join('、')}(「チャートに出す」と、数値を変えて試せます)` });
+    if (def.guide) { desc.appendChild(document.createTextNode(' ')); desc.appendChild(guideA(def.guide)); }
+    add(desc);
   }
   const select = (label, value, options, onChange) => {
     const sel = el('select', { class: 'ctl' }, options.map(([v, t]) => el('option', { value: v, text: t })));
@@ -6265,9 +6353,11 @@ function renderBacktest() {
     return el('label', { class: 'bt-ctl' }, [el('span', { class: 'dim', text: label }), sel]);
   };
   const sides = [];
+  // 買うか休むかだけのルール(longOnly)の ▼ は「手じまい」の合図なので、売りから入る選び方は出さない
+  const longOnly = byRule && RULES[bt.rule].longOnly;
   if (hasUp) sides.push(['long', '▲ で買う(値上がりをねらう)']);
-  if (hasDown) sides.push(['short', '▼ で売りから入る(値下がりをねらう)']);
-  if (hasUp && hasDown) sides.push(['both', '両方(▲ で買い、▼ で売りに切りかえ)']);
+  if (hasDown && !longOnly) sides.push(['short', '▼ で売りから入る(値下がりをねらう)']);
+  if (hasUp && hasDown && !longOnly) sides.push(['both', '両方(▲ で買い、▼ で売りに切りかえ)']);
   const ctl = el('div', { class: 'bt-ctls' }, [select('入り方', bt.side, sides, v => { bt.side = v; })]);
   const oppOk = bt.side === 'both' || (bt.side === 'long' ? hasDown : hasUp);
   if (bt.side !== 'both') {
@@ -6299,14 +6389,26 @@ function renderBacktest() {
 
   const cls = v => (v > 0 ? 'up' : v < 0 ? 'down' : '');
   const diff = r.total - r.holdRet;
-  add(el('div', { class: 'kpis' }, [
-    btKpi('合図どおりの損益', pctText(r.total, 2, true), cls(r.total), '資金を毎回すべて使った場合の、期間全体の増減'),
+  // 勝率だけでは良し悪しが決まらないので、勝ちと負けの大きさ(ペイオフレシオ)と、損も得もしない勝率を、勝率のすぐ隣に出す
+  const po = GT.stats.payoff(r), st = rd ? rd.st : null;
+  const poText = !isFinite(po.payoff) ? '' : po.payoff === Infinity ? '負けがないため、計算できません' : `平均の勝ち ÷ 平均の負け = ${fx(po.payoff, 2)} 倍。勝率がこれより低いと損`;
+  // 手数料・すべりを引く前の損益(同じ合図で、コストだけ 0 にした試算)。コストがどれだけ削ったかを、すぐ見比べられるように
+  const grossText = st && isFinite(st.grossTotal) ? `手数料・すべりを引く前は ${pctText(st.grossTotal, 2, true)}。` : '';
+  add(el('div', { class: 'kpis', id: 'btKpis' }, [
+    btKpi('合図どおりの損益', pctText(r.total, 2, true), cls(r.total), `${grossText}資金を毎回すべて使った場合の、期間全体の増減`),
     btKpi('何もせず持ち続けた場合', pctText(r.holdRet, 2, true), cls(r.holdRet), isFinite(diff) ? `合図どおりのほうが ${pctText(Math.abs(diff), 2)} ${diff >= 0 ? '良い' : '悪い'}` : ''),
     btKpi('勝率', r.n ? pctText(r.wins / r.n, 0) : '—', '', `売買 ${r.n} 回(勝ち ${r.wins}・負け ${r.losses})` + (bt.sl > 0 || bt.tp > 0 ? `。うち損切り ${r.nSl} 回・利確 ${r.nTp} 回` : '')),
+    btKpi('損益分岐の勝率', isFinite(po.beWin) ? pctText(po.beWin, 0) : '—', isFinite(po.beWin) && po.winRate !== po.beWin ? cls(po.winRate - po.beWin) : '', poText || '売買がないため、計算できません', 'expect'),
     btKpi('プロフィットファクター', isFinite(r.pf) ? fx(r.pf, 2) : r.wins && !r.losses ? '負けなし' : '—', isFinite(r.pf) ? cls(r.pf - 1) : '', '利益の合計 ÷ 損失の合計。1 より大きければ全体でプラス'),
     btKpi('最大ドローダウン', r.maxDD > 0 ? pctText(-r.maxDD, 2) : '—', r.maxDD > 0 ? 'down' : '', '資金がいちばん多かった時点からの、最大の落ち込み'),
     btKpi('平均利益 / 平均損失', `${pctText(r.avgWin, 2, true)} / ${pctText(r.avgLoss, 2, true)}`, '', `ポジションを持っていた時間は全体の ${pctText(r.exposure, 0)}`),
+    btKpi('1年の手数料の目安', st && isFinite(st.costPerYear) ? `約 ${pctText(st.costPerYear, 1)}` : '—', '',
+      st && isFinite(st.tradesPerYear) ? `1年に約 ${fx(st.tradesPerYear, 1)} 回 × 往復 ${pctText(2 * (FEE + state.btSlip / 100), 2)}(手数料+すべり)。資金に対する割合` : 'データが短いため、計算できません', 'ytcost'),
   ]));
+  // 「勝率が高いのに負ける」:勝率が半分を超えているのに、1回あたりの平均がマイナスのとき、ひとこと説明する
+  if (r.n && po.winRate > 0.5 && po.expect < 0 && isFinite(po.beWin)) {
+    add(el('p', { class: 'bt-alert', id: 'btPayoffNote', text: `勝率は ${pctText(po.winRate, 0)} と半分を超えているのに、平均の負け(${pctText(r.avgLoss, 2)})が平均の勝ち(${pctText(r.avgWin, 2, true)})の ${fx(1 / po.payoff, 1)} 倍あるため、1回あたりの平均はマイナス(${pctText(po.expect, 2)})です。損も得もしないには、勝率 ${pctText(po.beWin, 0)} が必要でした。` }));
+  }
   add(el('h3', { text: '資金の推移(開始時を 1 とした倍率)' }));
   const cv = el('canvas', { id: 'btCurve', class: 'curve', role: 'img', 'aria-label': '合図どおりに売買した場合と、持ち続けた場合の資金の推移' });
   add(cv);
@@ -6326,7 +6428,9 @@ function renderBacktest() {
   else if (r.n < 30) warn.push(`売買が ${r.n} 回と少ないため、結果は偶然に大きく左右されます。30回に満たない成績は、参考程度に見てください。`);
   if (r.open) warn.push(`最後の売買は、まだ手じまいしていません(いま手じまうと ${pctText(r.open.ret, 2, true)}。手数料・すべり込み)。損益には入れていますが、勝率には数えていません。`);
   warn.push(`合図が出た足の「次の足の始値」で売買し、売買のたびに手数料 ${fx(FEE * 100, 1)}% とすべり ${state.btSlip}% を不利な側に引いています。「持ち続けた場合」も、同じ最初の足の始値で買い、同じ最後の足の終値で売ったとして、同じ手数料とすべりを引いています。最後に手じまっていない売買も、最後の足の終値で手じまったとして計算しています。`);
+  if (bt.sl > 0 || bt.tp > 0) warn.push('損切り・利確は、足の高値・安値がその価格に届いた時点で、その価格で手じまったとして計算しています(窓を開けて損切りの価格を飛びこえたときは、その足の始値)。教科書の第5章の検証は、終値で判定して次の足の始値で手じまう決まりなので、同じルールでも数字は一致しません。');
   if (bt.sl > 0 && bt.tp > 0) warn.push('1本の足の中で損切りと利確の両方に届いた場合は、どちらが先か分からないため、損切りが先だったとして計算しています(成績を良く見せないため)。');
+  if (byRule && RULES[bt.rule].longOnly) warn.push('このルールは「買うか、休むか」だけで試します。▼ は売りから入る合図ではなく、手じまいの合図です。');
   warn.push('これは過去の値動きに当てはめた結果で、これからも同じようになることを示すものではありません。成績が良くなるまで式や数値を調整すると、過去にたまたま合っただけの設定になりやすくなります。別の銘柄や時間足でも試して、同じ傾向が出るかを確かめてください。');
   warn.push('実際の売買では、注文が思った価格で通らないこと(すべり)があり、成績はここより悪くなるのがふつうです。');
   add(fold('notes', '計算の決まりと注意点', el('small', { text: `${warn.length} 項目` }), [el('ul', { class: 'bt-notes' }, warn.map(t => el('li', { text: t })))], 'backtest'));
